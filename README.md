@@ -1,5 +1,8 @@
 # Neuromicon ArtMaze
 
+**Live WebXR & Desktop Application:** [https://alexsheff.github.io/Neuromicon-ArtMaze/](https://alexsheff.github.io/Neuromicon-ArtMaze/)  
+**Repository:** [https://github.com/AlexSheff/Neuromicon-ArtMaze](https://github.com/AlexSheff/Neuromicon-ArtMaze)
+
 **Neuromicon ArtMaze** is a browser-based WebXR and desktop 3D world consisting of a central multidimensional labyrinth (`ROOM_0000`) and independently authored rooms (`ROOM_0001` .. `ROOM_1149`).
 
 Walk. Look. Listen. Choose. Wonder.
