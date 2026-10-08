@@ -5,6 +5,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { webxrManager } from './engine/xr/webxrManager';
+import { hubPlayerState } from './state/playerState';
 import { playerStateStore } from './systems/state/playerStateStore';
 import { PlayerState, VoidType } from './types/artmaze';
 import { LabyrinthViewport } from './ui/LabyrinthViewport';
@@ -37,6 +38,7 @@ export default function App() {
 
   const handleEnterRoom = (roomId: string) => {
     playerStateStore.enterRoom(roomId);
+    hubPlayerState.enterRoom(roomId);
     setActiveSection('labyrinth');
   };
 

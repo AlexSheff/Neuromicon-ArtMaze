@@ -1,85 +1,72 @@
 import React, { useEffect, useRef, useState } from 'react';
+import {
+  getWorldNodes,
+  SpatialInteractiveTarget,
+} from '../corridor/corridorBuilder';
+import {
+  HubEngine,
+  HubRenderTelemetry,
+} from '../engine/hubEngine';
 import { InputController } from '../engine/input/inputController';
-import {
-  CameraPose,
-  LocomotionSystem,
-} from '../engine/locomotion/locomotionSystem';
-import {
-  RaycastTarget,
-  ThreeLabyrinthEngine,
-} from '../engine/renderer/labyrinthRenderer';
 import { webxrManager } from '../engine/xr/webxrManager';
 import { spatialAudioSystem } from '../systems/audio/spatialAudioSystem';
-import { evaluateDoor } from '../systems/doors/doorSystem';
-import {
-  performObjectInteraction,
-  performPaintingInteraction,
-} from '../systems/interaction/interactionSystem';
-import { computeCognitiveProfile } from '../systems/measurement/protocolMeasurementSystem';
-import { resolveMirrorProposition } from '../systems/mirror/mirrorSystem';
-import { observationSystem } from '../systems/observation/observationSystem';
-import { getActiveRoomObjects } from '../systems/rooms/roomStateSystem';
-import { playerStateStore } from '../systems/state/playerStateStore';
-import {
-  DoorDefinition,
-  MirrorDefinition,
-  PlayerState,
-  RoomManifest,
-} from '../types/artmaze';
-import { loadRoomManifest } from '../world/loader/roomLoader';
-import { getRoomRegistry } from '../world/registry/roomRegistry';
-import { executeDoorTransition } from '../world/transitions/transitionSystem';
-import { getVoidDescriptor } from '../world/void/voidSystem';
+import { HubPlayerState, hubPlayerState } from '../state/playerState';
+import { PlayerState } from '../types/artmaze';
+import { getRoomV1Manifest } from '../world/roomStreamer';
 
 interface LabyrinthViewportProps {
   lang: 'en' | 'ru';
   playerState: PlayerState;
 }
 
+type ActiveHotkeyOverlay = 'none' | 'rules' | 'radio' | 'comfort' | 'audio';
+
 export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
   lang,
-  playerState,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const engineRef = useRef<HubEngine | null>(null);
   const inputRef = useRef<InputController>(new InputController());
-  const locomotionRef = useRef<LocomotionSystem>(new LocomotionSystem());
-  const hoveredRef = useRef<RaycastTarget | null>(null);
-  const langRef = useRef<'en' | 'ru'>(lang);
-  langRef.current = lang;
 
-  const [hoveredTarget, setHoveredTarget] = useState<RaycastTarget | null>(null);
-  const [gazeProgress, setGazeProgress] = useState<number>(0);
+  const [hubState, setHubState] = useState<HubPlayerState>(() =>
+    hubPlayerState.getState()
+  );
+  const [hoveredTarget, setHoveredTarget] =
+    useState<SpatialInteractiveTarget | null>(null);
+  const [hasFloorTeleportTarget, setHasFloorTeleportTarget] =
+    useState<boolean>(false);
+  const [telemetry, setTelemetry] = useState<HubRenderTelemetry>({
+    fps: 72,
+    drawCalls: 18,
+    triangles: 4200,
+    geometries: 24,
+    textures: 8,
+  });
+  const [activeOverlay, setActiveOverlay] =
+    useState<ActiveHotkeyOverlay>('none');
+  const [zoomActive, setZoomActive] = useState<boolean>(false);
   const [xrActive, setXrActive] = useState<boolean>(() =>
     webxrManager.isSessionActive()
-  );
-  const [narrativeNotice, setNarrativeNotice] = useState<{
-    title: string;
-    body: string;
-  } | null>(null);
-  const [activeDoorProposition, setActiveDoorProposition] =
-    useState<DoorDefinition | null>(null);
-  const [activeMirrorModal, setActiveMirrorModal] =
-    useState<MirrorDefinition | null>(null);
-  const [creatorModalOpen, setCreatorModalOpen] = useState<boolean>(false);
-  const [customRuleText, setCustomRuleText] = useState<string>(
-    'A door that is observed twice must reveal its hidden counterpart.'
   );
   const [audioActive, setAudioActive] = useState<boolean>(() =>
     spatialAudioSystem.isPlaying()
   );
-  const [poseSnapshot, setPoseSnapshot] = useState<CameraPose>(() =>
-    locomotionRef.current.getPose()
+  const [notice, setNotice] = useState<{ title: string; body: string } | null>(
+    null
   );
+  const [radioDraft, setRadioDraft] = useState<string>('');
 
-  const currentManifest: RoomManifest =
-    loadRoomManifest(playerState.currentRoomId) ??
-    loadRoomManifest('ROOM_0000')!;
+  const hoveredRef = useRef<SpatialInteractiveTarget | null>(null);
+  const floorHitRef = useRef<{ x: number; z: number } | null>(null);
+  const langRef = useRef<'en' | 'ru'>(lang);
+  langRef.current = lang;
 
-  const registry = getRoomRegistry();
-  const visitCount =
-    playerState.roomStates[currentManifest.id]?.visitCount ?? 1;
-  const cognitiveProfile = computeCognitiveProfile(playerState);
+  useEffect(() => {
+    return hubPlayerState.subscribe((next) => {
+      setHubState(next);
+    });
+  }, []);
 
   useEffect(() => {
     return webxrManager.onSessionChange((active) => {
@@ -87,126 +74,207 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
     });
   }, []);
 
-  // Reset camera pose on room change
+  // Desktop Hotkeys: R (Rules), T (Radio/Comments), C (Zoom), Alt (Comfort/Settings), Z (Audio)
   useEffect(() => {
-    locomotionRef.current.resetToRoomSpawn(currentManifest);
-    inputRef.current.setPitch(0);
-    setPoseSnapshot(locomotionRef.current.getPose());
-    setActiveDoorProposition(null);
-    setActiveMirrorModal(null);
-    setCreatorModalOpen(false);
-    spatialAudioSystem.updateRoomAcoustics(
-      currentManifest.audio?.baseFrequency ?? 110,
-      currentManifest.audio?.harmonicProfile ?? 'labyrinth',
-      playerState.activeVoid
-    );
-  }, [currentManifest.id, playerState.activeVoid]);
+    const onKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-  const triggerTargetInteraction = (
-    target: RaycastTarget,
-    inImmersiveVR = false
-  ) => {
+      if (e.code === 'KeyR') {
+        e.preventDefault();
+        setActiveOverlay((prev) => (prev === 'rules' ? 'none' : 'rules'));
+      } else if (e.code === 'KeyT') {
+        e.preventDefault();
+        setActiveOverlay((prev) => (prev === 'radio' ? 'none' : 'radio'));
+      } else if (e.code === 'KeyC') {
+        e.preventDefault();
+        const eng = engineRef.current;
+        if (eng) {
+          const next = !eng.isFovZoom();
+          eng.setFovZoom(next);
+          setZoomActive(next);
+        }
+      } else if (e.key === 'Alt') {
+        e.preventDefault();
+        setActiveOverlay((prev) => (prev === 'comfort' ? 'none' : 'comfort'));
+      } else if (e.code === 'KeyZ') {
+        e.preventDefault();
+        const nextAudio = spatialAudioSystem.toggle();
+        setAudioActive(nextAudio);
+        setActiveOverlay((prev) => (prev === 'audio' ? 'none' : 'audio'));
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  const executeSpatialAction = (target: SpatialInteractiveTarget) => {
+    const eng = engineRef.current;
     const curLang = langRef.current;
-    const latestState = playerStateStore.getState();
-    const manifest =
-      loadRoomManifest(latestState.currentRoomId) ??
-      loadRoomManifest('ROOM_0000')!;
+    const st = hubPlayerState.getState();
 
-    if (target.kind === 'door' && target.door) {
-      if (target.id === 'VOID_RETURN') {
-        playerStateStore.exitVoidToRoom(
-          latestState.currentRoomId || 'ROOM_0000'
-        );
-        spatialAudioSystem.triggerChime(523.25);
-        return;
-      }
-
-      // In immersive VR headset, directly transition through doors so 2D modals never block VR locomotion
-      if (
-        !inImmersiveVR &&
-        target.door.proposition &&
-        target.door.proposition.options.length > 0
-      ) {
-        setActiveDoorProposition(target.door);
-        return;
-      }
-
-      if (
-        inImmersiveVR &&
-        target.door.proposition &&
-        target.door.proposition.options.length > 0
-      ) {
-        const firstOpt = target.door.proposition.options[0];
-        playerStateStore.recordDecision(
-          `door:${manifest.id}:${target.door.id}`,
-          firstOpt.id,
-          undefined,
-          firstOpt.behavioralSignal
-        );
-      }
-
-      const res = executeDoorTransition(target.door);
-      spatialAudioSystem.triggerChime(440);
-      setNarrativeNotice({
-        title: `Door ${target.door.id}`,
-        body: curLang === 'ru' ? res.messageRu : res.message,
+    if (target.kind === 'threshold-branch' && target.branch) {
+      const chosen = target.branch;
+      spatialAudioSystem.triggerChime(chosen === 'ascend' ? 523.25 : 293.66);
+      eng?.comfort.triggerFadeTransition(() => {
+        hubPlayerState.chooseBranchFromThreshold(chosen);
       });
-      return;
-    }
-
-    if (target.kind === 'mirror' && target.mirror) {
-      if (inImmersiveVR) {
-        resolveMirrorProposition(manifest.id, target.mirror, 'accept');
-        spatialAudioSystem.triggerChime(523.25);
-        return;
-      }
-      setActiveMirrorModal(target.mirror);
-      return;
-    }
-
-    if (target.kind === 'painting' && target.painting) {
-      const out = performPaintingInteraction(manifest.id, target.painting);
-      spatialAudioSystem.triggerChime(440);
-      setNarrativeNotice({
+      setNotice({
         title:
+          chosen === 'ascend'
+            ? curLang === 'ru'
+              ? 'Путь Выбран: ВОСХОЖДЕНИЕ (Ascent)'
+              : 'Path Chosen: ASCENT (Grow / Embody)'
+            : curLang === 'ru'
+            ? 'Путь Выбран: НИСХОЖДЕНИЕ (Descent)'
+            : 'Path Chosen: DESCENT (Search / Explore)',
+        body:
           curLang === 'ru'
-            ? target.painting.metadata.titleRu || target.painting.metadata.title
-            : target.painting.metadata.title,
-        body: curLang === 'ru' ? out.messageRu : out.message,
+            ? `Записано player.path = "${chosen}". Вы вошли в Сегмент 1.`
+            : `Persisted player.path = "${chosen}". Entered Segment 1.`,
       });
       return;
     }
 
-    if (target.kind === 'object' && target.object) {
-      if (
-        !inImmersiveVR &&
-        manifest.creatorPrompt?.enabled &&
-        target.object.discoveryId === 'SYSTEM_RULE_CREATED'
-      ) {
-        setCreatorModalOpen(true);
-        return;
-      }
-      if (
-        inImmersiveVR &&
-        manifest.creatorPrompt?.enabled &&
-        target.object.discoveryId === 'SYSTEM_RULE_CREATED'
-      ) {
-        playerStateStore.recordCreatedRule(manifest.id, customRuleText);
-        spatialAudioSystem.triggerChime(587.33);
-        return;
-      }
-      const out = performObjectInteraction(
-        manifest.id,
-        target.object,
-        'inspect'
-      );
+    if (target.kind === 'segment-portal' && target.branch && target.segment) {
+      const b = target.branch;
+      const s = target.segment;
+      spatialAudioSystem.triggerChime(440);
+      eng?.comfort.triggerFadeTransition(() => {
+        hubPlayerState.setCorridorSegment(b, s);
+      });
+      return;
+    }
+
+    if (target.kind === 'corridor-return') {
       spatialAudioSystem.triggerChime(392);
-      setNarrativeNotice({
+      eng?.comfort.triggerFadeTransition(() => {
+        hubPlayerState.returnToThreshold();
+      });
+      return;
+    }
+
+    if (target.kind === 'corridor-door' && target.roomId) {
+      if (target.status === 'planned') {
+        spatialAudioSystem.triggerChime(220);
+        setNotice({
+          title:
+            curLang === 'ru'
+              ? `${target.roomId} · Дверь Запечатана (Planned)`
+              : `${target.roomId} · Door Sealed (Planned)`,
+          body:
+            curLang === 'ru'
+              ? 'Этот узел графа имеет статус "planned" в world.graph.json и ожидает публикации репозитория комнаты.'
+              : 'This graph node is marked status: "planned" in world.graph.json and renders as a sealed architectural door.',
+        });
+        return;
+      }
+
+      const rid = target.roomId;
+      spatialAudioSystem.triggerChime(523.25);
+      eng?.comfort.triggerFadeTransition(() => {
+        hubPlayerState.enterRoom(rid, st.branch, st.segment);
+      });
+      return;
+    }
+
+    if (target.kind === 'room-door' && target.roomId) {
+      if (target.status === 'planned') {
+        spatialAudioSystem.triggerChime(220);
+        setNotice({
+          title: `${target.roomId} · Sealed Door`,
+          body:
+            curLang === 'ru'
+              ? 'Комната в статусе "planned". Используйте другие двери или вернитесь в коридор через Зеркало (BACK).'
+              : 'Destination room is marked "planned". Choose another door or return to the Corridor via the Mirror (BACK).',
+        });
+        return;
+      }
+
+      const rid = target.roomId;
+      spatialAudioSystem.triggerChime(587.33);
+      eng?.comfort.triggerFadeTransition(() => {
+        hubPlayerState.enterRoom(rid);
+      });
+      return;
+    }
+
+    if (target.kind === 'room-object' && target.objectId) {
+      const roomId = st.currentRoomId || 'ROOM_073';
+      const manifest = getRoomV1Manifest(roomId);
+      const isGhost = target.id.startsWith('GHOST_');
+
+      if (isGhost) {
+        const discKey = `${roomId}:interactReflection:${target.objectId}`;
+        hubPlayerState.unlockDiscovery(discKey);
+        hubPlayerState.markQuestCompleted(roomId);
+        spatialAudioSystem.triggerChime(659.25);
+        setNotice({
+          title:
+            curLang === 'ru'
+              ? 'Кроличья Нора Открыта (Door RH → ROOM_1149)'
+              : 'Rabbit Hole Unlocked (Door RH → ROOM_1149)',
+          body:
+            curLang === 'ru'
+              ? 'Вы взаимодействовали с отражением объекта, которого нет в комнате! На западной стене открылась скрытая дверь RH.'
+              : 'You interacted with a reflection that has no physical object! Hidden Door RH has materialized on the West wall.',
+        });
+        return;
+      }
+
+      hubPlayerState.markQuestCompleted(roomId);
+      spatialAudioSystem.triggerChime(493.88);
+      setNotice({
+        title: curLang === 'ru' ? target.titleRu : target.title,
+        body:
+          curLang === 'ru'
+            ? `Квест комнаты ${manifest.id} выполнен! Объект непереносим (portable: false) и остаётся в комнате.`
+            : `Quest objective in ${manifest.id} completed! Object is non-portable (portable: false) and remains in the room.`,
+      });
+      return;
+    }
+
+    if (target.kind === 'room-mirror' && target.mirrorChoice) {
+      const roomId = st.currentRoomId || 'ROOM_073';
+      if (target.mirrorChoice === 'back') {
+        spatialAudioSystem.triggerChime(392);
+        eng?.comfort.triggerFadeTransition(() => {
+          hubPlayerState.returnToCorridor();
+        });
+        setNotice({
+          title:
+            curLang === 'ru'
+              ? 'Возврат в Главный Коридор'
+              : 'Returned to Main Corridor',
+          body:
+            curLang === 'ru'
+              ? `Вы вернулись в ветвь ${st.branch.toUpperCase()}, Сегмент ${st.segment}.`
+              : `Restored to ${st.branch.toUpperCase()} Branch, Segment ${st.segment}.`,
+        });
+        return;
+      }
+
+      hubPlayerState.recordMirrorChoice(roomId, target.mirrorChoice);
+      spatialAudioSystem.triggerChime(523.25);
+      setNotice({
         title:
           curLang === 'ru'
-            ? target.object.titleRu || target.object.title || target.object.id
-            : target.object.title || target.object.id,
-        body: curLang === 'ru' ? out.messageRu : out.message,
+            ? `Зеркало: ${target.mirrorChoice.toUpperCase()}`
+            : `Mirror Identity: ${target.mirrorChoice.toUpperCase()}`,
+        body:
+          curLang === 'ru'
+            ? `Выбор идентичности (${target.mirrorChoice}) сохранён в состоянии игрока.`
+            : `Identity choice (${target.mirrorChoice}) recorded in persistent state.`,
+      });
+      return;
+    }
+
+    if (target.kind === 'artwork') {
+      spatialAudioSystem.triggerChime(440);
+      setNotice({
+        title: curLang === 'ru' ? target.titleRu : target.title,
+        body: target.subtitle,
       });
     }
   };
@@ -216,7 +284,8 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
     const container = containerRef.current;
     if (!canvas || !container) return;
 
-    const engine = new ThreeLabyrinthEngine(canvas);
+    const engine = new HubEngine(canvas);
+    engineRef.current = engine;
     webxrManager.attachRenderer(engine.renderer);
 
     const input = inputRef.current;
@@ -231,423 +300,591 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
     const resizeObserver = new ResizeObserver(handleResize);
     resizeObserver.observe(container);
 
-    const onContextLost = (e: Event) => {
-      e.preventDefault();
-    };
-    canvas.addEventListener('webglcontextlost', onContextLost);
-
     let lastTime = performance.now();
-    let lastUiSync = 0;
+    let lastTelemetryTime = 0;
 
-    // Three.js WebXR-compatible animation loop (runs at 72Hz/90Hz on Quest 2 and 60Hz on Desktop)
     engine.renderer.setAnimationLoop((now) => {
       const dt = Math.min(0.1, Math.max(0.001, (now - lastTime) / 1000));
       lastTime = now;
 
-      const latestState = playerStateStore.getState();
-      const manifest =
-        loadRoomManifest(latestState.currentRoomId) ??
-        loadRoomManifest('ROOM_0000')!;
-
       const desktopInput = input.consumeState();
       const xrInput = webxrManager.pollControllerInput(dt);
-      const isPresenting = engine.renderer.xr.isPresenting;
+      const currentState = hubPlayerState.getState();
 
-      const mergedInput = {
-        ...desktopInput,
-        analogForward: -xrInput.moveZ,
-        analogStrafe: xrInput.moveX,
-        analogTurn: xrInput.turnX,
-        interactPressed:
-          desktopInput.interactPressed || xrInput.triggerJustPressed,
-      };
-
-      const headingOverride = isPresenting
-        ? engine.getWorldHeadingYaw(locomotionRef.current.getPose().yaw)
-        : undefined;
-
-      const pose = locomotionRef.current.step(
-        mergedInput,
+      const { hovered, telemetry: frameTelemetry } = engine.stepAndRender(
         dt,
-        manifest,
-        Boolean(latestState.activeVoid),
-        headingOverride
+        desktopInput,
+        xrInput,
+        currentState
       );
 
-      const { hovered } = engine.updateAndRender(
-        pose,
-        manifest,
-        latestState,
-        getRoomRegistry(),
-        now / 1000
-      );
-
-      // Update hovered target & HUD state without excessive React re-renders
-      if (hovered?.id !== hoveredRef.current?.id) {
-        hoveredRef.current = hovered;
-        setHoveredTarget(hovered);
+      if (hovered.target?.id !== hoveredRef.current?.id) {
+        hoveredRef.current = hovered.target;
+        setHoveredTarget(hovered.target);
       }
 
-      if (now - lastUiSync > 120) {
-        lastUiSync = now;
-        setPoseSnapshot(pose);
+      if (hovered.floorHitPoint) {
+        floorHitRef.current = {
+          x: hovered.floorHitPoint.x,
+          z: hovered.floorHitPoint.z,
+        };
+        setHasFloorTeleportTarget(true);
+      } else {
+        floorHitRef.current = null;
+        setHasFloorTeleportTarget(false);
       }
 
-      // Sustained Gaze Observation Mechanic (Looking vs Seeing)
-      const gazeRes = observationSystem.updateGaze(
-        hovered?.id ?? null,
-        dt,
-        hovered?.discoveryId,
-        manifest.id
-      );
-      setGazeProgress(gazeRes.progress);
-
-      if (gazeRes.triggeredDiscovery) {
-        spatialAudioSystem.triggerChime(587.33);
-        const curLang = langRef.current;
-        setNarrativeNotice({
-          title:
-            curLang === 'ru'
-              ? 'Замечена Аномалия Пространства'
-              : 'Spatial Anomaly Observed',
-          body:
-            curLang === 'ru'
-              ? `Наблюдение открыло скрытую закономерность: ${gazeRes.triggeredDiscovery}. Проверьте двери комнаты.`
-              : `Sustained observation revealed: ${gazeRes.triggeredDiscovery}. A hidden threshold may now be visible.`,
-        });
+      if (now - lastTelemetryTime > 400) {
+        lastTelemetryTime = now;
+        setTelemetry(frameTelemetry);
       }
 
-      if (mergedInput.interactPressed) {
-        if (hovered) {
-          triggerTargetInteraction(hovered, isPresenting);
-        } else if (latestState.activeVoid && isPresenting) {
-          playerStateStore.exitVoidToRoom(
-            latestState.currentRoomId || 'ROOM_0000'
-          );
-          spatialAudioSystem.triggerChime(523.25);
+      if (desktopInput.interactPressed || xrInput.triggerJustPressed) {
+        if (hovered.target) {
+          executeSpatialAction(hovered.target);
+        } else if (hovered.floorHitPoint) {
+          engine.teleportTo(hovered.floorHitPoint.x, hovered.floorHitPoint.z);
         }
       }
     });
 
     return () => {
       resizeObserver.disconnect();
-      canvas.removeEventListener('webglcontextlost', onContextLost);
       input.detach();
       engine.dispose();
+      engineRef.current = null;
     };
   }, []);
 
-  const handleToggleAudio = () => {
-    const next = spatialAudioSystem.toggle();
-    setAudioActive(next);
-    if (next) {
-      spatialAudioSystem.updateRoomAcoustics(
-        currentManifest.audio?.baseFrequency ?? 110,
-        currentManifest.audio?.harmonicProfile ?? 'labyrinth',
-        playerState.activeVoid
-      );
-    }
-  };
+  const activeRoomManifest =
+    hubState.location === 'room' && hubState.currentRoomId
+      ? getRoomV1Manifest(hubState.currentRoomId)
+      : null;
 
-  const handleEnterVRClick = async () => {
-    const status = await webxrManager.toggleVRSession();
-    setNarrativeNotice({
-      title: 'WebXR · Meta Quest 2',
-      body: status.message,
-    });
-  };
+  const activeChannel =
+    hubState.location === 'room' && activeRoomManifest
+      ? activeRoomManifest.radio.channel
+      : 'THRESHOLD';
 
-  const handleLookAtPosition = (targetPos: [number, number, number]) => {
-    const pose = locomotionRef.current.getPose();
-    const dx = targetPos[0] - pose.x;
-    const dz = targetPos[2] - pose.z;
-    const yaw = Math.atan2(-dx, -dz);
-    inputRef.current.setPitch(0);
-    locomotionRef.current.setPose({
-      yaw,
-      pitch: 0,
-    });
-  };
-
-  const visibleDoors = currentManifest.doors.filter(
-    (d) => evaluateDoor(d, playerState, registry).isVisible
+  const currentSegmentNodes = getWorldNodes().filter(
+    (n) => n.branch === hubState.branch && n.segment === hubState.segment
   );
-  const activeObjects = getActiveRoomObjects(currentManifest, playerState);
 
   return (
     <div
       ref={containerRef}
       className="relative w-full h-[calc(100vh-61px)] bg-[#0b0a09] overflow-hidden select-none"
     >
-      {/* Three.js WebGL2 + WebXR Canvas */}
+      {/* WebGL2 + WebXR Canvas */}
       <canvas
         ref={canvasRef}
         onClick={() => {
-          if (inputRef.current.wasClickNotDrag() && hoveredRef.current) {
-            triggerTargetInteraction(hoveredRef.current, false);
+          if (!inputRef.current.wasClickNotDrag()) return;
+          if (hoveredRef.current) {
+            executeSpatialAction(hoveredRef.current);
+          } else if (floorHitRef.current && engineRef.current) {
+            engineRef.current.teleportTo(
+              floorHitRef.current.x,
+              floorHitRef.current.z
+            );
           }
         }}
         className="w-full h-full block cursor-crosshair"
       />
 
-      {/* Center Reticle & Observation Ring */}
-      {!playerState.activeVoid && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="relative flex items-center justify-center">
-            <div
-              className={`w-2.5 h-2.5 rounded-full transition-transform duration-150 ${
-                hoveredTarget
-                  ? 'bg-[#c8a464] scale-125'
-                  : 'bg-white/40 scale-100'
-              }`}
-            />
-            {gazeProgress > 0.05 && (
-              <svg className="absolute w-9 h-9 -rotate-90" viewBox="0 0 36 36">
-                <circle
-                  cx="18"
-                  cy="18"
-                  r="15"
-                  fill="none"
-                  stroke="rgba(200, 164, 100, 0.25)"
-                  strokeWidth="2"
-                />
-                <circle
-                  cx="18"
-                  cy="18"
-                  r="15"
-                  fill="none"
-                  stroke="#c8a464"
-                  strokeWidth="2.2"
-                  strokeDasharray={`${Math.round(gazeProgress * 94)} 94`}
-                />
-              </svg>
-            )}
-          </div>
-        </div>
-      )}
+      {/* Center Reticle */}
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div
+          className={`w-2.5 h-2.5 rounded-full transition-transform duration-150 ${
+            hoveredTarget
+              ? 'bg-[#c8a464] scale-125'
+              : hasFloorTeleportTarget
+              ? 'bg-[#c8a464]/70 scale-105'
+              : 'bg-white/35 scale-100'
+          }`}
+        />
+      </div>
 
-      {/* Top-Left Architectural Room HUD */}
-      <div className="z-10 pointer-events-auto absolute top-5 left-5 max-w-md p-4 bg-black/55 backdrop-blur-md border border-white/10 rounded space-y-2.5">
-        <div className="flex items-center justify-between gap-4 text-xs font-mono tabular-nums text-[#a89f91]">
+      {/* Top-Left Minimal Context Header (§4A.1 - Keep greeting minimal, no text wall) */}
+      <div className="z-10 pointer-events-auto absolute top-5 left-5 max-w-md p-4 bg-black/60 backdrop-blur-md border border-white/10 rounded space-y-2">
+        <div className="flex items-center justify-between gap-4 text-xs font-mono text-[#a89f91]">
           <span>
-            {currentManifest.id} ·{' '}
-            {lang === 'ru' ? `Визит ${visitCount}` : `Visit ${visitCount}`} ·{' '}
-            {lang === 'ru'
-              ? `Цикл ${playerState.cycleCount}`
-              : `Cycle ${playerState.cycleCount}`}
+            {hubState.location === 'threshold'
+              ? 'THE THRESHOLD · ATRIUM'
+              : hubState.location === 'corridor'
+              ? `${hubState.branch.toUpperCase()} · SEGMENT ${hubState.segment}`
+              : `${activeRoomManifest?.id} · ${activeRoomManifest?.identity.dimension}`}
           </span>
-          <button
-            onClick={handleToggleAudio}
-            className="text-xs font-mono text-[#c8a464] hover:underline whitespace-nowrap"
-          >
-            {audioActive
-              ? lang === 'ru'
-                ? 'Звук: ВКЛ'
-                : 'Acoustics: ON'
-              : lang === 'ru'
-              ? 'Звук: ВЫКЛ'
-              : 'Acoustics: OFF'}
-          </button>
+          <span className="text-[#c8a464]">
+            {hubState.path
+              ? `PATH: ${hubState.path.toUpperCase()}`
+              : 'PATH: UNCHOSEN'}
+          </span>
         </div>
-
-        {currentManifest.protocolStage && !playerState.activeVoid && (
-          <p className="text-xs font-mono text-[#c8a464]">
-            {currentManifest.protocolStage}
-          </p>
-        )}
 
         <h1 className="text-lg font-semibold text-[#f3ede2]">
-          {playerState.activeVoid
+          {hubState.location === 'threshold'
             ? lang === 'ru'
-              ? `ПУСТОТА · ${getVoidDescriptor(playerState.activeVoid).titleRu}`
-              : `VOID · ${getVoidDescriptor(playerState.activeVoid).title}`
+              ? 'Порог · Выберите Восхождение или Нисхождение'
+              : 'The Threshold · Choose Ascent or Descent'
+            : hubState.location === 'corridor'
+            ? lang === 'ru'
+              ? `${
+                  hubState.branch === 'ascend'
+                    ? 'Ветвь Восхождения (Воплощать / Расти)'
+                    : 'Ветвь Нисхождения (Искать / Исследовать)'
+                } · Сегмент ${hubState.segment}`
+              : `${
+                  hubState.branch === 'ascend'
+                    ? 'Ascent Branch (Grow / Embody)'
+                    : 'Descent Branch (Search / Explore)'
+                } · Segment ${hubState.segment}`
             : lang === 'ru'
-            ? currentManifest.titleRu || currentManifest.title
-            : currentManifest.title}
+            ? `${activeRoomManifest?.identity.symbol} · ${
+                activeRoomManifest?.identity.nameRu ||
+                activeRoomManifest?.identity.name
+              }`
+            : `${activeRoomManifest?.identity.symbol} · ${activeRoomManifest?.identity.name}`}
         </h1>
 
-        <p className="text-xs text-[#c2b9aa] leading-relaxed">
-          {playerState.activeVoid
-            ? lang === 'ru'
-              ? getVoidDescriptor(playerState.activeVoid).subtitleRu
-              : getVoidDescriptor(playerState.activeVoid).subtitle
-            : lang === 'ru'
-            ? currentManifest.descriptionRu || currentManifest.description
-            : currentManifest.description}
-        </p>
-
-        {currentManifest.quest && !playerState.activeVoid && (
-          <div className="pt-2 border-t border-white/10 space-y-1">
+        {hubState.location === 'room' && activeRoomManifest && (
+          <div className="pt-1.5 border-t border-white/10 space-y-1">
             <p className="text-xs text-[#c8a464] italic">
               «
               {lang === 'ru'
-                ? currentManifest.quest.questionRu ||
-                  currentManifest.quest.question
-                : currentManifest.quest.question}
+                ? activeRoomManifest.quest.questionRu ||
+                  activeRoomManifest.quest.question
+                : activeRoomManifest.quest.question}
               »
+            </p>
+            <p className="text-xs text-[#a89f91] font-mono">
+              {lang === 'ru'
+                ? `Задача: ${
+                    activeRoomManifest.quest.objectiveRu ||
+                    activeRoomManifest.quest.objective
+                  }`
+                : `Objective: ${activeRoomManifest.quest.objective}`}
             </p>
           </div>
         )}
       </div>
 
-      {/* Top-Right Spatial Orientation & Direct Interaction Bar */}
-      <div className="z-10 pointer-events-auto absolute top-5 right-5 max-w-xs p-4 bg-black/55 backdrop-blur-md border border-white/10 rounded space-y-3">
-        <div className="flex items-center justify-between text-xs font-mono tabular-nums text-[#a89f91]">
+      {/* Top-Right Quick Navigation & Comfort Bar */}
+      <div className="z-10 pointer-events-auto absolute top-5 right-5 max-w-xs p-4 bg-black/60 backdrop-blur-md border border-white/10 rounded space-y-3">
+        <div className="flex items-center justify-between gap-3 text-xs font-mono tabular-nums text-[#a89f91]">
           <span>
-            X:{poseSnapshot.x.toFixed(1)} Z:{poseSnapshot.z.toFixed(1)}
+            {telemetry.fps} FPS · {telemetry.drawCalls} DC
           </span>
-          <span>
-            {lang === 'ru' ? 'Открытий:' : 'Discoveries:'}{' '}
-            {playerState.discoveries.length}
+          <span className="text-[#c8a464]">
+            {hubState.comfortMode.toUpperCase()}
           </span>
         </div>
 
-        {!playerState.activeVoid && (
-          <>
-            <div className="space-y-1.5">
+        {/* Diegetic Quick Actions for Desktop & Quest 2 Browser */}
+        {hubState.location === 'threshold' && (
+          <div className="space-y-1.5">
+            <p className="text-xs text-[#9c9488]">
+              {lang === 'ru'
+                ? 'Выбор ветви лабиринта (§4A):'
+                : 'Choose Labyrinth Branch (§4A):'}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() =>
+                  executeSpatialAction({
+                    id: 'THRESHOLD_ASCENT',
+                    kind: 'threshold-branch',
+                    branch: 'ascend',
+                    title: 'UP — ASCENT',
+                    titleRu: 'ВВЕРХ — ВОСХОЖДЕНИЕ',
+                    subtitle: '',
+                    subtitleRu: '',
+                  })
+                }
+                className="px-3 py-2 text-xs font-semibold bg-[#c8a464] text-[#0b0a09] hover:bg-[#d8b676] rounded transition-colors"
+              >
+                ▲ {lang === 'ru' ? 'ВВЕРХ (Расти)' : 'UP · Ascent'}
+              </button>
+              <button
+                onClick={() =>
+                  executeSpatialAction({
+                    id: 'THRESHOLD_DESCENT',
+                    kind: 'threshold-branch',
+                    branch: 'descend',
+                    title: 'DOWN — DESCENT',
+                    titleRu: 'ВНИЗ — НИСХОЖДЕНИЕ',
+                    subtitle: '',
+                    subtitleRu: '',
+                  })
+                }
+                className="px-3 py-2 text-xs font-semibold bg-[#1c3b57] text-[#e8f4fc] border border-[#4ea8de]/50 hover:bg-[#254d70] rounded transition-colors"
+              >
+                ▼ {lang === 'ru' ? 'ВНИЗ (Искать)' : 'DOWN · Descent'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {hubState.location === 'corridor' && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <button
+                onClick={() =>
+                  hubPlayerState.setCorridorSegment(
+                    hubState.branch,
+                    hubState.segment === 1 ? 2 : 1
+                  )
+                }
+                className="flex-1 px-2.5 py-1.5 text-xs font-mono bg-white/5 hover:bg-white/10 border border-white/10 rounded text-[#f3ede2]"
+              >
+                → {lang === 'ru' ? 'Сегмент' : 'Segment'}{' '}
+                {hubState.segment === 1 ? 2 : 1}
+              </button>
+              <button
+                onClick={() => hubPlayerState.returnToThreshold()}
+                className="px-2.5 py-1.5 text-xs font-mono bg-white/5 hover:bg-white/10 border border-white/10 rounded text-[#a89f91]"
+              >
+                ↺ {lang === 'ru' ? 'Порог' : 'Threshold'}
+              </button>
+            </div>
+
+            <div className="space-y-1 pt-1 border-t border-white/10">
               <p className="text-xs text-[#9c9488]">
-                {lang === 'ru'
-                  ? 'Двери в этой реальности:'
-                  : 'Doors in this reality:'}
+                {lang === 'ru' ? 'Двери сегмента:' : 'Segment Doors:'}
               </p>
               <div className="flex flex-wrap gap-1.5">
-                {visibleDoors.map((door) => (
+                {currentSegmentNodes.map((n) => (
                   <button
-                    key={door.id}
-                    onClick={() => {
-                      if (door.position) handleLookAtPosition(door.position);
-                      if (
-                        door.proposition &&
-                        door.proposition.options.length > 0
-                      ) {
-                        setActiveDoorProposition(door);
-                      } else {
-                        const res = executeDoorTransition(door);
-                        setNarrativeNotice({
-                          title: `Door ${door.id}`,
-                          body: lang === 'ru' ? res.messageRu : res.message,
-                        });
-                      }
-                    }}
-                    className={`px-2.5 py-1 text-xs font-mono rounded border transition-colors whitespace-nowrap ${
-                      door.type === 'rabbit-hole' || door.id === 'RH'
-                        ? 'bg-[#241a2e] text-[#f0d27a] border-[#d4af37]/50 hover:bg-[#312340]'
-                        : 'bg-white/5 text-[#e8e2d5] border-white/10 hover:bg-white/10'
+                    key={n.id}
+                    onClick={() =>
+                      executeSpatialAction({
+                        id: `CORRIDOR_DOOR_${n.id}`,
+                        kind: 'corridor-door',
+                        roomId: n.id,
+                        status: n.status,
+                        title: n.title,
+                        titleRu: n.titleRu || n.title,
+                        subtitle: n.dimension,
+                        subtitleRu: n.dimension,
+                      })
+                    }
+                    className={`px-2.5 py-1 text-xs font-mono rounded border transition-colors ${
+                      n.status === 'planned'
+                        ? 'bg-white/5 text-[#777] border-white/5'
+                        : 'bg-white/5 hover:bg-white/15 text-[#f3ede2] border-[#c8a464]/40'
                     }`}
                   >
-                    {door.symbol || '→'} Door {door.label || door.id}
+                    {n.symbol} · {n.id}
                   </button>
                 ))}
               </div>
             </div>
-
-            {(activeObjects.length > 0 ||
-              currentManifest.mirror ||
-              currentManifest.creatorPrompt?.enabled) && (
-              <div className="space-y-1.5 pt-2 border-t border-white/10">
-                <p className="text-xs text-[#9c9488]">
-                  {lang === 'ru'
-                    ? 'Объекты, Зеркало и инструменты:'
-                    : 'Objects, Mirror & instruments:'}
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {activeObjects.map((obj) => (
-                    <button
-                      key={obj.id}
-                      onClick={() => {
-                        handleLookAtPosition(obj.position);
-                        if (
-                          currentManifest.creatorPrompt?.enabled &&
-                          obj.discoveryId === 'SYSTEM_RULE_CREATED'
-                        ) {
-                          setCreatorModalOpen(true);
-                          return;
-                        }
-                        const out = performObjectInteraction(
-                          currentManifest.id,
-                          obj,
-                          'inspect'
-                        );
-                        spatialAudioSystem.triggerChime(392);
-                        setNarrativeNotice({
-                          title:
-                            lang === 'ru'
-                              ? obj.titleRu || obj.title || obj.id
-                              : obj.title || obj.id,
-                          body: lang === 'ru' ? out.messageRu : out.message,
-                        });
-                      }}
-                      className="px-2.5 py-1 text-xs bg-white/5 hover:bg-white/10 text-[#d8cfc0] border border-white/10 rounded transition-colors truncate max-w-[240px]"
-                    >
-                      {lang === 'ru'
-                        ? obj.titleRu || obj.title
-                        : obj.title || obj.id}
-                    </button>
-                  ))}
-                  {currentManifest.mirror && (
-                    <button
-                      onClick={() => {
-                        if (currentManifest.mirror?.position) {
-                          handleLookAtPosition(currentManifest.mirror.position);
-                        }
-                        setActiveMirrorModal(currentManifest.mirror!);
-                      }}
-                      className="px-2.5 py-1 text-xs bg-[#16222f] hover:bg-[#1e2f40] text-[#b8d4ec] border border-[#7da2c4]/40 rounded transition-colors whitespace-nowrap"
-                    >
-                      {lang === 'ru'
-                        ? `Зеркало (${
-                            currentManifest.mirror.characterStateRu ||
-                            currentManifest.mirror.characterState
-                          })`
-                        : `Mirror (${currentManifest.mirror.characterState})`}
-                    </button>
-                  )}
-                  {currentManifest.creatorPrompt?.enabled && (
-                    <button
-                      onClick={() => setCreatorModalOpen(true)}
-                      className="px-2.5 py-1 text-xs bg-[#261f12] hover:bg-[#332917] text-[#f0d27a] border border-[#c8a464]/50 rounded transition-colors whitespace-nowrap"
-                    >
-                      {lang === 'ru'
-                        ? 'XI. Создать Правило (Игрок → Дизайнер)'
-                        : 'XI. Author Rule (Player → Designer)'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-          </>
+          </div>
         )}
 
-        {playerState.activeVoid && (
-          <div className="pt-2 space-y-2">
+        {hubState.location === 'room' && activeRoomManifest && (
+          <div className="space-y-2">
             <button
               onClick={() =>
-                playerStateStore.exitVoidToRoom(
-                  playerState.currentRoomId || 'ROOM_0000'
-                )
+                executeSpatialAction({
+                  id: 'MIRROR_CHOICE_back',
+                  kind: 'room-mirror',
+                  mirrorChoice: 'back',
+                  title: 'Back to Corridor',
+                  titleRu: 'В Коридор',
+                  subtitle: '',
+                  subtitleRu: '',
+                })
               }
-              className="w-full py-2 px-3 text-xs font-semibold text-[#0b0a09] bg-[#c8a464] hover:bg-[#d6b475] rounded transition-colors whitespace-nowrap"
+              className="w-full py-1.5 px-3 text-xs font-semibold bg-[#c8a464] text-[#0b0a09] hover:bg-[#d8b676] rounded transition-colors"
             >
+              ↺{' '}
               {lang === 'ru'
-                ? `Вернуться из Пустоты в ${playerState.currentRoomId}`
-                : `Step Back from Void into ${playerState.currentRoomId}`}
-            </button>
-            <button
-              onClick={() => playerStateStore.exitVoidToRoom('ROOM_0000')}
-              className="w-full py-1.5 px-3 text-xs text-[#d8cfc0] bg-white/5 hover:bg-white/10 border border-white/10 rounded transition-colors whitespace-nowrap"
-            >
-              {lang === 'ru'
-                ? 'Вернуться в ROOM_0000 (Центральный Лабиринт)'
-                : 'Return to ROOM_0000 (Central Labyrinth)'}
+                ? `Вернуться в Коридор (${hubState.branch.toUpperCase()} Seg ${
+                    hubState.segment
+                  })`
+                : `Return to Corridor (${hubState.branch.toUpperCase()} Seg ${
+                    hubState.segment
+                  })`}
             </button>
           </div>
         )}
+
+        {/* Hotkey Bar (§7.9: R, T, C, Alt, Z) */}
+        <div className="pt-2 border-t border-white/10 grid grid-cols-5 gap-1">
+          <button
+            onClick={() =>
+              setActiveOverlay((p) => (p === 'rules' ? 'none' : 'rules'))
+            }
+            className={`py-1 text-[11px] font-mono rounded border ${
+              activeOverlay === 'rules'
+                ? 'bg-[#c8a464] text-[#0b0a09] border-[#c8a464]'
+                : 'bg-white/5 text-[#d8cfc0] border-white/10'
+            }`}
+            title="Rules (Key R)"
+          >
+            [R]
+          </button>
+          <button
+            onClick={() =>
+              setActiveOverlay((p) => (p === 'radio' ? 'none' : 'radio'))
+            }
+            className={`py-1 text-[11px] font-mono rounded border ${
+              activeOverlay === 'radio'
+                ? 'bg-[#c8a464] text-[#0b0a09] border-[#c8a464]'
+                : 'bg-white/5 text-[#d8cfc0] border-white/10'
+            }`}
+            title="Radio / Comments (Key T)"
+          >
+            [T]
+          </button>
+          <button
+            onClick={() => {
+              const eng = engineRef.current;
+              if (eng) {
+                const next = !eng.isFovZoom();
+                eng.setFovZoom(next);
+                setZoomActive(next);
+              }
+            }}
+            className={`py-1 text-[11px] font-mono rounded border ${
+              zoomActive
+                ? 'bg-[#c8a464] text-[#0b0a09] border-[#c8a464]'
+                : 'bg-white/5 text-[#d8cfc0] border-white/10'
+            }`}
+            title="Zoom / Scale (Key C)"
+          >
+            [C]
+          </button>
+          <button
+            onClick={() =>
+              setActiveOverlay((p) => (p === 'comfort' ? 'none' : 'comfort'))
+            }
+            className={`py-1 text-[11px] font-mono rounded border ${
+              activeOverlay === 'comfort'
+                ? 'bg-[#c8a464] text-[#0b0a09] border-[#c8a464]'
+                : 'bg-white/5 text-[#d8cfc0] border-white/10'
+            }`}
+            title="VR Comfort Settings (Key Alt)"
+          >
+            [Alt]
+          </button>
+          <button
+            onClick={() => {
+              const next = spatialAudioSystem.toggle();
+              setAudioActive(next);
+              setActiveOverlay((p) => (p === 'audio' ? 'none' : 'audio'));
+            }}
+            className={`py-1 text-[11px] font-mono rounded border ${
+              audioActive
+                ? 'bg-[#c8a464] text-[#0b0a09] border-[#c8a464]'
+                : 'bg-white/5 text-[#d8cfc0] border-white/10'
+            }`}
+            title="Soundtrack & Volume (Key Z)"
+          >
+            [Z]
+          </button>
+        </div>
       </div>
 
-      {/* Bottom-Right Dedicated Meta Quest 2 WebXR Launch Button */}
-      <div className="z-10 pointer-events-auto absolute bottom-5 right-5">
+      {/* Hotkey Overlay Panels (R, T, Alt, Z) */}
+      {activeOverlay !== 'none' && (
+        <div className="z-30 pointer-events-auto absolute top-24 left-1/2 -translate-x-1/2 max-w-lg w-full p-5 bg-[#12110f]/95 backdrop-blur-md border border-[#c8a464]/40 rounded space-y-4">
+          <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+            <h2 className="text-sm font-mono uppercase tracking-wider text-[#c8a464]">
+              {activeOverlay === 'rules' &&
+                (lang === 'ru'
+                  ? '[R] Правила Лабиринта & Room API v1'
+                  : '[R] Labyrinth Rules & Room API v1')}
+              {activeOverlay === 'radio' &&
+                (lang === 'ru'
+                  ? `[T] Радиоканал · ${activeChannel}`
+                  : `[T] Radio Channel · ${activeChannel}`)}
+              {activeOverlay === 'comfort' &&
+                (lang === 'ru'
+                  ? '[Alt] Настройки VR-Комфорта (Без Укачивания)'
+                  : '[Alt] VR Comfort & Anti-Vection Settings')}
+              {activeOverlay === 'audio' &&
+                (lang === 'ru'
+                  ? '[Z] Управление Звуком и Саундтреком'
+                  : '[Z] Audio & Branch Crossfade Control')}
+            </h2>
+            <button
+              onClick={() => setActiveOverlay('none')}
+              className="text-xs text-[#a89f91] hover:text-white"
+            >
+              ×
+            </button>
+          </div>
+
+          {activeOverlay === 'rules' && (
+            <div className="space-y-2 text-xs text-[#d8cfc0] leading-relaxed">
+              <p>
+                •{' '}
+                {lang === 'ru'
+                  ? 'Порог разделён вертикально: ВВЕРХ (Восхождение — воплощать, расти) и ВНИЗ (Нисхождение — искать, исследовать).'
+                  : 'The Threshold splits vertically: UP (Ascent — grow, embody) and DOWN (Descent — search, explore).'}
+              </p>
+              <p>
+                •{' '}
+                {lang === 'ru'
+                  ? 'В каждой комнате: вопрос, квест, 3 двери (A, B, C), Зеркало идентичности (Accept / Reject / Back) и скрытая Кроличья Нора (RH).'
+                  : 'Every room holds a question, a quest, 3 doors (A, B, C), an Identity Mirror (Accept / Reject / Back), and a hidden Rabbit Hole (RH).'}
+              </p>
+              <p>
+                •{' '}
+                {lang === 'ru'
+                  ? 'Объекты никогда не покидают комнату (portable: false); между комнатами передаётся только знание.'
+                  : 'Objects never leave their room (portable: false); only knowledge travels across thresholds.'}
+              </p>
+            </div>
+          )}
+
+          {activeOverlay === 'comfort' && (
+            <div className="space-y-3 text-xs">
+              <div className="space-y-1.5">
+                <p className="text-[#a89f91] font-mono">
+                  {lang === 'ru'
+                    ? 'Режим перемещения в VR / Десктоп (§4A.3):'
+                    : 'Locomotion Mode (§4A.3):'}
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['teleport', 'smooth', 'seated'] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => hubPlayerState.setComfortMode(m)}
+                      className={`py-2 px-3 font-mono rounded border ${
+                        hubState.comfortMode === m
+                          ? 'bg-[#c8a464] text-[#0b0a09] border-[#c8a464] font-semibold'
+                          : 'bg-white/5 text-[#e8e2d5] border-white/10'
+                      }`}
+                    >
+                      {m.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                <span className="text-[#d8cfc0]">
+                  {lang === 'ru'
+                    ? 'Дискретный поворот (Snap Turn, без «плывущего» вращения):'
+                    : 'Discrete Snap Turn Angle:'}
+                </span>
+                <div className="flex gap-2">
+                  {([30, 45] as const).map((deg) => (
+                    <button
+                      key={deg}
+                      onClick={() => hubPlayerState.setSnapTurnDegrees(deg)}
+                      className={`px-3 py-1 font-mono rounded border ${
+                        hubState.snapTurnDegrees === deg
+                          ? 'bg-[#c8a464] text-[#0b0a09] border-[#c8a464]'
+                          : 'bg-white/5 text-[#d8cfc0] border-white/10'
+                      }`}
+                    >
+                      {deg}°
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                <span className="text-[#d8cfc0]">
+                  {lang === 'ru'
+                    ? 'Периферийная виньетка комфорта при движении:'
+                    : 'Peripheral Comfort Vignette + Horizon Frame:'}
+                </span>
+                <button
+                  onClick={() => hubPlayerState.toggleVignette()}
+                  className="px-3 py-1 font-mono bg-white/10 rounded text-[#c8a464]"
+                >
+                  {hubState.vignetteEnabled ? 'ON' : 'OFF'}
+                </button>
+              </div>
+
+              <div className="p-2.5 bg-black/50 rounded font-mono text-[11px] text-[#a89f91] flex justify-between">
+                <span>FPS: {telemetry.fps} (Target ≥72)</span>
+                <span>Draw Calls: {telemetry.drawCalls}/150</span>
+                <span>Tris: {telemetry.triangles}</span>
+              </div>
+            </div>
+          )}
+
+          {activeOverlay === 'radio' && (
+            <div className="space-y-3 text-xs">
+              <div className="max-h-40 overflow-y-auto space-y-1.5 p-2.5 bg-black/50 rounded border border-white/10 font-mono">
+                {(hubState.radioChannels[activeChannel] ?? []).map((m, i) => (
+                  <div key={i} className="text-[#d8cfc0]">
+                    <span className="text-[#c8a464]">
+                      [{m.timestamp}] {m.author}:
+                    </span>{' '}
+                    {m.text}
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={radioDraft}
+                  onChange={(e) => setRadioDraft(e.target.value)}
+                  placeholder={
+                    lang === 'ru'
+                      ? 'Оставить наблюдение в канале...'
+                      : 'Broadcast discovery to channel...'
+                  }
+                  className="flex-1 px-3 py-1.5 bg-black/60 border border-white/15 rounded text-xs text-[#f3ede2]"
+                />
+                <button
+                  onClick={() => {
+                    if (!radioDraft.trim()) return;
+                    hubPlayerState.postRadioMessage(
+                      activeChannel,
+                      radioDraft.trim()
+                    );
+                    setRadioDraft('');
+                  }}
+                  className="px-3 py-1.5 bg-[#c8a464] text-[#0b0a09] font-semibold rounded"
+                >
+                  {lang === 'ru' ? 'Отправить' : 'Send'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeOverlay === 'audio' && (
+            <div className="space-y-3 text-xs">
+              <p className="font-mono text-[#c8a464]">
+                {spatialAudioSystem.getCurrentTrackLabel()}
+              </p>
+              <div className="flex items-center gap-3">
+                <span className="text-[#a89f91]">Volume:</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  defaultValue={spatialAudioSystem.getVolume()}
+                  onChange={(e) =>
+                    spatialAudioSystem.setVolume(parseFloat(e.target.value))
+                  }
+                  className="flex-1"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Bottom-Right Dedicated Meta Quest 2 WebXR Button */}
+      <div className="z-10 pointer-events-auto absolute bottom-5 right-5 flex items-center gap-2">
         <button
-          onClick={handleEnterVRClick}
+          onClick={async () => {
+            const status = await webxrManager.toggleVRSession();
+            setNotice({
+              title: 'WebXR · Meta Quest 2',
+              body: status.message,
+            });
+          }}
           className="px-4 py-2.5 text-xs font-semibold text-[#0b0a09] bg-[#c8a464] hover:bg-[#d6b475] rounded shadow-lg transition-colors whitespace-nowrap"
         >
           {xrActive
@@ -655,418 +892,61 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
               ? 'Выйти из VR (Quest 2)'
               : 'Exit VR (Quest 2)'
             : lang === 'ru'
-            ? 'Войти в 6DOF VR (Meta Quest 2)'
-            : 'Enter 6DOF VR (Meta Quest 2)'}
+            ? 'Войти в VR (Meta Quest 2)'
+            : 'Enter VR (Meta Quest 2)'}
         </button>
       </div>
 
-      {/* Hovered Target Prompt */}
-      {hoveredTarget && !playerState.activeVoid && (
-        <div className="z-10 pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 px-4 py-2 bg-black/70 backdrop-blur-md border border-[#c8a464]/40 rounded text-center">
-          <p className="text-xs font-semibold text-[#f3ede2]">
-            [Click / E / VR Trigger]{' '}
-            {lang === 'ru'
-              ? hoveredTarget.titleRu || hoveredTarget.title
-              : hoveredTarget.title}
-          </p>
-          {hoveredTarget.subtitle && (
-            <p className="text-xs text-[#a89f91] font-mono mt-0.5">
+      {/* Hovered Target or Floor Teleport Prompt */}
+      {(hoveredTarget || hasFloorTeleportTarget) && (
+        <div className="z-10 pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 px-4 py-2 bg-black/75 backdrop-blur-md border border-[#c8a464]/40 rounded text-center">
+          {hoveredTarget ? (
+            <>
+              <p className="text-xs font-semibold text-[#f3ede2]">
+                [Click / E / VR Trigger]{' '}
+                {lang === 'ru' ? hoveredTarget.titleRu : hoveredTarget.title}
+              </p>
+              <p className="text-xs text-[#a89f91] font-mono mt-0.5">
+                {lang === 'ru'
+                  ? hoveredTarget.subtitleRu
+                  : hoveredTarget.subtitle}
+              </p>
+            </>
+          ) : (
+            <p className="text-xs font-mono text-[#c8a464]">
               {lang === 'ru'
-                ? hoveredTarget.subtitleRu || hoveredTarget.subtitle
-                : hoveredTarget.subtitle}
+                ? '[Клик / Курок VR] Телепорт в точку (с комфортным затуханием)'
+                : '[Click / VR Trigger] Blink-Teleport to Floor Ring (Comfort Fade)'}
             </p>
           )}
         </div>
       )}
 
-      {/* Narrative / Discovery Toast */}
-      {narrativeNotice && (
-        <div className="z-20 pointer-events-auto absolute bottom-16 left-5 max-w-md p-4 bg-[#141210]/95 backdrop-blur-md border border-[#c8a464]/40 rounded space-y-1.5">
+      {/* Toast Notice */}
+      {notice && (
+        <div className="z-20 pointer-events-auto absolute bottom-16 left-5 max-w-md p-4 bg-[#141210]/95 backdrop-blur-md border border-[#c8a464]/40 rounded space-y-1">
           <div className="flex items-center justify-between gap-4">
             <span className="text-xs font-semibold text-[#c8a464]">
-              {narrativeNotice.title}
+              {notice.title}
             </span>
             <button
-              onClick={() => setNarrativeNotice(null)}
+              onClick={() => setNotice(null)}
               className="text-xs text-[#9c9488] hover:text-white"
             >
               ×
             </button>
           </div>
           <p className="text-xs text-[#e8e2d5] leading-relaxed">
-            {narrativeNotice.body}
+            {notice.body}
           </p>
         </div>
       )}
 
-      {/* Door Proposition Modal (A / B / C Options + Behavioral Signal Recording) */}
-      {activeDoorProposition && (
-        <div className="z-30 pointer-events-auto absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="max-w-lg w-full p-6 bg-[#141311] border border-[#c8a464]/40 rounded space-y-5">
-            <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
-              <div>
-                <p className="text-xs font-mono text-[#c8a464]">
-                  DOOR {activeDoorProposition.id} ·{' '}
-                  {activeDoorProposition.subtitle ||
-                    activeDoorProposition.destination}
-                </p>
-                <h2 className="text-xl font-semibold text-[#f3ede2] mt-1">
-                  {lang === 'ru'
-                    ? activeDoorProposition.proposition?.promptRu ||
-                      activeDoorProposition.proposition?.prompt
-                    : activeDoorProposition.proposition?.prompt}
-                </h2>
-              </div>
-              <button
-                onClick={() => setActiveDoorProposition(null)}
-                className="text-xs text-[#9c9488] hover:text-white px-2 py-1"
-              >
-                {lang === 'ru' ? 'Отойти' : 'Step Back'}
-              </button>
-            </div>
-
-            <div className="space-y-2.5">
-              {activeDoorProposition.proposition?.options.map((opt, idx) => (
-                <button
-                  key={opt.id}
-                  onClick={() => {
-                    playerStateStore.recordDecision(
-                      `door:${currentManifest.id}:${activeDoorProposition.id}`,
-                      opt.id,
-                      undefined,
-                      opt.behavioralSignal
-                    );
-                    if (opt.behavioralSignal === 'cycle_reset') {
-                      setActiveDoorProposition(null);
-                      setNarrativeNotice({
-                        title:
-                          lang === 'ru'
-                            ? 'XVI. Последняя Дверь → Новый Цикл'
-                            : 'XVI. The Last Door → New Cycle',
-                        body:
-                          lang === 'ru'
-                            ? 'Лабиринт не закончился. Вы вернулись в начало в новом цикле идентичности.'
-                            : 'The labyrinth has not ended. You have returned to the beginning in a new identity cycle.',
-                      });
-                      return;
-                    }
-                    const res = executeDoorTransition(
-                      activeDoorProposition,
-                      opt.destinationOverride,
-                      opt.voidOverride
-                    );
-                    setActiveDoorProposition(null);
-                    setNarrativeNotice({
-                      title: `Door ${activeDoorProposition.id}`,
-                      body: lang === 'ru' ? res.messageRu : res.message,
-                    });
-                  }}
-                  className="w-full text-left p-3.5 bg-white/[0.03] hover:bg-white/[0.08] border border-white/10 hover:border-[#c8a464]/50 rounded transition-colors flex items-center justify-between gap-4"
-                >
-                  <span className="text-xs text-[#f3ede2]">
-                    0{idx + 1}.{' '}
-                    {lang === 'ru' ? opt.textRu || opt.text : opt.text}
-                  </span>
-                  <span className="text-xs font-mono text-[#c8a464] shrink-0">
-                    →
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            <p className="text-xs text-[#9c9488] pt-2 border-t border-white/10">
-              {lang === 'ru'
-                ? 'Никакой вариант не объявляется «правильным». Вы также можете отойти от двери и исследовать скрытый слой самой комнаты.'
-                : 'No option is declared "correct." You may also step away from the door and examine the hidden layer of the room itself.'}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Mirror Instrument Modal (Supports Entry Mirror, Identity Mirror, and Meta-Mirror) */}
-      {activeMirrorModal && (
-        <div className="z-30 pointer-events-auto absolute inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="max-w-xl w-full p-6 bg-[#11161c] border border-[#7da2c4]/40 rounded space-y-5 max-h-[90vh] overflow-y-auto">
-            <div className="border-b border-white/10 pb-4 flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-mono text-[#7da2c4]">
-                  {activeMirrorModal.mode === 'meta'
-                    ? 'XII. META MIRROR · DECISION HISTORY'
-                    : activeMirrorModal.mode === 'first'
-                    ? 'I. ENTRY MIRROR · BASELINE EXPECTATION'
-                    : `V. IDENTITY MIRROR · ${activeMirrorModal.characterState}`}
-                </p>
-                <h2 className="text-xl font-semibold text-[#f3ede2] mt-1">
-                  {lang === 'ru'
-                    ? activeMirrorModal.characterStateRu ||
-                      activeMirrorModal.characterState
-                    : activeMirrorModal.characterState}
-                </h2>
-                <p className="text-xs text-[#c2cfd9] mt-2 leading-relaxed">
-                  {lang === 'ru'
-                    ? activeMirrorModal.propositionRu ||
-                      activeMirrorModal.proposition
-                    : activeMirrorModal.proposition}
-                </p>
-              </div>
-              <button
-                onClick={() => setActiveMirrorModal(null)}
-                className="text-xs text-[#9c9488] hover:text-white px-2 py-1"
-              >
-                ×
-              </button>
-            </div>
-
-            {activeMirrorModal.mode === 'meta' && (
-              <div className="space-y-4">
-                <div className="p-4 bg-[#0a0d12] border border-white/10 rounded font-mono text-xs text-[#e8e2d5] space-y-1.5">
-                  {(lang === 'ru'
-                    ? cognitiveProfile.metaMirrorLinesRu
-                    : cognitiveProfile.metaMirrorLinesEn
-                  ).map((line, idx) => (
-                    <div key={idx}>{line}</div>
-                  ))}
-                </div>
-
-                <div className="p-4 bg-[#141920] border border-[#c8a464]/30 rounded space-y-2">
-                  <p className="text-xs font-mono text-[#c8a464]">
-                    XIV. INITIATION · XV. PERSONAL COGNITIVE PROFILE
-                  </p>
-                  <p className="text-sm font-semibold text-[#f3ede2]">
-                    {lang === 'ru'
-                      ? cognitiveProfile.initiationTitleRu
-                      : cognitiveProfile.initiationTitleEn}
-                  </p>
-                  <div className="grid grid-cols-2 gap-2 text-xs text-[#c2cfd9] pt-1">
-                    <div>
-                      <span className="text-[#9c9488] font-mono">PRIMARY: </span>
-                      {lang === 'ru'
-                        ? cognitiveProfile.primaryModeRu
-                        : cognitiveProfile.primaryModeEn}
-                    </div>
-                    <div>
-                      <span className="text-[#9c9488] font-mono">
-                        SECONDARY:{' '}
-                      </span>
-                      {lang === 'ru'
-                        ? cognitiveProfile.secondaryModeRu
-                        : cognitiveProfile.secondaryModeEn}
-                    </div>
-                    <div>
-                      <span className="text-[#9c9488] font-mono">SOCIAL: </span>
-                      {lang === 'ru'
-                        ? cognitiveProfile.socialModeRu
-                        : cognitiveProfile.socialModeEn}
-                    </div>
-                    <div>
-                      <span className="text-[#9c9488] font-mono">RISK: </span>
-                      {lang === 'ru'
-                        ? cognitiveProfile.riskProfileRu
-                        : cognitiveProfile.riskProfileEn}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 pt-2 font-mono tabular-nums text-xs border-t border-white/10">
-                    <div>
-                      DISCOVERY:{' '}
-                      <strong className="text-[#c8a464]">
-                        {cognitiveProfile.discoveryIndex}
-                      </strong>
-                    </div>
-                    <div>
-                      AWARENESS:{' '}
-                      <strong className="text-[#c8a464]">
-                        {cognitiveProfile.systemAwareness}
-                      </strong>
-                    </div>
-                    <div>
-                      ADAPTATION:{' '}
-                      <strong className="text-[#c8a464]">
-                        {cognitiveProfile.adaptationIndex}
-                      </strong>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <button
-                onClick={() => {
-                  resolveMirrorProposition(
-                    currentManifest.id,
-                    activeMirrorModal,
-                    'accept'
-                  );
-                  spatialAudioSystem.triggerChime(523.25);
-                  setActiveMirrorModal(null);
-                  setNarrativeNotice({
-                    title: activeMirrorModal.characterState,
-                    body:
-                      activeMirrorModal.mode === 'first'
-                        ? lang === 'ru'
-                          ? 'Ожидание зафиксировано: встретить неизвестную версию себя.'
-                          : 'Baseline recorded: expecting an unknown version of oneself.'
-                        : lang === 'ru'
-                        ? 'Вы приняли отражение. Состояние идентичности обновлено.'
-                        : 'You accepted the reflection. Persistent identity state updated.',
-                  });
-                }}
-                className="py-2.5 px-4 text-xs font-semibold text-[#0b0a09] bg-[#c8a464] hover:bg-[#d6b475] rounded transition-colors whitespace-nowrap"
-              >
-                {activeMirrorModal.mode === 'first'
-                  ? lang === 'ru'
-                    ? 'Себя иного'
-                    : 'Another Self'
-                  : lang === 'ru'
-                  ? 'ПРИНЯТЬ (ACCEPT)'
-                  : 'ACCEPT'}
-              </button>
-              <button
-                onClick={() => {
-                  resolveMirrorProposition(
-                    currentManifest.id,
-                    activeMirrorModal,
-                    'reject'
-                  );
-                  spatialAudioSystem.triggerChime(349.23);
-                  setActiveMirrorModal(null);
-                  setNarrativeNotice({
-                    title: activeMirrorModal.characterState,
-                    body:
-                      activeMirrorModal.mode === 'first'
-                        ? lang === 'ru'
-                          ? 'Ожидание зафиксировано: встретить архитектора системы.'
-                          : 'Baseline recorded: expecting the system architect.'
-                        : lang === 'ru'
-                        ? 'Вы отвергли предложенный образ.'
-                        : 'You rejected the proposed reflection.',
-                  });
-                }}
-                className="py-2.5 px-4 text-xs font-medium text-[#e8e2d5] bg-white/5 hover:bg-white/10 border border-white/15 rounded transition-colors whitespace-nowrap"
-              >
-                {activeMirrorModal.mode === 'first'
-                  ? lang === 'ru'
-                    ? 'Создателя'
-                    : 'The Architect'
-                  : lang === 'ru'
-                  ? 'ОТВЕРГНУТЬ (REJECT)'
-                  : 'REJECT'}
-              </button>
-              <button
-                onClick={() => {
-                  resolveMirrorProposition(
-                    currentManifest.id,
-                    activeMirrorModal,
-                    'return'
-                  );
-                  setActiveMirrorModal(null);
-                }}
-                className="py-2.5 px-4 text-xs font-medium text-[#a89f91] bg-transparent hover:bg-white/5 border border-white/10 rounded transition-colors whitespace-nowrap"
-              >
-                {activeMirrorModal.mode === 'first'
-                  ? lang === 'ru'
-                    ? 'Никого (Пустоту)'
-                    : 'No One'
-                  : lang === 'ru'
-                  ? 'ВЕРНУТЬСЯ (RETURN)'
-                  : 'RETURN'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Stage XI: Creator Room Modal (Player → Designer) */}
-      {creatorModalOpen && currentManifest.creatorPrompt && (
-        <div className="z-30 pointer-events-auto absolute inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="max-w-lg w-full p-6 bg-[#16131a] border border-[#c8a464]/50 rounded space-y-5">
-            <div className="border-b border-white/10 pb-4 flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-mono text-[#c8a464]">
-                  XI. CREATOR ROOM · PLAYER → DESIGNER
-                </p>
-                <h2 className="text-xl font-semibold text-[#f3ede2] mt-1">
-                  {lang === 'ru'
-                    ? currentManifest.creatorPrompt.titleRu ||
-                      currentManifest.creatorPrompt.title
-                    : currentManifest.creatorPrompt.title}
-                </h2>
-                <p className="text-xs text-[#c2b9aa] mt-1.5">
-                  {lang === 'ru'
-                    ? currentManifest.creatorPrompt.descriptionRu ||
-                      currentManifest.creatorPrompt.description
-                    : currentManifest.creatorPrompt.description}
-                </p>
-              </div>
-              <button
-                onClick={() => setCreatorModalOpen(false)}
-                className="text-xs text-[#9c9488] hover:text-white"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              <label
-                htmlFor="creator-rule-input"
-                className="text-xs font-mono text-[#a89f91] block"
-              >
-                {lang === 'ru'
-                  ? 'Формулировка нового правила или загадки для лабиринта:'
-                  : 'Inscribe a new rule or proposition into the labyrinth:'}
-              </label>
-              <textarea
-                id="creator-rule-input"
-                rows={3}
-                value={customRuleText}
-                onChange={(e) => setCustomRuleText(e.target.value)}
-                className="w-full p-3 bg-[#0e0c10] text-xs font-mono text-[#f3ede2] border border-white/15 rounded focus:outline-none focus:border-[#c8a464]"
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-3">
-              <button
-                onClick={() => setCreatorModalOpen(false)}
-                className="px-4 py-2 text-xs text-[#a89f91] hover:text-white"
-              >
-                {lang === 'ru' ? 'Отмена' : 'Cancel'}
-              </button>
-              <button
-                onClick={() => {
-                  if (!customRuleText.trim()) return;
-                  playerStateStore.recordCreatedRule(
-                    currentManifest.id,
-                    customRuleText.trim()
-                  );
-                  spatialAudioSystem.triggerChime(587.33);
-                  setCreatorModalOpen(false);
-                  setNarrativeNotice({
-                    title:
-                      lang === 'ru'
-                        ? 'XI. Правило Вписано в Лабиринт (Player → Designer)'
-                        : 'XI. Rule Inscribed (Player → Designer)',
-                    body:
-                      lang === 'ru'
-                        ? `Создано новое правило и открыт прямой переход (Door RH → ROOM_0999).`
-                        : `Your rule has been inscribed into the world state and unlocked Door RH → ROOM_0999.`,
-                  });
-                }}
-                className="px-4 py-2 text-xs font-semibold text-[#0b0a09] bg-[#c8a464] hover:bg-[#d6b475] rounded transition-colors whitespace-nowrap"
-              >
-                {lang === 'ru'
-                  ? 'Запечатлеть Правило и Открыть Путь'
-                  : 'Inscribe Rule & Unlock Threshold'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Subtle Bottom Controls Bar */}
-      <div className="z-10 pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-black/45 backdrop-blur-sm border border-white/10 rounded text-xs text-[#a89f91] font-mono whitespace-nowrap">
+      {/* Bottom Controls Legend */}
+      <div className="z-10 pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-black/50 backdrop-blur-sm border border-white/10 rounded text-xs text-[#a89f91] font-mono whitespace-nowrap">
         {lang === 'ru'
-          ? 'WASD / Стики Quest: Движение · Мышь / 6DOF VR: Обзор · E / Курок VR: Взаимодействие'
-          : 'WASD / Quest Sticks: Walk · Mouse / 6DOF VR: Look · E / VR Trigger: Interact'}
+          ? 'Телепорт: Клик/Курок в пол · Стики/WASD: Ходьба · Q/R/Стик: Snap-Поворот · Горячие клавиши: R, T, C, Alt, Z'
+          : 'Teleport: Click/Trigger Floor · Sticks/WASD: Move · Q/R/Stick: Snap-Turn · Hotkeys: R, T, C, Alt, Z'}
       </div>
     </div>
   );

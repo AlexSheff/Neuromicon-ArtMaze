@@ -1,0 +1,49 @@
+{
+  "version": "1.0.0",
+  "artworks": [
+    {
+      "id": "art_threshold_ascent",
+      "title": "Ascension of the First Geometry",
+      "titleRu": "Восхождение Первой Геометрии",
+      "author": "Alex · Neuromicon Studio",
+      "license": "CC-BY-4.0 (Procedural Original)",
+      "source": "Original Procedural Shader & Canvas Plate",
+      "url": "https://alexsheff.github.io/Neuromicon-ArtMaze/#art_threshold_ascent",
+      "branch": "ascend",
+      "motif": "solar_arch"
+    },
+    {
+      "id": "art_threshold_descent",
+      "title": "Cartography of the Subterranean Mirror",
+      "titleRu": "Картография Подземного Зеркала",
+      "author": "Alex · Neuromicon Studio",
+      "license": "CC-BY-4.0 (Procedural Original)",
+      "source": "Original Procedural Shader & Canvas Plate",
+      "url": "https://alexsheff.github.io/Neuromicon-ArtMaze/#art_threshold_descent",
+      "branch": "descend",
+      "motif": "abyssal_lattice"
+    },
+    {
+      "id": "art_corridor_073",
+      "title": "The Object That Casts No Reflection",
+      "titleRu": "Объект, Не Отбрасывающий Отражения",
+      "author": "Alex · Neuromicon Studio",
+      "license": "CC-BY-4.0 (Procedural Original)",
+      "source": "Original Procedural Shader & Canvas Plate",
+      "url": "https://alexsheff.github.io/Neuromicon-ArtMaze/#art_corridor_073",
+      "branch": "descend",
+      "motif": "reflection_paradox"
+    },
+    {
+      "id": "art_corridor_204",
+      "title": "Harmonic Proportions of Room 1149",
+      "titleRu": "Гармонические Пропорции Комнаты 1149",
+      "author": "Alex · Neuromicon Studio",
+      "license": "CC-BY-4.0 (Procedural Original)",
+      "source": "Original Procedural Shader & Canvas Plate",
+      "url": "https://alexsheff.github.io/Neuromicon-ArtMaze/#art_corridor_204",
+      "branch": "ascend",
+      "motif": "golden_astrolabe"
+    }
+  ]
+}

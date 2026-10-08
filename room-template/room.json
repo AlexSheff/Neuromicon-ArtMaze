@@ -1,0 +1,115 @@
+{
+  "apiVersion": 1,
+  "entry": "index.js",
+  "allowedHosts": [],
+  "id": "ROOM_073",
+  "identity": {
+    "name": "Archive of Missing Things",
+    "nameRu": "Архив Исчезнувших Вещей",
+    "symbol": "XX",
+    "description": "A vaulted basalt sanctuary where an unseen monolith exists only inside the mirror reflection.",
+    "descriptionRu": "Базальтовое святилище, где незримый монолит существует только в отражении зеркала.",
+    "dimension": "D3"
+  },
+  "audio": {
+    "track": "audio/neuromicon_073.ogg",
+    "loop": true,
+    "baseHz": 108
+  },
+  "quest": {
+    "question": "What remains when the physical form is absent, yet its reflection endures?",
+    "questionRu": "Что остаётся, когда физическая форма отсутствует, но её отражение продолжает существовать?",
+    "objective": "Find the object that does not exist (inspect its reflection in the mirror)",
+    "objectiveRu": "Найдите объект, которого не существует в зале (исследуйте его призрачное отражение в зеркале)",
+    "completion": {
+      "type": "interactReflection",
+      "target": "obj_ghost"
+    }
+  },
+  "doors": [
+    {
+      "id": "A",
+      "symbol": "VI·⚖",
+      "label": "Citadel of Unwritten Laws",
+      "labelRu": "Цитадель Ненаписанных Законов",
+      "destination": "ROOM_412",
+      "requirement": null,
+      "visibility": "visible",
+      "choiceType": "identity-accept"
+    },
+    {
+      "id": "B",
+      "symbol": "X·☍",
+      "label": "Abyssal Cartography",
+      "labelRu": "Картография Бездны",
+      "destination": "ROOM_891",
+      "requirement": null,
+      "visibility": "visible",
+      "choiceType": "identity-reject"
+    },
+    {
+      "id": "C",
+      "symbol": "V·Φ",
+      "label": "Sanctuary of the Golden Ratio",
+      "labelRu": "Святилище Золотого Сечения",
+      "destination": "ROOM_204",
+      "requirement": null,
+      "visibility": "visible",
+      "choiceType": "free"
+    },
+    {
+      "id": "RH",
+      "symbol": "?",
+      "label": "The Horizon beyond 1149",
+      "labelRu": "Горизонт за Пределами 1149",
+      "destination": "ROOM_1149",
+      "requirement": {
+        "type": "interactReflection",
+        "target": "obj_ghost"
+      },
+      "visibility": "hidden",
+      "choiceType": "rabbit-hole"
+    }
+  ],
+  "mirror": {
+    "characterState": "THE_ARCHIVIST",
+    "characterStateRu": "АРХИВАРИУС ИСЧЕЗНУВШЕГО",
+    "appearance": "assets/avatar_archivist.glb",
+    "choices": ["accept", "reject", "back"]
+  },
+  "objects": [
+    {
+      "id": "obj_01",
+      "title": "Basalt Reliquary Key",
+      "titleRu": "Базальтовый Ключ-Реликварий",
+      "type": "item",
+      "model": "assets/key.glb",
+      "interactions": ["inspect", "rotate"],
+      "portable": false,
+      "visibleInMirror": true
+    },
+    {
+      "id": "puzzle_01",
+      "title": "Harmonic Astrolabe Busyboard",
+      "titleRu": "Гармоническая Астролябия",
+      "type": "busyboard",
+      "interactions": ["rotate", "align"],
+      "portable": false,
+      "visibleInMirror": true,
+      "config": { "rings": 3 }
+    },
+    {
+      "id": "obj_ghost",
+      "title": "Ghost Monolith (Exists Only in Mirror)",
+      "titleRu": "Призрачный Монолит (Только в Отражении)",
+      "type": "anomaly",
+      "interactions": ["interactReflection"],
+      "portable": false,
+      "visibleInMirror": true,
+      "onlyInMirror": true
+    }
+  ],
+  "radio": {
+    "channel": "ROOM_073"
+  }
+}

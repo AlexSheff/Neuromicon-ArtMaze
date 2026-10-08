@@ -1,21 +1,44 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://neuromicon.artmaze/schema/world.schema.json",
-  "title": "Neuromicon ArtMaze World Topology Graph Schema",
+  "title": "Neuromicon Artmaze World Topology Graph (1149 Rooms)",
   "type": "object",
-  "required": ["version", "nodes", "edges"],
+  "required": ["version", "totalRooms", "organizationAllowlist", "nodes", "edges"],
   "properties": {
     "version": { "type": "string" },
+    "totalRooms": { "type": "integer", "const": 1149 },
+    "organizationAllowlist": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
     "nodes": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "status", "hasExplicitEntry", "hasExplicitExit"],
+        "required": [
+          "id",
+          "title",
+          "symbol",
+          "dimension",
+          "branch",
+          "segment",
+          "status",
+          "repo",
+          "ref",
+          "entryHash"
+        ],
         "properties": {
-          "id": { "type": "string" },
-          "status": { "type": "string" },
-          "hasExplicitEntry": { "type": "boolean" },
-          "hasExplicitExit": { "type": "boolean" }
+          "id": { "type": "string", "pattern": "^ROOM_[0-9]{3,4}$" },
+          "title": { "type": "string" },
+          "titleRu": { "type": "string" },
+          "symbol": { "type": "string" },
+          "dimension": { "type": "string" },
+          "branch": { "type": "string", "enum": ["ascend", "descend"] },
+          "segment": { "type": "integer", "minimum": 1 },
+          "status": { "type": "string", "enum": ["ready", "planned"] },
+          "repo": { "type": "string" },
+          "ref": { "type": "string" },
+          "entryHash": { "type": "string" }
         }
       }
     },
@@ -23,15 +46,15 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["from", "doorId", "to", "status", "directed"],
+        "required": ["from", "to", "doorId", "choiceType"],
         "properties": {
           "from": { "type": "string" },
-          "doorId": { "type": "string" },
-          "to": { "type": ["string", "null"] },
-          "status": { "type": "string" },
-          "directed": { "type": "boolean" },
-          "voidFallback": { "type": "string" },
-          "condition": { "type": "string" }
+          "to": { "type": "string" },
+          "doorId": { "type": "string", "enum": ["A", "B", "C", "RH"] },
+          "choiceType": {
+            "type": "string",
+            "enum": ["identity-accept", "identity-reject", "free", "rabbit-hole"]
+          }
         }
       }
     }
