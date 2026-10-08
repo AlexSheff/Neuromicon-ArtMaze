@@ -1,117 +1,128 @@
-# Neuromicon ArtMaze
+# Neuromicon Artmaze (WebXR)
 
 **Live WebXR & Desktop Application:** [https://alexsheff.github.io/Neuromicon-ArtMaze/](https://alexsheff.github.io/Neuromicon-ArtMaze/)  
 **Repository:** [https://github.com/AlexSheff/Neuromicon-ArtMaze](https://github.com/AlexSheff/Neuromicon-ArtMaze)
 
-**Neuromicon ArtMaze** is a browser-based WebXR and desktop 3D world consisting of a central multidimensional labyrinth (`ROOM_0000`) and independently authored rooms (`ROOM_0001` .. `ROOM_1149`).
+**Neuromicon Artmaze** is a multidimensional labyrinth of **1149 unique rooms** explored in **WebXR (Meta Quest 2 / standalone VR)** and **desktop browsers**, hosted as a static site on **GitHub Pages**.
 
-Walk. Look. Listen. Choose. Wonder.
+Each room is an independent artwork living in its own repository (`room.json` + ES module `index.js`) and loaded at runtime through the fixed **Room API v1** inside a single page and a single uninterrupted WebXR session.
 
 ---
 
-## Architecture Overview
+## 1. Main Corridor — The Threshold (First Deliverable)
 
-Every room in the world conforms to [`ROOM_SPEC.md`](./ROOM_SPEC.md) and exists as a self-contained declarative manifest (`room.json`) with its own geometry, rules, paintings, objects, mirrors, quests, and doors.
+The player begins at the **Threshold**, a vast vertical atrium split in two vertically. The first act of the game is a physical, diegetic choice:
 
-```text
-WORLD
-  |
-  +-- MAIN MAZE / ROOM_0000 (main-maze/room.json)
-  |
-  +-- ROOM_0001 repository (rooms/ArtMaze-Room-0001)
-  +-- ROOM_0042 repository (rooms/ArtMaze-Room-0042)
-  +-- ROOM_0107 repository (rooms/ArtMaze-Room-0107)
-  |
-  +-- ...
-  |
-  +-- ROOM_1149 (World scale constant)
+| Direction | Meaning | Branch ID | Registry `branch` | Visual & Acoustic Direction |
+|---|---|---|---|---|
+| **Up — Ascent** | Grow, embody (*воплощать, расти*) | `ASCENT` | `ascend` | Sunlit travertine vaults, golden colonnades, celestial harmonic layer |
+| **Down — Descent** | Search, explore (*искать, исследовать*) | `DESCENT` | `descend` | Subterranean basalt monoliths, cyan reflection pools, abyssal drone layer |
+
+- **Chunked Corridor Segments:** Each branch (`ascend` and `descend`) consists of colossal segmented halls (`Segment 1`, `Segment 2`). Only the active segment is mounted in GPU memory (`THREE.InstancedMesh` colonnades, ≤ 150 draw calls, 72 FPS target on Meta Quest 2).
+- **Door Signage & State Indicators:** Every corridor door displays its room symbol, title, dimension (`D1`–`D9`), and state (`UNVISITED`, `VISITED`, `COMPLETED`, or `SEALED / PLANNED`). Rabbit-hole doors are never indicated in the corridor.
+- **Persistent Path & Return:** Choosing Ascent or Descent writes `player.path = "ascend" | "descend"` to `localStorage`. Returning from any room via the Mirror (`BACK`) restores the exact corridor branch and segment where the player left.
+
+---
+
+## 2. Core Room Loop & Room API v1
+
+Behind each corridor door is an independent room (`ROOM_001` .. `ROOM_1149`, including `ROOM_073` *"Archive of Missing Things"*):
+
+1. **Quest & Philosophical Question:** Each room poses a question and an objective completed by interacting with room artifacts or spatial anomalies.
+2. **Three Regular Doors (`A`, `B`, `C`):**
+   - `Door A` (`identity-accept`)
+   - `Door B` (`identity-reject`)
+   - `Door C` (`free`)
+3. **One Hidden Rabbit Hole (`Door RH`):** Hidden by default (`visibility: "hidden"`). Unlocked only by discovering a rule violation (e.g., interacting with a ghost monolith that exists **only inside the mirror reflection**, `onlyInMirror: true`).
+4. **The Identity Mirror:** Displays the room's archetype (`characterState`) and offers three choices: `ACCEPT`, `REJECT`, or `BACK` (return to the Main Corridor).
+5. **Non-Portable Objects (`portable: false`):** Interactive objects and busyboards can be inspected or rotated, but never leave the room—only knowledge and identity state travel across thresholds.
+
+```ts
+export interface RoomModule {
+  preload?(ctx: RoomContext): Promise<void>;   // optional asset preload
+  mount(ctx: RoomContext): Promise<void>;      // build scene under ctx.root
+  update?(dt: number, ctx: RoomContext): void; // per-frame update
+  unmount(ctx: RoomContext): void;             // dispose all geometries, materials, textures
+}
 ```
 
-### Key Principles
+---
 
-1. **One Room = One Repository**: A room defines its space, rules, state, interactions, and meaning purely through declarative JSON data (`room.json`). No room-specific hacks or executable scripts are embedded in room packages.
-2. **The Main Maze Is a Room**: `ROOM_0000` is the central architectural labyrinth with corridors, framed artworks, monuments, anomalies, and doors.
-3. **Doors Are Propositions**: A door can lead to a ready room, a planned room, a conditional rabbit hole, or a first-class Void (`infinity`, `fractal`, `fog`, `darkness`, `starfield`, `mirror`, `unknown`).
-4. **Directed Topology**: $A \to B$ does not imply $B \to A$. Rooms are not required to have an entrance, an exit, or a return path.
-5. **Local-First State**: The visitor carries no physical inventory—only discoveries, memories, decisions, and identity state across room visits.
+## 3. VR Comfort First (Meta Quest 2 & Desktop)
+
+To prevent motion sickness or "swimming space" vection in WebXR:
+
+- **Blink-Teleport with Comfort Fade (`teleport` mode, default):** Aim the Quest Touch controller ray (or desktop cursor) at any walkable floor/platform to reveal the golden **3D Teleport Ring**, then press Trigger / Click (or push the thumbstick forward) to blink-teleport with a smooth black micro-fade.
+- **Discrete Snap Turn (`30°` / `45°`):** Right thumbstick and `Q` / `R` keys rotate in crisp discrete steps rather than continuous rotational swimming.
+- **Smooth Locomotion with Peripheral Vignette (`smooth` mode):** Constant-velocity movement (zero camera acceleration) paired with an automatic 3D peripheral comfort vignette and stable horizon reference ticks.
+- **Seated Mode (`seated`):** Adds a calibrated `+0.45m` vertical rig offset for seated VR sessions.
 
 ---
 
-## Repository Structure
+## 4. Controls & Hotkeys
+
+| Input | Action |
+|---|---|
+| **Click / VR Trigger on Floor Ring** | Blink-Teleport to floor target with comfort fade |
+| **Click / `E` / VR Trigger on Target** | Interact with Door, Mirror choice, Object, Busyboard, or Ghost Reflection |
+| **`W` `A` `S` `D` / Left Quest Stick** | Move (Blink-Step in `Teleport` mode, Constant-Velocity in `Smooth` mode) |
+| **`Q` `R` / Arrow Keys / Right Quest Stick** | Discrete Snap Turn (`30°` or `45°`) |
+| **Mouse Drag** | Look around (Desktop) |
+| **`R`** | Toggle **Rules & Protocol** overlay |
+| **`T`** | Toggle **Radio / Comments** channel (`THRESHOLD`, `ROOM_073`, etc.) |
+| **`C`** | Toggle **Optical Zoom (`65° ↔ 36°` FOV)** to inspect distant plaques & art |
+| **`Alt`** | Toggle **VR Comfort & Performance Settings** (`Teleport / Smooth / Seated`, `Snap Turn`, FPS / Draw Calls) |
+| **`Z`** | Toggle **Audio & Soundtrack Control** (Vertical branch crossfade & room tracks) |
+
+---
+
+## 5. Repository Structure
 
 ```text
 /
-├── README.md
-├── AGENTS.md
-├── GAME_PROJECT_PLAN.md
-├── ROOM_SPEC.md
-├── LICENSE
-├── package.json
-├── vite.config.ts
-│
-├── src/
-│   ├── engine/
-│   │   ├── renderer/       # WebGL2 3D renderer, shaders, procedural frames & void raymarchers
-│   │   ├── xr/             # WebXR session manager (Meta Quest 2 + fallback)
-│   │   ├── input/          # Keyboard, mouse pointer-lock, and gaze/raycast input
-│   │   └── locomotion/     # Smooth collision-aware first-person movement
-│   │
-│   ├── world/
-│   │   ├── registry/       # Room registry resolver (registry/rooms.json)
-│   │   ├── graph/          # Directed world topology graph (registry/world.graph.json)
-│   │   ├── loader/         # Declarative ROOM_SPEC v1.0 manifest loader
-│   │   ├── transitions/    # Room-to-room and room-to-void transition coordinator
-│   │   └── void/           # First-class Void system (infinity, fractal, fog, darkness, starfield, mirror, unknown)
-│   │
-│   ├── systems/
-│   │   ├── doors/          # Door evaluation, requirements, propositions, and fallbacks
-│   │   ├── rooms/          # Dynamic room state & visit-count reconstruction
-│   │   ├── interaction/    # Generic interaction verbs (inspect, look, touch, activate, rotate, open, listen, read, observe)
-│   │   ├── observation/    # Prolonged gaze & anomaly detection mechanics
-│   │   ├── quest/          # Room propositions and multi-option choice handlers
-│   │   ├── mirror/         # Identity proposition instrument (ACCEPT / REJECT / RETURN)
-│   │   ├── identity/       # Persistent identity vector management
-│   │   ├── discovery/      # Anomaly & rabbit-hole unlocking
-│   │   ├── audio/          # WebAudio procedural spatial acoustics
-│   │   └── state/          # Local-first persistent player & room state store
-│   │
-│   ├── ui/                 # Minimal semantic HUD, Door Proposition modal, Mirror interface, and Studio tools
-│   ├── main.ts             # Engine entry exports
-│   └── App.tsx             # Application host
-│
-├── main-maze/
-│   ├── room.json           # Canonical ROOM_0000 manifest
-│   ├── geometry/           # Corridor & sector definitions
-│   ├── paintings/          # Artwork definitions & procedural plates
-│   ├── audio/              # Acoustic preset definitions
-│   └── assets/             # Material & frame presets
-│
-├── rooms/
-│   ├── ArtMaze-Room-0001/  # Sample Room 0001: The Hall of Unseen Reflections
-│   ├── ArtMaze-Room-0042/  # Sample Room 0042: The Room That Remembers
-│   └── ArtMaze-Room-0107/  # Sample Room 0107: The Archivist's Mirror
-│
-├── registry/
-│   ├── rooms.json          # Canonical room registry
-│   └── world.graph.json    # Directed world graph
-│
+├── AGENTS.md                  # Authoritative architectural specification & roadmap
+├── README.md                  # Project documentation & controls
+├── content/
+│   ├── world.graph.json       # 1149-room topology, branches (ascend/descend), segments & SHA-256 hashes
+│   └── art/manifest.json      # Licensed artwork metadata (id, title, author, license, source, url)
 ├── schema/
-│   ├── room.schema.json    # JSON Schema for ROOM_SPEC v1.0
-│   ├── registry.schema.json
-│   └── world.schema.json
-│
-├── tools/
-│   └── room-validator/     # Schema & contract validator for room.json manifests
-│
+│   ├── room.schema.json       # JSON Schema (draft 2020-12) for Room API v1 manifests
+│   └── world.schema.json      # JSON Schema for world.graph.json
+├── room-template/
+│   ├── room.json              # Canonical Room API v1 manifest (ROOM_073)
+│   └── index.ts               # Reference RoomModule (preload, mount, update, unmount)
+├── src/
+│   ├── room-sdk/              # Room API v1 types (RoomModule, RoomContext) & GPU disposal helpers
+│   ├── engine/
+│   │   ├── hubEngine.ts       # Three.js WebGL2 + WebXR stereo engine & raycaster
+│   │   ├── comfort/           # ComfortSystem (3D fade sphere, peripheral vignette, floor teleport ring)
+│   │   ├── xr/                # Meta Quest 2 WebXR session & Touch controller manager
+│   │   └── input/             # Keyboard, pointer, and hotkey controller
+│   ├── corridor/
+│   │   └── corridorBuilder.ts # Threshold Hall atrium + chunked Ascent & Descent segments
+│   ├── world/
+│   │   └── roomStreamer.ts    # Room API v1 streamer, mirror choices, and rabbit-hole unlocker
+│   ├── systems/
+│   │   └── audio/             # WebAudio vertical branch crossfader & room soundtrack synthesizer
+│   ├── state/
+│   │   └── playerState.ts     # Persistent localStorage state (path, branch, segment, visited, comfort)
+│   └── ui/                    # Viewport HUD, hotkey overlays (R, T, C, Alt, Z), Registry & Validator tools
 └── tests/
-    └── room-validator.test.ts
+    └── room-validator.test.ts # Manifest & schema validation suite
 ```
 
 ---
 
-## Controls
+## 6. Local Development & Deployment
 
-- **Walk**: `W`, `A`, `S`, `D` or Arrow Keys
-- **Look**: Click viewport to engage Pointer Lock (or drag with mouse), `Esc` to release cursor
-- **Observe / Inspect**: Hold reticle on any painting, object, shadow, reflection, or door (`E` or Click to interact)
-- **WebXR**: Click **Enter WebXR** on supported headsets (Meta Quest 2+)
+```bash
+# Install dependencies
+npm install
+
+# Start development server on port 3000
+npm run dev
+
+# Type-check and build static bundle for GitHub Pages
+npm run lint
+npm run build
+```
