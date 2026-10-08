@@ -38,44 +38,61 @@ export class LocomotionSystem {
     this.pose = { ...this.pose, ...partial };
   }
 
-  public step(input: InputState, dt: number, manifest: RoomManifest, inVoid: boolean): CameraPose {
+  public step(
+    input: InputState,
+    dt: number,
+    manifest: RoomManifest,
+    inVoid: boolean,
+    headingYawOverride?: number
+  ): CameraPose {
     const turnSpeed = 1.85;
     if (input.turnLeft) this.pose.yaw += turnSpeed * dt;
     if (input.turnRight) this.pose.yaw -= turnSpeed * dt;
+    if (input.analogTurn) {
+      this.pose.yaw -= input.analogTurn * turnSpeed * dt;
+    }
     this.pose.yaw += input.yawDelta;
     this.pose.pitch = input.pitchDelta;
 
     const moveSpeed = manifest.rules?.locomotion === 'slow' ? 2.4 : 4.2;
-    let forwardInput = 0;
-    let strafeInput = 0;
+    let forwardInput = input.analogForward ?? 0;
+    let strafeInput = input.analogStrafe ?? 0;
     if (input.forward) forwardInput += 1;
     if (input.backward) forwardInput -= 1;
     if (input.right) strafeInput += 1;
     if (input.left) strafeInput -= 1;
 
-    if (forwardInput !== 0 || strafeInput !== 0) {
+    if (Math.abs(forwardInput) > 0.01 || Math.abs(strafeInput) > 0.01) {
       const len = Math.hypot(forwardInput, strafeInput);
-      forwardInput /= len;
-      strafeInput /= len;
+      if (len > 1) {
+        forwardInput /= len;
+        strafeInput /= len;
+      }
 
-      // Forward in our camera space (-Z when yaw = 0)
-      const forwardX = -Math.sin(this.pose.yaw);
-      const forwardZ = -Math.cos(this.pose.yaw);
-      const rightX = Math.cos(this.pose.yaw);
-      const rightZ = -Math.sin(this.pose.yaw);
+      // Use VR head yaw when walking in WebXR so pushing stick forward moves where you look
+      const moveYaw =
+        headingYawOverride !== undefined ? headingYawOverride : this.pose.yaw;
+
+      // Forward in Three.js camera space (-Z when yaw = 0)
+      const forwardX = -Math.sin(moveYaw);
+      const forwardZ = -Math.cos(moveYaw);
+      const rightX = Math.cos(moveYaw);
+      const rightZ = -Math.sin(moveYaw);
 
       const nextX =
-        this.pose.x + (forwardX * forwardInput + rightX * strafeInput) * moveSpeed * dt;
+        this.pose.x +
+        (forwardX * forwardInput + rightX * strafeInput) * moveSpeed * dt;
       const nextZ =
-        this.pose.z + (forwardZ * forwardInput + rightZ * strafeInput) * moveSpeed * dt;
+        this.pose.z +
+        (forwardZ * forwardInput + rightZ * strafeInput) * moveSpeed * dt;
 
       if (inVoid) {
         this.pose.x = nextX;
         this.pose.z = nextZ;
       } else {
         const dims = manifest.environment.dimensions ?? [14, 5, 14];
-        const halfW = dims[0] * 0.5 - 1.1;
-        const halfD = dims[2] * 0.5 - 1.1;
+        const halfW = dims[0] * 0.5 - 1.15;
+        const halfD = dims[2] * 0.5 - 1.15;
         this.pose.x = Math.max(-halfW, Math.min(halfW, nextX));
         this.pose.z = Math.max(-halfD, Math.min(halfD, nextZ));
       }

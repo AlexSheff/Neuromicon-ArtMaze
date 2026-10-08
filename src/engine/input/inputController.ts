@@ -5,6 +5,9 @@ export interface InputState {
   right: boolean;
   turnLeft: boolean;
   turnRight: boolean;
+  analogForward?: number;
+  analogStrafe?: number;
+  analogTurn?: number;
   yawDelta: number;
   pitchDelta: number;
   interactPressed: boolean;
@@ -13,15 +16,15 @@ export interface InputState {
 export class InputController {
   private keys: Set<string> = new Set();
   private yawDelta = 0;
-  private pitchDelta = 0;
+  private pitchAngle = 0;
   private isDragging = false;
-  private lastMouseX = 0;
-  private lastMouseY = 0;
+  private lastPointerX = 0;
+  private lastPointerY = 0;
+  private dragDistance = 0;
   private interactQueued = false;
   private element: HTMLElement | null = null;
 
   private onKeyDown = (e: KeyboardEvent) => {
-    // Do not hijack typing in input/textarea
     const tag = (e.target as HTMLElement | null)?.tagName;
     if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT') return;
 
@@ -36,52 +39,66 @@ export class InputController {
     this.keys.delete(e.code);
   };
 
-  private onMouseDown = (e: MouseEvent) => {
-    if (e.button !== 0) return;
+  private onPointerDown = (e: PointerEvent) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
     this.isDragging = true;
-    this.lastMouseX = e.clientX;
-    this.lastMouseY = e.clientY;
+    this.dragDistance = 0;
+    this.lastPointerX = e.clientX;
+    this.lastPointerY = e.clientY;
   };
 
-  private onMouseMove = (e: MouseEvent) => {
+  private onPointerMove = (e: PointerEvent) => {
     if (document.pointerLockElement === this.element) {
-      this.yawDelta -= e.movementX * 0.0028;
-      this.pitchDelta = Math.max(
-        -0.55,
-        Math.min(0.55, this.pitchDelta - e.movementY * 0.0022)
+      this.yawDelta -= e.movementX * 0.0026;
+      this.pitchAngle = Math.max(
+        -1.15,
+        Math.min(1.15, this.pitchAngle - e.movementY * 0.0022)
       );
       return;
     }
     if (!this.isDragging) return;
-    const dx = e.clientX - this.lastMouseX;
-    const dy = e.clientY - this.lastMouseY;
-    this.lastMouseX = e.clientX;
-    this.lastMouseY = e.clientY;
-    this.yawDelta -= dx * 0.0045;
-    this.pitchDelta = Math.max(-0.55, Math.min(0.55, this.pitchDelta - dy * 0.003));
+    const dx = e.clientX - this.lastPointerX;
+    const dy = e.clientY - this.lastPointerY;
+    this.lastPointerX = e.clientX;
+    this.lastPointerY = e.clientY;
+    this.dragDistance += Math.hypot(dx, dy);
+
+    this.yawDelta -= dx * 0.0042;
+    this.pitchAngle = Math.max(
+      -1.15,
+      Math.min(1.15, this.pitchAngle - dy * 0.0032)
+    );
   };
 
-  private onMouseUp = () => {
+  private onPointerUp = () => {
     this.isDragging = false;
   };
+
+  public wasClickNotDrag(): boolean {
+    return this.dragDistance < 6;
+  }
+
+  public setPitch(pitch: number): void {
+    this.pitchAngle = Math.max(-1.15, Math.min(1.15, pitch));
+  }
 
   public attach(element: HTMLElement): void {
     this.element = element;
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
-    element.addEventListener('mousedown', this.onMouseDown);
-    window.addEventListener('mousemove', this.onMouseMove);
-    window.addEventListener('mouseup', this.onMouseUp);
+    element.addEventListener('pointerdown', this.onPointerDown);
+    window.addEventListener('pointermove', this.onPointerMove);
+    window.addEventListener('pointerup', this.onPointerUp);
   }
 
   public detach(): void {
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
     if (this.element) {
-      this.element.removeEventListener('mousedown', this.onMouseDown);
+      this.element.removeEventListener('pointerdown', this.onPointerDown);
     }
-    window.removeEventListener('mousemove', this.onMouseMove);
-    window.removeEventListener('mouseup', this.onMouseUp);
+    window.removeEventListener('pointermove', this.onPointerMove);
+    window.removeEventListener('pointerup', this.onPointerUp);
   }
 
   public queueInteract(): void {
@@ -97,7 +114,7 @@ export class InputController {
       turnLeft: this.keys.has('ArrowLeft') || this.keys.has('KeyQ'),
       turnRight: this.keys.has('ArrowRight') || this.keys.has('KeyR'),
       yawDelta: this.yawDelta,
-      pitchDelta: this.pitchDelta,
+      pitchDelta: this.pitchAngle,
       interactPressed: this.interactQueued,
     };
     this.yawDelta = 0;

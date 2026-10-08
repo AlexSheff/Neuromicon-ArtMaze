@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+
 export interface XRStatus {
   supported: boolean;
   active: boolean;
@@ -10,94 +12,43 @@ export interface XRControllerInput {
   moveZ: number;
   turnX: number;
   triggerJustPressed: boolean;
-  headYaw: number | null;
-  headPitch: number | null;
-}
-
-export type XRFrameRenderCallback = (
-  timeSec: number,
-  dt: number,
-  xrInput: XRControllerInput,
-  eyeIndex: number,
-  eyeOffsetX: number,
-  targetCanvas: HTMLCanvasElement
-) => void;
-
-interface WebXRSessionLike {
-  renderState: { baseLayer?: { framebuffer: WebGLFramebuffer | null; getViewport: (view: unknown) => { x: number; y: number; width: number; height: number } } };
-  inputSources?: Iterable<{
-    handedness?: 'left' | 'right' | 'none';
-    gamepad?: {
-      axes: readonly number[];
-      buttons: readonly { pressed: boolean }[];
-    };
-  }>;
-  updateRenderState: (state: unknown) => void;
-  requestReferenceSpace: (type: string) => Promise<unknown>;
-  requestAnimationFrame: (cb: (time: number, frame: unknown) => void) => number;
-  addEventListener: (type: string, listener: () => void) => void;
-  end: () => Promise<void>;
-}
-
-const VERT_SHADER = `
-  attribute vec2 a_pos;
-  varying vec2 v_uv;
-  void main() {
-    v_uv = vec2(a_pos.x * 0.5 + 0.5, 0.5 - a_pos.y * 0.5);
-    gl_Position = vec4(a_pos, 0.0, 1.0);
-  }
-`;
-
-const FRAG_SHADER = `
-  precision mediump float;
-  varying vec2 v_uv;
-  uniform sampler2D u_tex;
-  void main() {
-    gl_FragColor = texture2D(u_tex, v_uv);
-  }
-`;
-
-function quaternionToYawPitch(q: { x: number; y: number; z: number; w: number }): {
-  yaw: number;
-  pitch: number;
-} {
-  // Yaw (rotation around Y)
-  const siny_cosp = 2 * (q.w * q.y + q.x * q.z);
-  const cosy_cosp = 1 - 2 * (q.y * q.y + q.x * q.x);
-  const yaw = Math.atan2(siny_cosp, cosy_cosp);
-
-  // Pitch (rotation around X)
-  const sinp = 2 * (q.w * q.x - q.z * q.y);
-  const pitch =
-    Math.abs(sinp) >= 1 ? (Math.sign(sinp) * Math.PI) / 2 : Math.asin(sinp);
-
-  return { yaw, pitch: Math.max(-0.65, Math.min(0.65, pitch)) };
 }
 
 class WebXRManager {
-  private currentSession: WebXRSessionLike | null = null;
+  private renderer: THREE.WebGLRenderer | null = null;
+  private currentSession: XRSession | null = null;
   private supported = false;
-  private xrCanvas: HTMLCanvasElement | null = null;
-  private offscreen2DCanvas: HTMLCanvasElement | null = null;
-  private frameCallback: XRFrameRenderCallback | null = null;
   private wasTriggerPressed = false;
-  private lastFrameTime = 0;
+  private selectQueued = false;
+  private snapTurnCooldown = 0;
+  private statusListeners: Set<(active: boolean) => void> = new Set();
 
-  public setFrameRenderCallback(cb: XRFrameRenderCallback | null): void {
-    this.frameCallback = cb;
+  public attachRenderer(renderer: THREE.WebGLRenderer): void {
+    this.renderer = renderer;
+    this.renderer.xr.enabled = true;
+    // 'local-floor' gives true 1:1 physical floor height in meters on Meta Quest 2
+    this.renderer.xr.setReferenceSpaceType('local-floor');
+  }
+
+  public onSessionChange(listener: (active: boolean) => void): () => void {
+    this.statusListeners.add(listener);
+    return () => {
+      this.statusListeners.delete(listener);
+    };
+  }
+
+  private notifySessionChange(active: boolean): void {
+    this.statusListeners.forEach((cb) => cb(active));
   }
 
   public isSessionActive(): boolean {
-    return this.currentSession !== null;
+    return Boolean(this.renderer?.xr.isPresenting);
   }
 
   public async checkSupport(): Promise<boolean> {
     try {
-      const nav = navigator as unknown as {
-        xr?: { isSessionSupported?: (mode: string) => Promise<boolean> };
-      };
-      if (nav.xr && typeof nav.xr.isSessionSupported === 'function') {
-        this.supported = await nav.xr.isSessionSupported('immersive-vr');
+      if ('xr' in navigator && navigator.xr) {
+        this.supported = await navigator.xr.isSessionSupported('immersive-vr');
         return this.supported;
       }
     } catch {
@@ -107,38 +58,38 @@ class WebXRManager {
   }
 
   public async toggleVRSession(): Promise<XRStatus> {
-    const nav = navigator as unknown as {
-      xr?: {
-        isSessionSupported?: (mode: string) => Promise<boolean>;
-        requestSession?: (
-          mode: string,
-          options?: unknown
-        ) => Promise<WebXRSessionLike>;
-      };
-    };
-
     if (this.currentSession) {
       try {
         await this.currentSession.end();
       } catch {
-        // Ignore session termination errors
+        // Ignore session close error
       }
       this.currentSession = null;
+      this.notifySessionChange(false);
       return {
         supported: this.supported,
         active: false,
         mode: 'desktop',
-        message: 'Exited WebXR session. Returned to desktop viewport.',
+        message: 'Exited WebXR session. Returned to desktop 3D viewport.',
       };
     }
 
-    if (!nav.xr || typeof nav.xr.requestSession !== 'function') {
+    if (!('xr' in navigator) || !navigator.xr) {
       return {
         supported: false,
         active: false,
         mode: 'desktop',
         message:
-          'WebXR headset not detected (requires HTTPS on Meta Quest Browser). Running in Desktop 3D mode.',
+          'WebXR API not detected. Open via HTTPS in Meta Quest Browser on Quest 2.',
+      };
+    }
+
+    if (!this.renderer) {
+      return {
+        supported: false,
+        active: false,
+        mode: 'desktop',
+        message: '3D WebGLRenderer is not initialized yet.',
       };
     }
 
@@ -150,218 +101,120 @@ class WebXRManager {
           active: false,
           mode: 'desktop',
           message:
-            'Meta Quest / WebXR immersive-vr session is not available on this device. Open in Meta Quest Browser over HTTPS.',
+            'Meta Quest immersive-vr session is not available on this device.',
         };
       }
 
-      const session = await nav.xr.requestSession('immersive-vr', {
-        optionalFeatures: ['local-floor', 'bounded-floor'],
-      });
+      const sessionInit: XRSessionInit = {
+        optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking'],
+      };
+
+      const session = await navigator.xr.requestSession(
+        'immersive-vr',
+        sessionInit
+      );
+
       this.currentSession = session;
 
-      await this.initializeXRWebGLLoop(session);
+      const onSelectStart = () => {
+        this.selectQueued = true;
+      };
+      session.addEventListener('selectstart', onSelectStart);
+
+      session.addEventListener('end', () => {
+        session.removeEventListener('selectstart', onSelectStart);
+        this.currentSession = null;
+        this.notifySessionChange(false);
+      });
+
+      await this.renderer.xr.setSession(session);
+      this.notifySessionChange(true);
 
       return {
         supported: true,
         active: true,
         mode: 'immersive-vr',
         message:
-          'Meta Quest 2 WebXR session active (Stereo XRWebGLLayer + Touch Controllers enabled).',
+          'Native 6DOF WebXR active on Meta Quest 2 (1:1 metric scale, hardware stereo projection).',
       };
     } catch (err) {
       this.currentSession = null;
+      this.notifySessionChange(false);
       return {
         supported: this.supported,
         active: false,
         mode: 'desktop',
-        message: `WebXR session unavailable (${
+        message: `Could not start WebXR (${
           err instanceof Error ? err.message : 'fallback to desktop'
         }).`,
       };
     }
   }
 
-  private async initializeXRWebGLLoop(session: WebXRSessionLike): Promise<void> {
-    if (!this.xrCanvas) {
-      this.xrCanvas = document.createElement('canvas');
-    }
-    if (!this.offscreen2DCanvas) {
-      this.offscreen2DCanvas = document.createElement('canvas');
-      this.offscreen2DCanvas.width = 1280;
-      this.offscreen2DCanvas.height = 1280;
-    }
-
-    const gl = (this.xrCanvas.getContext('webgl2', { xrCompatible: true }) ||
-      this.xrCanvas.getContext('webgl', {
-        xrCompatible: true,
-      })) as WebGLRenderingContext | null;
-
-    if (!gl) {
-      throw new Error('Could not create xrCompatible WebGL context');
-    }
-
-    // Compile stereo texture blit shader for XRWebGLLayer
-    const vs = gl.createShader(gl.VERTEX_SHADER)!;
-    gl.shaderSource(vs, VERT_SHADER);
-    gl.compileShader(vs);
-
-    const fs = gl.createShader(gl.FRAGMENT_SHADER)!;
-    gl.shaderSource(fs, FRAG_SHADER);
-    gl.compileShader(fs);
-
-    const prog = gl.createProgram()!;
-    gl.attachShader(prog, vs);
-    gl.attachShader(prog, fs);
-    gl.linkProgram(prog);
-
-    const posBuf = gl.createBuffer()!;
-    gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
-    gl.bufferData(
-      gl.ARRAY_BUFFER,
-      new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
-      gl.STATIC_DRAW
-    );
-
-    const tex = gl.createTexture()!;
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-    const XRWebGLLayerCtor = (
-      window as unknown as {
-        XRWebGLLayer: new (
-          s: unknown,
-          context: WebGLRenderingContext
-        ) => unknown;
-      }
-    ).XRWebGLLayer;
-
-    const baseLayer = new XRWebGLLayerCtor(session, gl);
-    session.updateRenderState({ baseLayer });
-
-    let refSpace: unknown;
-    try {
-      refSpace = await session.requestReferenceSpace('local-floor');
-    } catch {
-      refSpace = await session.requestReferenceSpace('local');
-    }
-
-    session.addEventListener('end', () => {
-      this.currentSession = null;
-    });
-
-    this.lastFrameTime = performance.now();
-
-    const onXRFrame = (time: number, frame: unknown) => {
-      if (!this.currentSession) return;
-      session.requestAnimationFrame(onXRFrame);
-
-      const dt = Math.min(0.1, Math.max(0.001, (time - this.lastFrameTime) / 1000));
-      this.lastFrameTime = time;
-
-      const xrFrame = frame as {
-        getViewerPose: (space: unknown) => {
-          transform: {
-            orientation: { x: number; y: number; z: number; w: number };
-          };
-          views: Array<{
-            eye?: string;
-            transform: { position: { x: number; y: number; z: number } };
-          }>;
-        } | null;
+  /**
+   * Reads Oculus Touch controller thumbsticks and triggers from the active WebXR session.
+   */
+  public pollControllerInput(dt: number): XRControllerInput {
+    const session = this.renderer?.xr.getSession();
+    if (!session) {
+      return {
+        moveX: 0,
+        moveZ: 0,
+        turnX: 0,
+        triggerJustPressed: false,
       };
+    }
 
-      const pose = xrFrame.getViewerPose(refSpace);
-      if (!pose) return;
+    if (this.snapTurnCooldown > 0) {
+      this.snapTurnCooldown = Math.max(0, this.snapTurnCooldown - dt);
+    }
 
-      // Read Oculus Quest 2 Touch Controllers (thumbsticks + triggers)
-      let moveX = 0;
-      let moveZ = 0;
-      let turnX = 0;
-      let triggerPressedNow = false;
+    let moveX = 0;
+    let moveZ = 0;
+    let turnX = 0;
+    let triggerPressedNow = false;
 
-      if (session.inputSources) {
-        for (const source of session.inputSources) {
-          const gp = source.gamepad;
-          if (!gp) continue;
-          const axX = gp.axes[2] ?? gp.axes[0] ?? 0;
-          const axY = gp.axes[3] ?? gp.axes[1] ?? 0;
+    for (const source of session.inputSources) {
+      const gp = source.gamepad;
+      if (!gp) continue;
 
-          if (source.handedness === 'left') {
-            if (Math.abs(axX) > 0.15) moveX += axX;
-            if (Math.abs(axY) > 0.15) moveZ += axY;
-          } else if (source.handedness === 'right') {
-            if (Math.abs(axX) > 0.18) turnX += axX;
-            if (Math.abs(axY) > 0.25) moveZ += axY;
-          } else {
-            if (Math.abs(axY) > 0.15) moveZ += axY;
-            if (Math.abs(axX) > 0.18) turnX += axX;
-          }
+      // Oculus Touch thumbsticks are on axes[2] (X) and axes[3] (Y), fallback to [0]/[1]
+      const axX = gp.axes.length >= 4 ? gp.axes[2] : gp.axes[0] ?? 0;
+      const axY = gp.axes.length >= 4 ? gp.axes[3] : gp.axes[1] ?? 0;
 
-          // Primary index trigger (button 0) or A/X button (button 4)
-          if (gp.buttons[0]?.pressed || gp.buttons[4]?.pressed) {
-            triggerPressedNow = true;
-          }
-        }
+      if (source.handedness === 'left') {
+        if (Math.abs(axX) > 0.16) moveX += axX;
+        if (Math.abs(axY) > 0.16) moveZ += axY;
+      } else if (source.handedness === 'right') {
+        if (Math.abs(axX) > 0.22) turnX += axX;
+        if (Math.abs(axY) > 0.18) moveZ += axY;
+      } else {
+        if (Math.abs(axY) > 0.16) moveZ += axY;
+        if (Math.abs(axX) > 0.22) turnX += axX;
       }
 
-      const triggerJustPressed = triggerPressedNow && !this.wasTriggerPressed;
-      this.wasTriggerPressed = triggerPressedNow;
+      // Button 0 = Index Trigger, Button 1 = Grip, Button 4 = A/X, Button 5 = B/Y
+      if (
+        gp.buttons[0]?.pressed ||
+        gp.buttons[4]?.pressed ||
+        gp.buttons[5]?.pressed
+      ) {
+        triggerPressedNow = true;
+      }
+    }
 
-      const headAngles = quaternionToYawPitch(pose.transform.orientation);
-      const layer = session.renderState.baseLayer;
-      if (!layer || !this.offscreen2DCanvas) return;
+    const buttonEdge = triggerPressedNow && !this.wasTriggerPressed;
+    this.wasTriggerPressed = triggerPressedNow;
 
-      gl.bindFramebuffer(gl.FRAMEBUFFER, layer.framebuffer);
-      gl.clearColor(0.04, 0.04, 0.035, 1.0);
-      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    const triggerJustPressed = buttonEdge || this.selectQueued;
+    this.selectQueued = false;
 
-      gl.useProgram(prog);
-      const posLoc = gl.getAttribLocation(prog, 'a_pos');
-      gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
-      gl.enableVertexAttribArray(posLoc);
-      gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
-
-      pose.views.forEach((view, eyeIdx) => {
-        const vp = layer.getViewport(view);
-        gl.viewport(vp.x, vp.y, vp.width, vp.height);
-
-        if (this.frameCallback && this.offscreen2DCanvas) {
-          const eyeOffset =
-            view.eye === 'left' ? -0.032 : view.eye === 'right' ? 0.032 : 0;
-          this.frameCallback(
-            time / 1000,
-             eyeIdx === 0 ? dt : 0,
-            {
-              moveX,
-              moveZ,
-              turnX,
-              triggerJustPressed: eyeIdx === 0 ? triggerJustPressed : false,
-              headYaw: headAngles.yaw,
-              headPitch: headAngles.pitch,
-            },
-            eyeIdx,
-            eyeOffset,
-            this.offscreen2DCanvas
-          );
-
-          gl.bindTexture(gl.TEXTURE_2D, tex);
-          gl.texImage2D(
-            gl.TEXTURE_2D,
-            0,
-            gl.RGBA,
-            gl.RGBA,
-            gl.UNSIGNED_BYTE,
-            this.offscreen2DCanvas
-          );
-          gl.drawArrays(gl.TRIANGLES, 0, 6);
-        }
-      });
+    return {
+      moveX: Math.max(-1, Math.min(1, moveX)),
+      moveZ: Math.max(-1, Math.min(1, moveZ)),
+      turnX: Math.max(-1, Math.min(1, turnX)),
+      triggerJustPressed,
     };
-
-    session.requestAnimationFrame(onXRFrame);
   }
 }
 

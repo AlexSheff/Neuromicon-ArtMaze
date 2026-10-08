@@ -1,9 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { InputController } from '../engine/input/inputController';
-import { CameraPose, LocomotionSystem } from '../engine/locomotion/locomotionSystem';
 import {
-  labyrinthRenderer,
+  CameraPose,
+  LocomotionSystem,
+} from '../engine/locomotion/locomotionSystem';
+import {
   RaycastTarget,
+  ThreeLabyrinthEngine,
 } from '../engine/renderer/labyrinthRenderer';
 import { webxrManager } from '../engine/xr/webxrManager';
 import { spatialAudioSystem } from '../systems/audio/spatialAudioSystem';
@@ -37,12 +40,19 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
   lang,
   playerState,
 }) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const inputRef = useRef<InputController>(new InputController());
   const locomotionRef = useRef<LocomotionSystem>(new LocomotionSystem());
+  const hoveredRef = useRef<RaycastTarget | null>(null);
+  const langRef = useRef<'en' | 'ru'>(lang);
+  langRef.current = lang;
 
   const [hoveredTarget, setHoveredTarget] = useState<RaycastTarget | null>(null);
   const [gazeProgress, setGazeProgress] = useState<number>(0);
+  const [xrActive, setXrActive] = useState<boolean>(() =>
+    webxrManager.isSessionActive()
+  );
   const [narrativeNotice, setNarrativeNotice] = useState<{
     title: string;
     body: string;
@@ -71,9 +81,16 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
     playerState.roomStates[currentManifest.id]?.visitCount ?? 1;
   const cognitiveProfile = computeCognitiveProfile(playerState);
 
+  useEffect(() => {
+    return webxrManager.onSessionChange((active) => {
+      setXrActive(active);
+    });
+  }, []);
+
   // Reset camera pose on room change
   useEffect(() => {
     locomotionRef.current.resetToRoomSpawn(currentManifest);
+    inputRef.current.setPitch(0);
     setPoseSnapshot(locomotionRef.current.getPose());
     setActiveDoorProposition(null);
     setActiveMirrorModal(null);
@@ -85,252 +102,240 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
     );
   }, [currentManifest.id, playerState.activeVoid]);
 
-  const triggerTargetInteraction = (target: RaycastTarget) => {
+  const triggerTargetInteraction = (
+    target: RaycastTarget,
+    inImmersiveVR = false
+  ) => {
+    const curLang = langRef.current;
+    const latestState = playerStateStore.getState();
+    const manifest =
+      loadRoomManifest(latestState.currentRoomId) ??
+      loadRoomManifest('ROOM_0000')!;
+
     if (target.kind === 'door' && target.door) {
-      if (target.door.proposition && target.door.proposition.options.length > 0) {
+      if (target.id === 'VOID_RETURN') {
+        playerStateStore.exitVoidToRoom(
+          latestState.currentRoomId || 'ROOM_0000'
+        );
+        spatialAudioSystem.triggerChime(523.25);
+        return;
+      }
+
+      // In immersive VR headset, directly transition through doors so 2D modals never block VR locomotion
+      if (
+        !inImmersiveVR &&
+        target.door.proposition &&
+        target.door.proposition.options.length > 0
+      ) {
         setActiveDoorProposition(target.door);
         return;
       }
+
+      if (
+        inImmersiveVR &&
+        target.door.proposition &&
+        target.door.proposition.options.length > 0
+      ) {
+        const firstOpt = target.door.proposition.options[0];
+        playerStateStore.recordDecision(
+          `door:${manifest.id}:${target.door.id}`,
+          firstOpt.id,
+          undefined,
+          firstOpt.behavioralSignal
+        );
+      }
+
       const res = executeDoorTransition(target.door);
+      spatialAudioSystem.triggerChime(440);
       setNarrativeNotice({
         title: `Door ${target.door.id}`,
-        body: lang === 'ru' ? res.messageRu : res.message,
+        body: curLang === 'ru' ? res.messageRu : res.message,
       });
       return;
     }
 
     if (target.kind === 'mirror' && target.mirror) {
+      if (inImmersiveVR) {
+        resolveMirrorProposition(manifest.id, target.mirror, 'accept');
+        spatialAudioSystem.triggerChime(523.25);
+        return;
+      }
       setActiveMirrorModal(target.mirror);
       return;
     }
 
     if (target.kind === 'painting' && target.painting) {
-      const out = performPaintingInteraction(currentManifest.id, target.painting);
+      const out = performPaintingInteraction(manifest.id, target.painting);
       spatialAudioSystem.triggerChime(440);
       setNarrativeNotice({
         title:
-          lang === 'ru'
+          curLang === 'ru'
             ? target.painting.metadata.titleRu || target.painting.metadata.title
             : target.painting.metadata.title,
-        body: lang === 'ru' ? out.messageRu : out.message,
+        body: curLang === 'ru' ? out.messageRu : out.message,
       });
       return;
     }
 
     if (target.kind === 'object' && target.object) {
       if (
-        currentManifest.creatorPrompt?.enabled &&
+        !inImmersiveVR &&
+        manifest.creatorPrompt?.enabled &&
         target.object.discoveryId === 'SYSTEM_RULE_CREATED'
       ) {
         setCreatorModalOpen(true);
         return;
       }
-      const out = performObjectInteraction(currentManifest.id, target.object, 'inspect');
+      if (
+        inImmersiveVR &&
+        manifest.creatorPrompt?.enabled &&
+        target.object.discoveryId === 'SYSTEM_RULE_CREATED'
+      ) {
+        playerStateStore.recordCreatedRule(manifest.id, customRuleText);
+        spatialAudioSystem.triggerChime(587.33);
+        return;
+      }
+      const out = performObjectInteraction(
+        manifest.id,
+        target.object,
+        'inspect'
+      );
       spatialAudioSystem.triggerChime(392);
       setNarrativeNotice({
         title:
-          lang === 'ru'
+          curLang === 'ru'
             ? target.object.titleRu || target.object.title || target.object.id
             : target.object.title || target.object.id,
-        body: lang === 'ru' ? out.messageRu : out.message,
+        body: curLang === 'ru' ? out.messageRu : out.message,
       });
     }
   };
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+
+    const engine = new ThreeLabyrinthEngine(canvas);
+    webxrManager.attachRenderer(engine.renderer);
 
     const input = inputRef.current;
     input.attach(canvas);
+
+    const handleResize = () => {
+      const rect = container.getBoundingClientRect();
+      engine.resize(rect.width, rect.height);
+    };
+    handleResize();
+
+    const resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(container);
 
     const onContextLost = (e: Event) => {
       e.preventDefault();
     };
     canvas.addEventListener('webglcontextlost', onContextLost);
 
-    // Register Oculus Quest 2 stereo WebXR frame callback
-    webxrManager.setFrameRenderCallback(
-      (timeSec, dt, xrInput, eyeIndex, eyeOffsetX, targetCanvas) => {
-        const xrCtx = targetCanvas.getContext('2d');
-        if (!xrCtx) return;
-
-        const latestState = playerStateStore.getState();
-        const manifest =
-          loadRoomManifest(latestState.currentRoomId) ??
-          loadRoomManifest('ROOM_0000')!;
-
-        if (eyeIndex === 0 && dt > 0) {
-          locomotionRef.current.step(
-            {
-              forward: xrInput.moveZ < -0.2,
-              backward: xrInput.moveZ > 0.2,
-              left: xrInput.moveX < -0.2,
-              right: xrInput.moveX > 0.2,
-              turnLeft: xrInput.turnX < -0.25,
-              turnRight: xrInput.turnX > 0.25,
-              yawDelta: 0,
-              pitchDelta: xrInput.headPitch ?? 0,
-              interactPressed: xrInput.triggerJustPressed,
-            },
-            dt,
-            manifest,
-            Boolean(latestState.activeVoid)
-          );
-        }
-
-        const basePose = locomotionRef.current.getPose();
-        const eyePose: CameraPose = {
-          ...basePose,
-          x: basePose.x + Math.cos(basePose.yaw) * eyeOffsetX,
-          z: basePose.z - Math.sin(basePose.yaw) * eyeOffsetX,
-          yaw:
-            xrInput.headYaw !== null
-              ? basePose.yaw + xrInput.headYaw
-              : basePose.yaw,
-          pitch: xrInput.headPitch ?? basePose.pitch,
-        };
-
-        const w = targetCanvas.width;
-        const h = targetCanvas.height;
-        const { hovered } = labyrinthRenderer.render(
-          xrCtx,
-          w,
-          h,
-          eyePose,
-          manifest,
-          latestState,
-          getRoomRegistry(),
-          timeSec
-        );
-
-        // Draw in-headset VR reticle & hovered prompt directly onto the XR canvas
-        xrCtx.save();
-        xrCtx.fillStyle = hovered ? '#c8a464' : 'rgba(255,255,255,0.55)';
-        xrCtx.beginPath();
-        xrCtx.arc(w * 0.5, h * 0.5, hovered ? 5 : 3.5, 0, Math.PI * 2);
-        xrCtx.fill();
-
-        if (hovered) {
-          xrCtx.font = '600 20px "Cinzel", Georgia, serif';
-          xrCtx.textAlign = 'center';
-          xrCtx.fillStyle = '#f3ede2';
-          xrCtx.fillText(
-            `[Trigger] ${lang === 'ru' ? hovered.titleRu || hovered.title : hovered.title}`,
-            w * 0.5,
-            h * 0.62
-          );
-        }
-        xrCtx.restore();
-
-        if (eyeIndex === 0) {
-          setHoveredTarget(hovered);
-          const gazeRes = observationSystem.updateGaze(
-            hovered?.id ?? null,
-            dt,
-            hovered?.discoveryId,
-            manifest.id
-          );
-          setGazeProgress(gazeRes.progress);
-          if (xrInput.triggerJustPressed && hovered) {
-            triggerTargetInteraction(hovered);
-          } else if (xrInput.triggerJustPressed && latestState.activeVoid) {
-            playerStateStore.exitVoidToRoom(
-              latestState.currentRoomId || 'ROOM_0000'
-            );
-          }
-        }
-      }
-    );
-
-    let animId = 0;
     let lastTime = performance.now();
+    let lastUiSync = 0;
 
-    const frame = (now: number) => {
-      const dt = Math.min(0.1, (now - lastTime) / 1000);
+    // Three.js WebXR-compatible animation loop (runs at 72Hz/90Hz on Quest 2 and 60Hz on Desktop)
+    engine.renderer.setAnimationLoop((now) => {
+      const dt = Math.min(0.1, Math.max(0.001, (now - lastTime) / 1000));
       lastTime = now;
 
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const rect = canvas.getBoundingClientRect();
-      const targetW = Math.max(320, Math.floor(rect.width * dpr));
-      const targetH = Math.max(240, Math.floor(rect.height * dpr));
-      if (canvas.width !== targetW || canvas.height !== targetH) {
-        canvas.width = targetW;
-        canvas.height = targetH;
-      }
+      const latestState = playerStateStore.getState();
+      const manifest =
+        loadRoomManifest(latestState.currentRoomId) ??
+        loadRoomManifest('ROOM_0000')!;
 
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        const latestState = playerStateStore.getState();
-        const manifest =
-          loadRoomManifest(latestState.currentRoomId) ??
-          loadRoomManifest('ROOM_0000')!;
+      const desktopInput = input.consumeState();
+      const xrInput = webxrManager.pollControllerInput(dt);
+      const isPresenting = engine.renderer.xr.isPresenting;
 
-        const inputState = input.consumeState();
-        const pose = locomotionRef.current.step(
-          inputState,
-          dt,
-          manifest,
-          Boolean(latestState.activeVoid)
-        );
-        setPoseSnapshot(pose);
+      const mergedInput = {
+        ...desktopInput,
+        analogForward: -xrInput.moveZ,
+        analogStrafe: xrInput.moveX,
+        analogTurn: xrInput.turnX,
+        interactPressed:
+          desktopInput.interactPressed || xrInput.triggerJustPressed,
+      };
 
-        ctx.save();
-        ctx.scale(dpr, dpr);
-        const { hovered } = labyrinthRenderer.render(
-          ctx,
-          rect.width,
-          rect.height,
-          pose,
-          manifest,
-          latestState,
-          getRoomRegistry(),
-          now / 1000
-        );
-        ctx.restore();
+      const headingOverride = isPresenting
+        ? engine.getWorldHeadingYaw(locomotionRef.current.getPose().yaw)
+        : undefined;
 
+      const pose = locomotionRef.current.step(
+        mergedInput,
+        dt,
+        manifest,
+        Boolean(latestState.activeVoid),
+        headingOverride
+      );
+
+      const { hovered } = engine.updateAndRender(
+        pose,
+        manifest,
+        latestState,
+        getRoomRegistry(),
+        now / 1000
+      );
+
+      // Update hovered target & HUD state without excessive React re-renders
+      if (hovered?.id !== hoveredRef.current?.id) {
+        hoveredRef.current = hovered;
         setHoveredTarget(hovered);
-
-        // Gaze observation mechanic (Looking vs Seeing)
-        const gazeRes = observationSystem.updateGaze(
-          hovered?.id ?? null,
-          dt,
-          hovered?.discoveryId,
-          manifest.id
-        );
-        setGazeProgress(gazeRes.progress);
-
-        if (gazeRes.triggeredDiscovery) {
-          spatialAudioSystem.triggerChime(587.33);
-          setNarrativeNotice({
-            title:
-              lang === 'ru'
-                ? 'Замечена Аномалия Пространства'
-                : 'Spatial Anomaly Observed',
-            body:
-              lang === 'ru'
-                ? `Наблюдение открыло скрытую закономерность: ${gazeRes.triggeredDiscovery}. Проверьте двери комнаты.`
-                : `Sustained observation revealed: ${gazeRes.triggeredDiscovery}. A hidden threshold may now be visible.`,
-          });
-        }
-
-        if (inputState.interactPressed && hovered) {
-          triggerTargetInteraction(hovered);
-        }
       }
 
-      animId = window.requestAnimationFrame(frame);
-    };
+      if (now - lastUiSync > 120) {
+        lastUiSync = now;
+        setPoseSnapshot(pose);
+      }
 
-    animId = window.requestAnimationFrame(frame);
+      // Sustained Gaze Observation Mechanic (Looking vs Seeing)
+      const gazeRes = observationSystem.updateGaze(
+        hovered?.id ?? null,
+        dt,
+        hovered?.discoveryId,
+        manifest.id
+      );
+      setGazeProgress(gazeRes.progress);
+
+      if (gazeRes.triggeredDiscovery) {
+        spatialAudioSystem.triggerChime(587.33);
+        const curLang = langRef.current;
+        setNarrativeNotice({
+          title:
+            curLang === 'ru'
+              ? 'Замечена Аномалия Пространства'
+              : 'Spatial Anomaly Observed',
+          body:
+            curLang === 'ru'
+              ? `Наблюдение открыло скрытую закономерность: ${gazeRes.triggeredDiscovery}. Проверьте двери комнаты.`
+              : `Sustained observation revealed: ${gazeRes.triggeredDiscovery}. A hidden threshold may now be visible.`,
+        });
+      }
+
+      if (mergedInput.interactPressed) {
+        if (hovered) {
+          triggerTargetInteraction(hovered, isPresenting);
+        } else if (latestState.activeVoid && isPresenting) {
+          playerStateStore.exitVoidToRoom(
+            latestState.currentRoomId || 'ROOM_0000'
+          );
+          spatialAudioSystem.triggerChime(523.25);
+        }
+      }
+    });
 
     return () => {
-      window.cancelAnimationFrame(animId);
-      webxrManager.setFrameRenderCallback(null);
+      resizeObserver.disconnect();
       canvas.removeEventListener('webglcontextlost', onContextLost);
       input.detach();
+      engine.dispose();
     };
-  }, [lang, currentManifest.id]);
+  }, []);
 
   const handleToggleAudio = () => {
     const next = spatialAudioSystem.toggle();
@@ -344,11 +349,20 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
     }
   };
 
+  const handleEnterVRClick = async () => {
+    const status = await webxrManager.toggleVRSession();
+    setNarrativeNotice({
+      title: 'WebXR · Meta Quest 2',
+      body: status.message,
+    });
+  };
+
   const handleLookAtPosition = (targetPos: [number, number, number]) => {
     const pose = locomotionRef.current.getPose();
     const dx = targetPos[0] - pose.x;
     const dz = targetPos[2] - pose.z;
     const yaw = Math.atan2(-dx, -dz);
+    inputRef.current.setPitch(0);
     locomotionRef.current.setPose({
       yaw,
       pitch: 0,
@@ -361,13 +375,16 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
   const activeObjects = getActiveRoomObjects(currentManifest, playerState);
 
   return (
-    <div className="relative w-full h-[calc(100vh-61px)] bg-[#0b0a09] overflow-hidden select-none">
-      {/* 3D Viewport Canvas */}
+    <div
+      ref={containerRef}
+      className="relative w-full h-[calc(100vh-61px)] bg-[#0b0a09] overflow-hidden select-none"
+    >
+      {/* Three.js WebGL2 + WebXR Canvas */}
       <canvas
         ref={canvasRef}
         onClick={() => {
-          if (hoveredTarget) {
-            triggerTargetInteraction(hoveredTarget);
+          if (inputRef.current.wasClickNotDrag() && hoveredRef.current) {
+            triggerTargetInteraction(hoveredRef.current, false);
           }
         }}
         className="w-full h-full block cursor-crosshair"
@@ -464,7 +481,8 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
             <p className="text-xs text-[#c8a464] italic">
               «
               {lang === 'ru'
-                ? currentManifest.quest.questionRu || currentManifest.quest.question
+                ? currentManifest.quest.questionRu ||
+                  currentManifest.quest.question
                 : currentManifest.quest.question}
               »
             </p>
@@ -498,7 +516,10 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
                     key={door.id}
                     onClick={() => {
                       if (door.position) handleLookAtPosition(door.position);
-                      if (door.proposition && door.proposition.options.length > 0) {
+                      if (
+                        door.proposition &&
+                        door.proposition.options.length > 0
+                      ) {
                         setActiveDoorProposition(door);
                       } else {
                         const res = executeDoorTransition(door);
@@ -558,7 +579,9 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
                       }}
                       className="px-2.5 py-1 text-xs bg-white/5 hover:bg-white/10 text-[#d8cfc0] border border-white/10 rounded transition-colors truncate max-w-[240px]"
                     >
-                      {lang === 'ru' ? obj.titleRu || obj.title : obj.title || obj.id}
+                      {lang === 'ru'
+                        ? obj.titleRu || obj.title
+                        : obj.title || obj.id}
                     </button>
                   ))}
                   {currentManifest.mirror && (
@@ -572,7 +595,10 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
                       className="px-2.5 py-1 text-xs bg-[#16222f] hover:bg-[#1e2f40] text-[#b8d4ec] border border-[#7da2c4]/40 rounded transition-colors whitespace-nowrap"
                     >
                       {lang === 'ru'
-                        ? `Зеркало (${currentManifest.mirror.characterStateRu || currentManifest.mirror.characterState})`
+                        ? `Зеркало (${
+                            currentManifest.mirror.characterStateRu ||
+                            currentManifest.mirror.characterState
+                          })`
                         : `Mirror (${currentManifest.mirror.characterState})`}
                     </button>
                   )}
@@ -618,11 +644,27 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
         )}
       </div>
 
+      {/* Bottom-Right Dedicated Meta Quest 2 WebXR Launch Button */}
+      <div className="z-10 pointer-events-auto absolute bottom-5 right-5">
+        <button
+          onClick={handleEnterVRClick}
+          className="px-4 py-2.5 text-xs font-semibold text-[#0b0a09] bg-[#c8a464] hover:bg-[#d6b475] rounded shadow-lg transition-colors whitespace-nowrap"
+        >
+          {xrActive
+            ? lang === 'ru'
+              ? 'Выйти из VR (Quest 2)'
+              : 'Exit VR (Quest 2)'
+            : lang === 'ru'
+            ? 'Войти в 6DOF VR (Meta Quest 2)'
+            : 'Enter 6DOF VR (Meta Quest 2)'}
+        </button>
+      </div>
+
       {/* Hovered Target Prompt */}
       {hoveredTarget && !playerState.activeVoid && (
         <div className="z-10 pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 px-4 py-2 bg-black/70 backdrop-blur-md border border-[#c8a464]/40 rounded text-center">
           <p className="text-xs font-semibold text-[#f3ede2]">
-            [Click / E]{' '}
+            [Click / E / VR Trigger]{' '}
             {lang === 'ru'
               ? hoveredTarget.titleRu || hoveredTarget.title
               : hoveredTarget.title}
@@ -665,7 +707,8 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
               <div>
                 <p className="text-xs font-mono text-[#c8a464]">
                   DOOR {activeDoorProposition.id} ·{' '}
-                  {activeDoorProposition.subtitle || activeDoorProposition.destination}
+                  {activeDoorProposition.subtitle ||
+                    activeDoorProposition.destination}
                 </p>
                 <h2 className="text-xl font-semibold text-[#f3ede2] mt-1">
                   {lang === 'ru'
@@ -721,9 +764,12 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
                   className="w-full text-left p-3.5 bg-white/[0.03] hover:bg-white/[0.08] border border-white/10 hover:border-[#c8a464]/50 rounded transition-colors flex items-center justify-between gap-4"
                 >
                   <span className="text-xs text-[#f3ede2]">
-                    0{idx + 1}. {lang === 'ru' ? opt.textRu || opt.text : opt.text}
+                    0{idx + 1}.{' '}
+                    {lang === 'ru' ? opt.textRu || opt.text : opt.text}
                   </span>
-                  <span className="text-xs font-mono text-[#c8a464] shrink-0">→</span>
+                  <span className="text-xs font-mono text-[#c8a464] shrink-0">
+                    →
+                  </span>
                 </button>
               ))}
             </div>
@@ -758,7 +804,8 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
                 </h2>
                 <p className="text-xs text-[#c2cfd9] mt-2 leading-relaxed">
                   {lang === 'ru'
-                    ? activeMirrorModal.propositionRu || activeMirrorModal.proposition
+                    ? activeMirrorModal.propositionRu ||
+                      activeMirrorModal.proposition
                     : activeMirrorModal.proposition}
                 </p>
               </div>
@@ -798,7 +845,9 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
                         : cognitiveProfile.primaryModeEn}
                     </div>
                     <div>
-                      <span className="text-[#9c9488] font-mono">SECONDARY: </span>
+                      <span className="text-[#9c9488] font-mono">
+                        SECONDARY:{' '}
+                      </span>
                       {lang === 'ru'
                         ? cognitiveProfile.secondaryModeRu
                         : cognitiveProfile.secondaryModeEn}
@@ -818,13 +867,22 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
                   </div>
                   <div className="grid grid-cols-3 gap-2 pt-2 font-mono tabular-nums text-xs border-t border-white/10">
                     <div>
-                      DISCOVERY: <strong className="text-[#c8a464]">{cognitiveProfile.discoveryIndex}</strong>
+                      DISCOVERY:{' '}
+                      <strong className="text-[#c8a464]">
+                        {cognitiveProfile.discoveryIndex}
+                      </strong>
                     </div>
                     <div>
-                      AWARENESS: <strong className="text-[#c8a464]">{cognitiveProfile.systemAwareness}</strong>
+                      AWARENESS:{' '}
+                      <strong className="text-[#c8a464]">
+                        {cognitiveProfile.systemAwareness}
+                      </strong>
                     </div>
                     <div>
-                      ADAPTATION: <strong className="text-[#c8a464]">{cognitiveProfile.adaptationIndex}</strong>
+                      ADAPTATION:{' '}
+                      <strong className="text-[#c8a464]">
+                        {cognitiveProfile.adaptationIndex}
+                      </strong>
                     </div>
                   </div>
                 </div>
@@ -1007,8 +1065,8 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
       {/* Subtle Bottom Controls Bar */}
       <div className="z-10 pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-black/45 backdrop-blur-sm border border-white/10 rounded text-xs text-[#a89f91] font-mono whitespace-nowrap">
         {lang === 'ru'
-          ? 'WASD / Стрелки: Движение · Мышь: Обзор · E / Клик: Осмотр · Удерживайте взгляд для поиска аномалий'
-          : 'WASD / Arrows: Walk · Mouse Drag: Look · E / Click: Interact · Hold Gaze to Observe Anomalies'}
+          ? 'WASD / Стики Quest: Движение · Мышь / 6DOF VR: Обзор · E / Курок VR: Взаимодействие'
+          : 'WASD / Quest Sticks: Walk · Mouse / 6DOF VR: Look · E / VR Trigger: Interact'}
       </div>
     </div>
   );
