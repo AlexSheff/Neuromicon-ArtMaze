@@ -1,0 +1,12 @@
+{
+  "objects": [
+    {
+      "id": "obj_monolith_west",
+      "description": "Polished basalt column that casts both a shadow and a mirror image."
+    },
+    {
+      "id": "obj_monolith_east",
+      "description": "Identical basalt column whose reflection is absent from the northern mirror plane."
+    }
+  ]
+}

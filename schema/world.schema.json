@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://neuromicon.artmaze/schema/world.schema.json",
+  "title": "Neuromicon ArtMaze World Topology Graph Schema",
+  "type": "object",
+  "required": ["version", "nodes", "edges"],
+  "properties": {
+    "version": { "type": "string" },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "status", "hasExplicitEntry", "hasExplicitExit"],
+        "properties": {
+          "id": { "type": "string" },
+          "status": { "type": "string" },
+          "hasExplicitEntry": { "type": "boolean" },
+          "hasExplicitExit": { "type": "boolean" }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "doorId", "to", "status", "directed"],
+        "properties": {
+          "from": { "type": "string" },
+          "doorId": { "type": "string" },
+          "to": { "type": ["string", "null"] },
+          "status": { "type": "string" },
+          "directed": { "type": "boolean" },
+          "voidFallback": { "type": "string" },
+          "condition": { "type": "string" }
+        }
+      }
+    }
+  }
+}

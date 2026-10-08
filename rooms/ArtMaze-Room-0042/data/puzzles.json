@@ -1,0 +1,12 @@
+{
+  "puzzles": [
+    {
+      "id": "temporal_visit_progression",
+      "states": [
+        { "visit": 1, "description": "The room is sparse. Only the Chronicle Stone stands." },
+        { "visit": 2, "description": "A chair has appeared in the center of the chamber." },
+        { "visit": 3, "description": "The chair faces the visitor and the Nocturnal Sundial emerges." }
+      ]
+    }
+  ]
+}

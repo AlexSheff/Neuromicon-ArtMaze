@@ -1,0 +1,185 @@
+{
+  "specVersion": "1.0",
+  "id": "ROOM_0001",
+  "version": "1.0",
+  "protocolStage": "IV. DISORIENTATION (Spatial & Reflection Logic)",
+  "title": "The Hall of Unseen Reflections",
+  "titleRu": "Зал Незримых Отражений",
+  "author": "Alex",
+  "description": "A gallery divided by an obsidian reflection plane. Two monoliths stand in the room, yet only one exists inside the glass.",
+  "descriptionRu": "Галерея, разделённая обсидиановой зеркальной плоскостью. В зале стоят два монолита, но в зазеркалье отражается только один.",
+  "type": "custom",
+  "environment": {
+    "scene": "assets/models/room_0001.glb",
+    "scale": 1.0,
+    "dimensions": [16, 4.8, 16],
+    "palette": {
+      "wall": "#14181d",
+      "floor": "#0d1014",
+      "ceiling": "#090b0e",
+      "fog": "#0a0d12",
+      "accent": "#7da2c4"
+    },
+    "spawn": {
+      "position": [0, 1.7, 6.2],
+      "rotation": [0, 0, 0]
+    }
+  },
+  "rules": {
+    "entryAllowed": true,
+    "gravity": true,
+    "locomotion": "standard",
+    "returnAllowed": true
+  },
+  "audio": {
+    "track": "audio/glass_harmonics.ogg",
+    "loop": true,
+    "volume": 0.7,
+    "baseFrequency": 146.83,
+    "harmonicProfile": "mirror"
+  },
+  "paintings": [
+    {
+      "id": "painting_r1_01",
+      "image": "assets/images/symmetry_study.jpg",
+      "frame": "obsidian_minimal",
+      "position": [-4.8, 2.1, 0],
+      "rotation": [0, 1.5708, 0],
+      "scale": 1.2,
+      "metadata": {
+        "title": "Law of Asymmetric Glass",
+        "titleRu": "Закон Асимметричного Стекла",
+        "author": "V. Kholm",
+        "license": "CC-BY-4.0",
+        "source": "ArtMaze-Room-0001 Archive",
+        "url": "https://github.com/AlexSheff/ArtMaze-Room-0001",
+        "inscription": "Compare what stands before the mirror with what the mirror consents to repeat.",
+        "inscriptionRu": "Сравни то, что стоит перед зеркалом, с тем, что зеркало соглашается повторить."
+      },
+      "interaction": {
+        "type": "inspect"
+      }
+    }
+  ],
+  "objects": [
+    {
+      "id": "obj_monolith_west",
+      "title": "Witness Monolith (Reflected)",
+      "titleRu": "Монолит Свидетеля (Отражённый)",
+      "type": "monolith",
+      "model": "assets/models/monolith.glb",
+      "portable": false,
+      "position": [-2.2, 0, -1.8],
+      "rotation": [0, 0, 0],
+      "interactions": ["inspect", "observe"],
+      "castsShadow": true,
+      "visibleInMirror": true
+    },
+    {
+      "id": "obj_monolith_east",
+      "title": "Unreflected Monolith (Anomaly)",
+      "titleRu": "Неотражённый Монолит (Аномалия)",
+      "type": "reflection_anomaly",
+      "model": "assets/models/monolith_hollow.glb",
+      "portable": false,
+      "position": [2.2, 0, -1.8],
+      "rotation": [0, 0, 0],
+      "interactions": ["observe", "inspect", "touch"],
+      "discoveryId": "REFLECTION_MISMATCH",
+      "castsShadow": true,
+      "visibleInMirror": false
+    }
+  ],
+  "quest": {
+    "id": "quest_reflection_01",
+    "type": "compare",
+    "question": "Which object refuses to appear in the mirror at the northern wall?",
+    "questionRu": "Какой объект отказывается появляться в зеркале у северной стены?",
+    "objective": "Compare the physical hall with its reflection",
+    "objectiveRu": "Сравните физический зал с его отражением",
+    "completion": {
+      "type": "discover",
+      "target": "REFLECTION_MISMATCH"
+    }
+  },
+  "mirror": {
+    "id": "mirror_hall_01",
+    "characterState": "THE_OBSERVER",
+    "characterStateRu": "НАБЛЮДАТЕЛЬ",
+    "proposition": "The glass reflects your silhouette, but omits the eastern stone. Do you trust the room or the reflection?",
+    "propositionRu": "Стекло отражает ваш силуэт, но пропускает восточный камень. Вы доверяете комнате или отражению?",
+    "appearance": "assets/models/avatar_observer.glb",
+    "position": [0, 0, -7.6],
+    "choices": {
+      "accept": {
+        "identity": {
+          "observer": 1
+        }
+      },
+      "reject": {
+        "identity": {
+          "observer": -1
+        }
+      },
+      "return": {}
+    }
+  },
+  "doors": [
+    {
+      "id": "A",
+      "label": "A",
+      "subtitle": "ROOM_0000 · Return to Central Labyrinth",
+      "subtitleRu": "ROOM_0000 · Возврат в Центральный Лабиринт",
+      "symbol": "←",
+      "destination": "ROOM_0000",
+      "status": "ready",
+      "visibility": "visible",
+      "type": "standard",
+      "position": [-4.85, 0, 4.5],
+      "rotation": [0, 1.5708, 0]
+    },
+    {
+      "id": "B",
+      "label": "B",
+      "subtitle": "ROOM_0177 · The Inverted Atrium (Planned → Infinity)",
+      "subtitleRu": "ROOM_0177 · Обращённый Атриум (Планируется → Бесконечность)",
+      "symbol": "→",
+      "destination": "ROOM_0177",
+      "status": "planned",
+      "visibility": "visible",
+      "type": "monumental",
+      "position": [4.85, 0, 4.5],
+      "rotation": [0, -1.5708, 0],
+      "fallback": {
+        "type": "infinity"
+      }
+    },
+    {
+      "id": "RH",
+      "label": "RH",
+      "subtitle": "ROOM_0107 · Passage Behind the Glass",
+      "subtitleRu": "ROOM_0107 · Проход За Стеклом",
+      "symbol": "◊",
+      "destination": "ROOM_0107",
+      "status": "conditional",
+      "visibility": "hidden",
+      "type": "rabbit-hole",
+      "position": [3.2, 0, -7.8],
+      "rotation": [0, 0, 0],
+      "requirement": {
+        "type": "discovery",
+        "id": "REFLECTION_MISMATCH"
+      }
+    }
+  ],
+  "state": {
+    "rememberVisits": true,
+    "variables": {
+      "mirrorChecked": false
+    }
+  },
+  "metadata": {
+    "tags": ["mirror", "reflection", "anomaly", "ROOM_0001"],
+    "license": "CC-BY-4.0"
+  }
+}

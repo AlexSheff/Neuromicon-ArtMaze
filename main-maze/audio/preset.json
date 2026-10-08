@@ -1,0 +1,6 @@
+{
+  "profile": "labyrinth",
+  "baseFrequency": 110,
+  "harmonics": [1.0, 1.498, 2.0, 2.996],
+  "reverbDecay": 4.2
+}

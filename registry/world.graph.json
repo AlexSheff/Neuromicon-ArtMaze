@@ -1,0 +1,225 @@
+{
+  "version": "1.0",
+  "nodes": [
+    {
+      "id": "ROOM_0000",
+      "status": "ready",
+      "hasExplicitEntry": true,
+      "hasExplicitExit": true
+    },
+    {
+      "id": "ROOM_0001",
+      "status": "ready",
+      "hasExplicitEntry": true,
+      "hasExplicitExit": true
+    },
+    {
+      "id": "ROOM_0042",
+      "status": "ready",
+      "hasExplicitEntry": true,
+      "hasExplicitExit": false
+    },
+    {
+      "id": "ROOM_0107",
+      "status": "ready",
+      "hasExplicitEntry": true,
+      "hasExplicitExit": true
+    },
+    {
+      "id": "ROOM_0204",
+      "status": "ready",
+      "hasExplicitEntry": true,
+      "hasExplicitExit": true
+    },
+    {
+      "id": "ROOM_0404",
+      "status": "ready",
+      "hasExplicitEntry": true,
+      "hasExplicitExit": true
+    },
+    {
+      "id": "ROOM_0999",
+      "status": "ready",
+      "hasExplicitEntry": true,
+      "hasExplicitExit": true
+    },
+    {
+      "id": "ROOM_0177",
+      "status": "planned",
+      "hasExplicitEntry": true,
+      "hasExplicitExit": false
+    },
+    {
+      "id": "ROOM_0777",
+      "status": "planned",
+      "hasExplicitEntry": false,
+      "hasExplicitExit": false
+    },
+    {
+      "id": "ROOM_1149",
+      "status": "planned",
+      "hasExplicitEntry": false,
+      "hasExplicitExit": false
+    }
+  ],
+  "edges": [
+    {
+      "from": "ROOM_0000",
+      "doorId": "A",
+      "to": "ROOM_0001",
+      "status": "ready",
+      "directed": true
+    },
+    {
+      "from": "ROOM_0000",
+      "doorId": "B",
+      "to": "ROOM_0042",
+      "status": "ready",
+      "directed": true
+    },
+    {
+      "from": "ROOM_0000",
+      "doorId": "C",
+      "to": null,
+      "status": "void",
+      "directed": true,
+      "voidFallback": "fractal"
+    },
+    {
+      "from": "ROOM_0000",
+      "doorId": "RH",
+      "to": "ROOM_0107",
+      "status": "conditional",
+      "directed": true,
+      "condition": "discovery:SHADOW_WITHOUT_OBJECT"
+    },
+    {
+      "from": "ROOM_0001",
+      "doorId": "A",
+      "to": "ROOM_0000",
+      "status": "ready",
+      "directed": true
+    },
+    {
+      "from": "ROOM_0001",
+      "doorId": "B",
+      "to": "ROOM_0177",
+      "status": "planned",
+      "directed": true,
+      "voidFallback": "infinity"
+    },
+    {
+      "from": "ROOM_0001",
+      "doorId": "RH",
+      "to": "ROOM_0107",
+      "status": "conditional",
+      "directed": true,
+      "condition": "discovery:REFLECTION_MISMATCH"
+    },
+    {
+      "from": "ROOM_0042",
+      "doorId": "A",
+      "to": "ROOM_0777",
+      "status": "planned",
+      "directed": true,
+      "voidFallback": "infinity"
+    },
+    {
+      "from": "ROOM_0042",
+      "doorId": "B",
+      "to": null,
+      "status": "void",
+      "directed": true,
+      "voidFallback": "starfield"
+    },
+    {
+      "from": "ROOM_0042",
+      "doorId": "RH",
+      "to": "ROOM_0000",
+      "status": "conditional",
+      "directed": true,
+      "condition": "visit-count:2"
+    },
+    {
+      "from": "ROOM_0107",
+      "doorId": "A",
+      "to": "ROOM_0000",
+      "status": "ready",
+      "directed": true
+    },
+    {
+      "from": "ROOM_0107",
+      "doorId": "B",
+      "to": "ROOM_0204",
+      "status": "ready",
+      "directed": true
+    },
+    {
+      "from": "ROOM_0107",
+      "doorId": "RH",
+      "to": "ROOM_0404",
+      "status": "conditional",
+      "directed": true,
+      "condition": "discovery:DIRECTED_TOPOLOGY_READ"
+    },
+    {
+      "from": "ROOM_0204",
+      "doorId": "A",
+      "to": "ROOM_0107",
+      "status": "ready",
+      "directed": true
+    },
+    {
+      "from": "ROOM_0204",
+      "doorId": "B",
+      "to": "ROOM_0404",
+      "status": "ready",
+      "directed": true
+    },
+    {
+      "from": "ROOM_0204",
+      "doorId": "RH",
+      "to": "ROOM_0999",
+      "status": "conditional",
+      "directed": true,
+      "condition": "discovery:COLLECTIVE_SYNTHESIS"
+    },
+    {
+      "from": "ROOM_0404",
+      "doorId": "A",
+      "to": "ROOM_0204",
+      "status": "ready",
+      "directed": true
+    },
+    {
+      "from": "ROOM_0404",
+      "doorId": "B",
+      "to": "ROOM_0999",
+      "status": "ready",
+      "directed": true
+    },
+    {
+      "from": "ROOM_0404",
+      "doorId": "RH",
+      "to": "ROOM_0999",
+      "status": "conditional",
+      "directed": true,
+      "condition": "discovery:SYSTEM_RULE_CREATED"
+    },
+    {
+      "from": "ROOM_0999",
+      "doorId": "A",
+      "to": "ROOM_0404",
+      "status": "ready",
+      "directed": true
+    },
+    {
+      "from": "ROOM_0999",
+      "doorId": "OMEGA",
+      "to": "ROOM_0000",
+      "status": "ready",
+      "directed": true,
+      "condition": "cycle_loop:THE_LAST_DOOR"
+    }
+  ]
+}

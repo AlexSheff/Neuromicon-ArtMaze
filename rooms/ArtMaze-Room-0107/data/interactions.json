@@ -1,0 +1,12 @@
+{
+  "interactions": [
+    {
+      "target": "mirror_01",
+      "verbs": ["observe", "accept", "reject", "return"]
+    },
+    {
+      "target": "obj_inscription_stele",
+      "verbs": ["read", "inspect", "observe"]
+    }
+  ]
+}

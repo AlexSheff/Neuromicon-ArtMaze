@@ -1,0 +1,32 @@
+{
+  "frames": {
+    "classic_gold": {
+      "borderWidth": 0.14,
+      "depth": 0.08,
+      "color": "#c8a464",
+      "roughness": 0.35,
+      "metalness": 0.8
+    },
+    "obsidian_minimal": {
+      "borderWidth": 0.09,
+      "depth": 0.06,
+      "color": "#1c1d21",
+      "roughness": 0.2,
+      "metalness": 0.5
+    },
+    "travertine_deep": {
+      "borderWidth": 0.16,
+      "depth": 0.1,
+      "color": "#9e9382",
+      "roughness": 0.75,
+      "metalness": 0.1
+    },
+    "bronze_monument": {
+      "borderWidth": 0.12,
+      "depth": 0.09,
+      "color": "#8c673e",
+      "roughness": 0.4,
+      "metalness": 0.7
+    }
+  }
+}

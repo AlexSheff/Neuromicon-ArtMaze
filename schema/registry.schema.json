@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://neuromicon.artmaze/schema/registry.schema.json",
+  "title": "Neuromicon ArtMaze Room Registry Schema",
+  "type": "object",
+  "required": ["version", "worldScaleConstant", "rooms"],
+  "properties": {
+    "version": { "type": "string" },
+    "worldScaleConstant": { "type": "integer", "const": 1149 },
+    "rooms": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["id", "type", "status", "title"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^ROOM_[0-9]{4}$" },
+          "title": { "type": "string" },
+          "titleRu": { "type": "string" },
+          "type": { "type": "string", "enum": ["main-maze", "external"] },
+          "source": { "type": "string" },
+          "repository": { "type": "string" },
+          "manifestPath": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["idea", "prototype", "testing", "ready", "planned", "deprecated", "archived"]
+          }
+        }
+      }
+    }
+  }
+}

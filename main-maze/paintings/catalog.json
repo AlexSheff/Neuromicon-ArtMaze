@@ -1,0 +1,24 @@
+{
+  "catalog": [
+    {
+      "id": "painting_001",
+      "motif": "architectural_arches",
+      "palette": ["#161412", "#c8a464", "#8a7248", "#e6dcc8"]
+    },
+    {
+      "id": "painting_002",
+      "motif": "shifting_horizon",
+      "palette": ["#0f1319", "#5c7c99", "#b8cde0", "#d4af37"]
+    },
+    {
+      "id": "painting_003",
+      "motif": "non_euclidean_grid",
+      "palette": ["#181615", "#a38f78", "#d6ccb8", "#6e5239"]
+    },
+    {
+      "id": "painting_004",
+      "motif": "absent_shadow",
+      "palette": ["#121110", "#b89758", "#423d38", "#efe9dd"]
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "version": "1.0",
+  "worldScaleConstant": 1149,
+  "rooms": {
+    "ROOM_0000": {
+      "id": "ROOM_0000",
+      "title": "The Central Labyrinth (I. Entry · II. Separation · III. First Choice)",
+      "titleRu": "Центральный Лабиринт (I. Вход · II. Отделение · III. Первый Выбор)",
+      "type": "main-maze",
+      "source": "local",
+      "manifestPath": "main-maze/room.json",
+      "status": "ready"
+    },
+    "ROOM_0001": {
+      "id": "ROOM_0001",
+      "title": "The Hall of Unseen Reflections (IV. Disorientation — Logic)",
+      "titleRu": "Зал Незримых Отражений (IV. Дезориентация — Логика)",
+      "type": "external",
+      "repository": "https://github.com/AlexSheff/ArtMaze-Room-0001",
+      "manifestPath": "rooms/ArtMaze-Room-0001/room.json",
+      "status": "ready"
+    },
+    "ROOM_0042": {
+      "id": "ROOM_0042",
+      "title": "The Room That Remembers (IV. Disorientation — Paradox)",
+      "titleRu": "Комната, Которая Помнит (IV. Дезориентация — Парадокс)",
+      "type": "external",
+      "repository": "https://github.com/AlexSheff/ArtMaze-Room-0042",
+      "manifestPath": "rooms/ArtMaze-Room-0042/room.json",
+      "status": "ready"
+    },
+    "ROOM_0107": {
+      "id": "ROOM_0107",
+      "title": "The Archivist's Mirror (V. Mirror · VI. Trial)",
+      "titleRu": "Зеркало Архивариуса (V. Зеркало · VI. Испытание)",
+      "type": "external",
+      "repository": "https://github.com/AlexSheff/ArtMaze-Room-0107",
+      "manifestPath": "rooms/ArtMaze-Room-0107/room.json",
+      "status": "ready"
+    },
+    "ROOM_0204": {
+      "id": "ROOM_0204",
+      "title": "The Chamber of Four Witnesses (VII. Group · VIII. Trust)",
+      "titleRu": "Зал Четырёх Свидетелей (VII. Группа · VIII. Доверие)",
+      "type": "external",
+      "repository": "https://github.com/AlexSheff/ArtMaze-Room-0204",
+      "manifestPath": "rooms/ArtMaze-Room-0204/room.json",
+      "status": "ready"
+    },
+    "ROOM_0404": {
+      "id": "ROOM_0404",
+      "title": "The Loom of Rules (X. System Break · XI. Creator Room)",
+      "titleRu": "Станок Правил (X. Взлом Системы · XI. Комната Создателя)",
+      "type": "external",
+      "repository": "https://github.com/AlexSheff/ArtMaze-Room-0404",
+      "manifestPath": "rooms/ArtMaze-Room-0404/room.json",
+      "status": "ready"
+    },
+    "ROOM_0999": {
+      "id": "ROOM_0999",
+      "title": "The Threshold of Return (XII. Meta-Mirror · XIV. Initiation · XVI. Last Door)",
+      "titleRu": "Порог Возвращения (XII. Мета-Зеркало · XIV. Посвящение · XVI. Последняя Дверь)",
+      "type": "external",
+      "repository": "https://github.com/AlexSheff/ArtMaze-Room-0999",
+      "manifestPath": "rooms/ArtMaze-Room-0999/room.json",
+      "status": "ready"
+    },
+    "ROOM_0177": {
+      "id": "ROOM_0177",
+      "title": "The Inverted Atrium",
+      "titleRu": "Обращённый Атриум",
+      "type": "external",
+      "repository": "https://github.com/AlexSheff/ArtMaze-Room-0177",
+      "status": "planned"
+    },
+    "ROOM_0777": {
+      "id": "ROOM_0777",
+      "title": "The Silent Observatory",
+      "titleRu": "Безмолвная Обсерватория",
+      "type": "external",
+      "repository": "https://github.com/AlexSheff/ArtMaze-Room-0777",
+      "status": "planned"
+    },
+    "ROOM_1149": {
+      "id": "ROOM_1149",
+      "title": "The Outer Threshold",
+      "titleRu": "Внешний Порог",
+      "type": "external",
+      "repository": "https://github.com/AlexSheff/ArtMaze-Room-1149",
+      "status": "planned"
+    }
+  }
+}

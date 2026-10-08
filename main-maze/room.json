@@ -1,0 +1,329 @@
+{
+  "specVersion": "1.0",
+  "id": "ROOM_0000",
+  "version": "1.0",
+  "protocolStage": "I. ENTRY · II. SEPARATION · III. FIRST CHOICE",
+  "title": "The Central Labyrinth",
+  "titleRu": "Центральный Лабиринт (Вход и Первый Выбор)",
+  "author": "Alex",
+  "description": "There is no single correct route here. Your decisions alter what happens next. Framed works line travertine walls; doors open into adjacent realities or unformed voids.",
+  "descriptionRu": "Здесь нет правильного маршрута. Ваши решения изменяют то, что произойдёт дальше. Картины в рамах вдоль травертиновых стен; двери ведут в соседние реальности или в пустоту.",
+  "type": "standard",
+  "environment": {
+    "scene": "main-maze/geometry/corridors.json",
+    "scale": 1.0,
+    "dimensions": [16, 5.6, 20],
+    "palette": {
+      "wall": "#1d1a17",
+      "floor": "#141210",
+      "ceiling": "#0d0c0a",
+      "fog": "#0e0c0a",
+      "accent": "#c8a464"
+    },
+    "spawn": {
+      "position": [0, 1.7, 7.2],
+      "rotation": [0, 0, 0]
+    }
+  },
+  "rules": {
+    "entryAllowed": true,
+    "gravity": true,
+    "locomotion": "standard",
+    "returnAllowed": true
+  },
+  "audio": {
+    "track": "main-maze/audio/cathedral_drone.ogg",
+    "loop": true,
+    "volume": 0.65,
+    "baseFrequency": 110,
+    "harmonicProfile": "labyrinth"
+  },
+  "paintings": [
+    {
+      "id": "painting_001",
+      "image": "paintings/painting_001.jpg",
+      "frame": "classic_gold",
+      "position": [-7.92, 2.2, 3.2],
+      "rotation": [0, 1.5708, 0],
+      "scale": 1.3,
+      "metadata": {
+        "title": "Axiom of the First Corridor",
+        "titleRu": "Аксиома Первого Коридора",
+        "author": "Neuromicon Atelier",
+        "license": "CC-BY-4.0",
+        "source": "Procedural Archival Plate I",
+        "url": "https://github.com/AlexSheff/Neuromicon-ArtMaze",
+        "inscription": "There is no correct route here. What encloses the path is also part of the path.",
+        "inscriptionRu": "Здесь нет правильного маршрута. То, что ограничивает путь, само является частью пути."
+      },
+      "interaction": {
+        "type": "inspect",
+        "discovery": "PAINTING_AXIOM_OBSERVED"
+      }
+    },
+    {
+      "id": "painting_002",
+      "image": "paintings/painting_002.jpg",
+      "frame": "obsidian_minimal",
+      "position": [7.92, 2.2, 3.2],
+      "rotation": [0, -1.5708, 0],
+      "scale": 1.3,
+      "metadata": {
+        "title": "The Horizon That Waits",
+        "titleRu": "Горизонт, Который Ждёт",
+        "author": "Neuromicon Atelier",
+        "license": "CC-BY-4.0",
+        "source": "Procedural Archival Plate II",
+        "url": "https://github.com/AlexSheff/Neuromicon-ArtMaze",
+        "inscription": "This canvas alters its geometry only while unobserved.",
+        "inscriptionRu": "Это полотно меняет свою геометрию только тогда, когда на него не смотрят."
+      },
+      "interaction": {
+        "type": "discover",
+        "discovery": "PAINTING_SHIFT_WHEN_IGNORED",
+        "mutatesOnIgnore": true
+      }
+    },
+    {
+      "id": "painting_003",
+      "image": "paintings/painting_003.jpg",
+      "frame": "travertine_deep",
+      "position": [-7.92, 2.2, -1.8],
+      "rotation": [0, 1.5708, 0],
+      "scale": 1.3,
+      "metadata": {
+        "title": "Cartography of 1149",
+        "titleRu": "Картография 1149",
+        "author": "Neuromicon Atelier",
+        "license": "CC-BY-4.0",
+        "source": "Procedural Archival Plate III",
+        "url": "https://github.com/AlexSheff/Neuromicon-ArtMaze",
+        "inscription": "The map is accurate, yet the territory refuses to agree.",
+        "inscriptionRu": "Карта точна, но территория отказывается с ней соглашаться."
+      },
+      "interaction": {
+        "type": "observe",
+        "discovery": "MAP_TERRITORY_CONTRADICTION"
+      }
+    },
+    {
+      "id": "painting_004",
+      "image": "paintings/painting_004.jpg",
+      "frame": "bronze_monument",
+      "position": [7.92, 2.2, -1.8],
+      "rotation": [0, -1.5708, 0],
+      "scale": 1.3,
+      "metadata": {
+        "title": "Study of an Absent Shadow",
+        "titleRu": "Этюд Отсутствующей Тени",
+        "author": "Neuromicon Atelier",
+        "license": "CC-BY-4.0",
+        "source": "Procedural Archival Plate IV",
+        "url": "https://github.com/AlexSheff/Neuromicon-ArtMaze",
+        "inscription": "Look to the floor near the northern colonnade where light is interrupted by nothing.",
+        "inscriptionRu": "Взгляни на пол у северной колоннады, где свет преграждён ничем."
+      },
+      "interaction": {
+        "type": "inspect"
+      }
+    }
+  ],
+  "objects": [
+    {
+      "id": "obj_plinth_01",
+      "title": "Basalt Plinth of Orientation (Entry Baseline)",
+      "titleRu": "Базальтовый Плинтус Входа",
+      "type": "plinth",
+      "model": "main-maze/assets/plinth.glb",
+      "portable": false,
+      "position": [0, 0, 1.5],
+      "rotation": [0, 0, 0],
+      "interactions": ["inspect", "read", "observe"],
+      "castsShadow": true,
+      "visibleInMirror": true
+    },
+    {
+      "id": "obj_shadow_anomaly",
+      "title": "Shadow Without an Object",
+      "titleRu": "Тень Без Объекта",
+      "type": "shadow_anomaly",
+      "model": "main-maze/assets/shadow_anomaly.glb",
+      "portable": false,
+      "position": [2.8, 0.02, -4.8],
+      "rotation": [0, 0.45, 0],
+      "interactions": ["observe", "inspect"],
+      "discoveryId": "SHADOW_WITHOUT_OBJECT",
+      "castsShadow": true,
+      "visibleInMirror": false
+    }
+  ],
+  "quest": {
+    "id": "quest_maze_threshold",
+    "type": "observe",
+    "question": "There is no single correct route here. Before you stand A, B, C — and a shadow cast by nothing.",
+    "questionRu": "Здесь нет правильного маршрута. Перед вами пути A, B, C — и тень, отброшенная ничем.",
+    "objective": "Consult the Entry Mirror, choose a door (A / B / C), or investigate what interrupts the light.",
+    "objectiveRu": "Загляните в Первое Зеркало, выберите дверь (A / B / C) или изучите то, что прерывает свет.",
+    "completion": {
+      "type": "discover",
+      "target": "SHADOW_WITHOUT_OBJECT"
+    }
+  },
+  "mirror": {
+    "id": "mirror_entry_00",
+    "mode": "first",
+    "characterState": "FIRST_MIRROR",
+    "characterStateRu": "ПЕРВОЕ ЗЕРКАЛО (ВХОД)",
+    "proposition": "Whom do you expect to meet here?",
+    "propositionRu": "Кого ты ожидаешь здесь встретить?",
+    "appearance": "main-maze/assets/entry_mirror.glb",
+    "position": [-3.8, 0, -9.92],
+    "choices": {
+      "accept": {
+        "identity": {
+          "observer": 1
+        },
+        "flag": "expected_unknown_self"
+      },
+      "reject": {
+        "identity": {
+          "archivist": 1
+        },
+        "flag": "expected_system_architect"
+      },
+      "return": {
+        "identity": {
+          "creator": 1
+        },
+        "flag": "expected_no_one"
+      }
+    }
+  },
+  "doors": [
+    {
+      "id": "A",
+      "label": "A",
+      "subtitle": "ROOM_0001 · Hall of Reflections (Logic & Symmetry)",
+      "subtitleRu": "ROOM_0001 · Зал Отражений (Логика и Симметрия)",
+      "symbol": "I",
+      "destination": "ROOM_0001",
+      "status": "ready",
+      "visibility": "visible",
+      "type": "monumental",
+      "position": [-7.92, 0, -6.5],
+      "rotation": [0, 1.5708, 0],
+      "proposition": {
+        "prompt": "III. FIRST CHOICE — Door A offers a structured chamber of symmetry. How do you proceed?",
+        "promptRu": "III. ПЕРВЫЙ ВЫБОР — Дверь A ведёт в упорядоченный зал симметрии. Как вы поступите?",
+        "options": [
+          {
+            "id": "a_1",
+            "text": "Follow the declared corridor into ROOM_0001",
+            "textRu": "Следовать объявленному маршруту в ROOM_0001",
+            "destinationOverride": "ROOM_0001",
+            "behavioralSignal": "safe"
+          },
+          {
+            "id": "a_2",
+            "text": "Enter ROOM_0001 to test the rules of its mirror",
+            "textRu": "Войти в ROOM_0001, чтобы проверить правила её зеркала",
+            "destinationOverride": "ROOM_0001",
+            "behavioralSignal": "third_path"
+          },
+          {
+            "id": "a_3",
+            "text": "Bypass the room and step directly into Mirror Void",
+            "textRu": "Миновать комнату и шагнуть прямо в Зеркальную Пустоту",
+            "destinationOverride": null,
+            "voidOverride": "mirror",
+            "behavioralSignal": "risky"
+          }
+        ]
+      }
+    },
+    {
+      "id": "B",
+      "label": "B",
+      "subtitle": "ROOM_0042 · The Room That Remembers (Time & Paradox)",
+      "subtitleRu": "ROOM_0042 · Комната, Которая Помнит (Время и Парадокс)",
+      "symbol": "II",
+      "destination": "ROOM_0042",
+      "status": "ready",
+      "visibility": "visible",
+      "type": "monumental",
+      "position": [0, 0, -9.92],
+      "rotation": [0, 0, 0],
+      "proposition": {
+        "prompt": "III. FIRST CHOICE — Door B warns that no direct return door exists inside.",
+        "promptRu": "III. ПЕРВЫЙ ВЫБОР — Дверь B предупреждает, что внутри нет прямой двери назад.",
+        "options": [
+          {
+            "id": "b_1",
+            "text": "Accept the irreversible threshold and enter ROOM_0042",
+            "textRu": "Принять риск необратимого порога и войти в ROOM_0042",
+            "destinationOverride": "ROOM_0042",
+            "behavioralSignal": "risky"
+          },
+          {
+            "id": "b_2",
+            "text": "Enter ROOM_0042 to observe how memory alters architecture",
+            "textRu": "Войти в ROOM_0042 для исследования памяти пространства",
+            "destinationOverride": "ROOM_0042",
+            "behavioralSignal": "third_path"
+          },
+          {
+            "id": "b_3",
+            "text": "Look beyond the threshold into Infinity Void",
+            "textRu": "Заглянуть за порог в Пустоту Бесконечности",
+            "destinationOverride": null,
+            "voidOverride": "infinity",
+            "behavioralSignal": "risky"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C",
+      "label": "C",
+      "subtitle": "VOID · 3D Fractal Horizon (Uncertainty)",
+      "subtitleRu": "ПУСТОТА · Фрактальный Горизонт (Неопределённость)",
+      "symbol": "∞",
+      "destination": null,
+      "status": "void",
+      "visibility": "visible",
+      "type": "monumental",
+      "position": [7.92, 0, -6.5],
+      "rotation": [0, -1.5708, 0],
+      "fallback": {
+        "type": "fractal"
+      }
+    },
+    {
+      "id": "RH",
+      "label": "RH",
+      "subtitle": "ROOM_0107 · The Archivist's Mirror (Hidden 4th Path)",
+      "subtitleRu": "ROOM_0107 · Зеркало Архивариуса (Скрытый 4-й Путь)",
+      "symbol": "◊",
+      "destination": "ROOM_0107",
+      "status": "conditional",
+      "visibility": "hidden",
+      "type": "rabbit-hole",
+      "position": [3.8, 0, -9.92],
+      "rotation": [0, 0, 0],
+      "requirement": {
+        "type": "discovery",
+        "id": "SHADOW_WITHOUT_OBJECT"
+      }
+    }
+  ],
+  "state": {
+    "rememberVisits": true,
+    "variables": {
+      "shadowInspected": false
+    }
+  },
+  "metadata": {
+    "tags": ["entry", "separation", "first-choice", "ROOM_0000"],
+    "license": "CC-BY-4.0"
+  }
+}

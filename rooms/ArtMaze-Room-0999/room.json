@@ -1,0 +1,183 @@
+{
+  "specVersion": "1.0",
+  "id": "ROOM_0999",
+  "version": "1.0",
+  "protocolStage": "XII. META MIRROR · XIII. RESET · XIV. INITIATION · XV. RETURN · XVI. THE LAST DOOR",
+  "title": "The Threshold of Return",
+  "titleRu": "Порог Возвращения (Мета-Зеркало и Последняя Дверь)",
+  "author": "Alex",
+  "description": "The final sanctum of the transformation protocol. Here the Meta-Mirror reflects not a character, but the exact history of your decisions, granting Initiation and opening The Last Door.",
+  "descriptionRu": "Финальное святилище протокола трансформации. Здесь Мета-Зеркало показывает не персонажа, а точную историю ваших решений, открывая Посвящение, Когнитивный Профиль и Последнюю Дверь.",
+  "type": "custom",
+  "environment": {
+    "scene": "assets/models/room_0999.glb",
+    "scale": 1.0,
+    "dimensions": [18, 6.0, 18],
+    "palette": {
+      "wall": "#141310",
+      "floor": "#0d0c0a",
+      "ceiling": "#070605",
+      "fog": "#0b0a08",
+      "accent": "#e0be78"
+    },
+    "spawn": {
+      "position": [0, 1.7, 6.5],
+      "rotation": [0, 0, 0]
+    }
+  },
+  "rules": {
+    "entryAllowed": true,
+    "gravity": true,
+    "locomotion": "standard",
+    "returnAllowed": true
+  },
+  "audio": {
+    "track": "audio/threshold_of_return.ogg",
+    "loop": true,
+    "volume": 0.8,
+    "baseFrequency": 110.0,
+    "harmonicProfile": "cathedral"
+  },
+  "paintings": [
+    {
+      "id": "painting_r999_01",
+      "image": "assets/images/the_last_door.jpg",
+      "frame": "classic_gold",
+      "position": [-6.2, 2.3, -1.0],
+      "rotation": [0, 1.5708, 0],
+      "scale": 1.4,
+      "metadata": {
+        "title": "ArtMaze Is Not a Place",
+        "titleRu": "ArtMaze — Это Не Место",
+        "author": "Alex",
+        "license": "CC-BY-4.0",
+        "source": "ArtMaze-Room-0999 Archive",
+        "url": "https://github.com/AlexSheff/ArtMaze-Room-0999",
+        "inscription": "The last door leads back to the beginning, because ArtMaze is not a place—it is a way of looking at reality.",
+        "inscriptionRu": "Последняя дверь ведёт обратно в начало, потому что ArtMaze — это не место, а способ смотреть на реальность."
+      },
+      "interaction": {
+        "type": "discover",
+        "discovery": "LAST_DOOR_INSIGHT"
+      }
+    }
+  ],
+  "objects": [
+    {
+      "id": "obj_initiation_stele",
+      "title": "Stele of Initiation & Cognitive Profile",
+      "titleRu": "Стела Посвящения и Профиля Поведения",
+      "type": "monolith",
+      "model": "assets/models/initiation_stele.glb",
+      "portable": false,
+      "position": [2.6, 0, -2.0],
+      "rotation": [0, -0.35, 0],
+      "interactions": ["read", "inspect", "observe"],
+      "discoveryId": "INITIATION_ACKNOWLEDGED",
+      "castsShadow": true,
+      "visibleInMirror": true
+    }
+  ],
+  "quest": {
+    "id": "quest_999_return",
+    "type": "identity",
+    "question": "Was this truly a labyrinth?",
+    "questionRu": "Это действительно был лабиринт?",
+    "objective": "Consult the Meta-Mirror at the northern altar, review your Initiation Profile, and step through The Last Door (Ω).",
+    "objectiveRu": "Загляните в Мета-Зеркало у северного алтаря, изучите свой Профиль Посвящения и шагните в Последнюю Дверь (Ω).",
+    "completion": {
+      "type": "discover",
+      "target": "INITIATION_ACKNOWLEDGED"
+    }
+  },
+  "mirror": {
+    "id": "mirror_meta_999",
+    "mode": "meta",
+    "characterState": "META_MIRROR",
+    "characterStateRu": "МЕТА-ЗЕРКАЛО (ИСТОРИЯ РЕШЕНИЙ)",
+    "proposition": "Was this truly a labyrinth?",
+    "propositionRu": "Это действительно был лабиринт?",
+    "appearance": "assets/models/meta_mirror.glb",
+    "position": [0, 0, -8.5],
+    "choices": {
+      "accept": {
+        "identity": {
+          "observer": 1,
+          "archivist": 1
+        }
+      },
+      "reject": {
+        "identity": {
+          "creator": 1
+        }
+      },
+      "return": {}
+    }
+  },
+  "doors": [
+    {
+      "id": "A",
+      "label": "A",
+      "subtitle": "ROOM_0404 · Return to The Loom of Rules",
+      "subtitleRu": "ROOM_0404 · Возврат в Комнату Создателя",
+      "symbol": "←",
+      "destination": "ROOM_0404",
+      "status": "ready",
+      "visibility": "visible",
+      "type": "standard",
+      "position": [-6.5, 0, 3.8],
+      "rotation": [0, 1.5708, 0]
+    },
+    {
+      "id": "OMEGA",
+      "label": "Ω",
+      "subtitle": "XVI. THE LAST DOOR → ROOM_0000 (New Identity Cycle)",
+      "subtitleRu": "XVI. ПОСЛЕДНЯЯ ДВЕРЬ → ROOM_0000 (Новый Цикл Трансформации)",
+      "symbol": "Ω",
+      "destination": "ROOM_0000",
+      "status": "ready",
+      "visibility": "visible",
+      "type": "monumental",
+      "position": [6.5, 0, 3.8],
+      "rotation": [0, -1.5708, 0],
+      "proposition": {
+        "prompt": "The Last Door leads back to the beginning (ROOM_0000). How do you cross back into the world?",
+        "promptRu": "Последняя дверь ведёт обратно в начало (ROOM_0000). Как вы совершите этот переход?",
+        "options": [
+          {
+            "id": "omega_new_cycle",
+            "text": "Begin a New Identity Experiment (Cycle + 1) — consciously test a new strategy",
+            "textRu": "Начать Новый Эксперимент Идентичности (Цикл + 1) — сознательно испытать иную стратегию",
+            "destinationOverride": "ROOM_0000",
+            "behavioralSignal": "cycle_reset"
+          },
+          {
+            "id": "omega_continue",
+            "text": "Return to ROOM_0000 preserving current state and discoveries",
+            "textRu": "Вернуться в ROOM_0000 с сохранением всех открытий и текущего состояния",
+            "destinationOverride": "ROOM_0000",
+            "behavioralSignal": "safe"
+          },
+          {
+            "id": "omega_1149_void",
+            "text": "Step beyond the 1149th boundary into the Unclassified Horizon",
+            "textRu": "Шагнуть за 1149-й предел в Неклассифицированный Горизонт",
+            "destinationOverride": null,
+            "voidOverride": "unknown",
+            "behavioralSignal": "risky"
+          }
+        ]
+      }
+    }
+  ],
+  "state": {
+    "rememberVisits": true,
+    "variables": {
+      "metaMirrorViewed": false
+    }
+  },
+  "metadata": {
+    "tags": ["meta-mirror", "initiation", "last-door", "return", "ROOM_0999"],
+    "license": "CC-BY-4.0"
+  }
+}

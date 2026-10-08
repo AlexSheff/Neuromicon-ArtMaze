@@ -1,0 +1,218 @@
+{
+  "specVersion": "1.0",
+  "id": "ROOM_0204",
+  "version": "1.0",
+  "protocolStage": "VII. GROUP · VIII. BETRAYAL / TRUST",
+  "title": "The Chamber of Four Witnesses",
+  "titleRu": "Зал Четырёх Свидетелей",
+  "author": "Alex",
+  "description": "No single vantage point holds the complete truth. Four steles divide perception into Space, Sound, Rule, and Mechanism; the exit requires deciding how to act when interests diverge.",
+  "descriptionRu": "Ни одна точка обзора не владеет всей полнотой картины. Четыре стелы разделяют восприятие на Пространство, Звук, Правило и Механизм; выход требует решить, как поступить при расхождении интересов.",
+  "type": "custom",
+  "environment": {
+    "scene": "assets/models/room_0204.glb",
+    "scale": 1.0,
+    "dimensions": [18, 5.4, 18],
+    "palette": {
+      "wall": "#141918",
+      "floor": "#0d1110",
+      "ceiling": "#080b0a",
+      "fog": "#0a0e0d",
+      "accent": "#76b5a0"
+    },
+    "spawn": {
+      "position": [0, 1.7, 6.5],
+      "rotation": [0, 0, 0]
+    }
+  },
+  "rules": {
+    "entryAllowed": true,
+    "gravity": true,
+    "locomotion": "standard",
+    "returnAllowed": true
+  },
+  "audio": {
+    "track": "audio/four_witnesses.ogg",
+    "loop": true,
+    "volume": 0.75,
+    "baseFrequency": 123.47,
+    "harmonicProfile": "cathedral"
+  },
+  "paintings": [
+    {
+      "id": "painting_r204_01",
+      "image": "assets/images/collective_chord.jpg",
+      "frame": "bronze_monument",
+      "position": [0, 2.2, -8.8],
+      "rotation": [0, 0, 0],
+      "scale": 1.4,
+      "metadata": {
+        "title": "Treatise on Divided Sight",
+        "titleRu": "Трактат о Разделённом Зрении",
+        "author": "Council of Cartographers",
+        "license": "CC-BY-4.0",
+        "source": "ArtMaze-Room-0204 Archive",
+        "url": "https://github.com/AlexSheff/ArtMaze-Room-0204",
+        "inscription": "Player A sees the space. Player B hears the signal. Player C knows the rule. Player D moves the mechanism.",
+        "inscriptionRu": "Участник A видит пространство. Участник B слышит сигнал. Участник C знает правило. Участник D приводит в действие механизм."
+      },
+      "interaction": {
+        "type": "inspect",
+        "discovery": "DIVIDED_SIGHT_READ"
+      }
+    }
+  ],
+  "objects": [
+    {
+      "id": "obj_witness_space",
+      "title": "Witness A · Spatial Coordinate",
+      "titleRu": "Свидетель A · Координата Пространства",
+      "type": "inscription",
+      "model": "assets/models/witness_a.glb",
+      "portable": false,
+      "position": [-3.2, 0, -2.5],
+      "rotation": [0, 0.4, 0],
+      "interactions": ["inspect", "read", "observe"],
+      "discoveryId": "WITNESS_SPACE_ALIGNED",
+      "castsShadow": true,
+      "visibleInMirror": true
+    },
+    {
+      "id": "obj_witness_sound",
+      "title": "Witness B · Acoustic Interval",
+      "titleRu": "Свидетель B · Акустический Интервал",
+      "type": "inscription",
+      "model": "assets/models/witness_b.glb",
+      "portable": false,
+      "position": [-1.1, 0, -3.5],
+      "rotation": [0, 0.15, 0],
+      "interactions": ["listen", "inspect", "observe"],
+      "discoveryId": "WITNESS_SOUND_ALIGNED",
+      "castsShadow": true,
+      "visibleInMirror": true
+    },
+    {
+      "id": "obj_witness_rule",
+      "title": "Witness C · Structural Rule",
+      "titleRu": "Свидетель C · Структурное Правило",
+      "type": "inscription",
+      "model": "assets/models/witness_c.glb",
+      "portable": false,
+      "position": [1.1, 0, -3.5],
+      "rotation": [0, -0.15, 0],
+      "interactions": ["read", "inspect", "observe"],
+      "discoveryId": "WITNESS_RULE_ALIGNED",
+      "castsShadow": true,
+      "visibleInMirror": true
+    },
+    {
+      "id": "obj_witness_mechanism",
+      "title": "Witness D · Synthesis Mechanism",
+      "titleRu": "Свидетель D · Механизм Синтеза",
+      "type": "sundial",
+      "model": "assets/models/witness_d.glb",
+      "portable": false,
+      "position": [3.2, 0, -2.5],
+      "rotation": [0, -0.4, 0],
+      "interactions": ["activate", "rotate", "inspect"],
+      "discoveryId": "COLLECTIVE_SYNTHESIS",
+      "castsShadow": true,
+      "visibleInMirror": true
+    }
+  ],
+  "quest": {
+    "id": "quest_204_collective",
+    "type": "choose",
+    "question": "Each witness holds one fragment of the lock. When the threshold opens, how do you allocate the passage?",
+    "questionRu": "Каждый свидетель хранит один фрагмент ключа. Когда порог открывается, как вы распределите переход?",
+    "objective": "Integrate the four perspectives (Space, Sound, Rule, Mechanism) and resolve the Trust Dilemma at Door B.",
+    "objectiveRu": "Объедините четыре перспективы (Пространство, Звук, Правило, Механизм) и разрешите дилемму доверия у Двери B.",
+    "completion": {
+      "type": "discover",
+      "target": "COLLECTIVE_SYNTHESIS"
+    }
+  },
+  "mirror": null,
+  "doors": [
+    {
+      "id": "A",
+      "label": "A",
+      "subtitle": "ROOM_0107 · The Archivist's Mirror",
+      "subtitleRu": "ROOM_0107 · Зеркало Архивариуса",
+      "symbol": "←",
+      "destination": "ROOM_0107",
+      "status": "ready",
+      "visibility": "visible",
+      "type": "standard",
+      "position": [-6.5, 0, 4.0],
+      "rotation": [0, 1.5708, 0]
+    },
+    {
+      "id": "B",
+      "label": "B",
+      "subtitle": "ROOM_0404 · The Loom of Rules (Trust Dilemma)",
+      "subtitleRu": "ROOM_0404 · Станок Правил (Дилемма Доверия)",
+      "symbol": "⚖",
+      "destination": "ROOM_0404",
+      "status": "ready",
+      "visibility": "visible",
+      "type": "monumental",
+      "position": [6.5, 0, 4.0],
+      "rotation": [0, -1.5708, 0],
+      "proposition": {
+        "prompt": "Interests diverge at the threshold. You can claim immediate passage alone, share the synthesis with the group, or forge a binding covenant.",
+        "promptRu": "Интересы участников расходятся у порога. Вы можете забрать преимущество себе, передать решение группе или заключить взаимное соглашение.",
+        "options": [
+          {
+            "id": "trust_covenant",
+            "text": "Forge a transparent covenant and share the full map — proceed to ROOM_0404",
+            "textRu": "Заключить открытое соглашение и объединить знание группы — перейти в ROOM_0404",
+            "destinationOverride": "ROOM_0404",
+            "behavioralSignal": "covenant"
+          },
+          {
+            "id": "trust_solo_advantage",
+            "text": "Claim unilateral advantage and seal the passage behind you — proceed to ROOM_0404",
+            "textRu": "Получить преимущество самому и закрыть проход за собой — перейти в ROOM_0404",
+            "destinationOverride": "ROOM_0404",
+            "behavioralSignal": "betray"
+          },
+          {
+            "id": "trust_refuse_zero_sum",
+            "text": "Reject the zero-sum premise and search for a third structural solution — proceed to ROOM_0404",
+            "textRu": "Отказаться от навязанной игры с нулевой суммой и найти третье системное решение — перейти в ROOM_0404",
+            "destinationOverride": "ROOM_0404",
+            "behavioralSignal": "third_path"
+          }
+        ]
+      }
+    },
+    {
+      "id": "RH",
+      "label": "RH",
+      "subtitle": "ROOM_0999 · Direct Synthesis Threshold (Requires Witness D)",
+      "subtitleRu": "ROOM_0999 · Прямой Порог Синтеза (Требуется Механизм Синтеза)",
+      "symbol": "◊",
+      "destination": "ROOM_0999",
+      "status": "conditional",
+      "visibility": "hidden",
+      "type": "rabbit-hole",
+      "position": [3.6, 0, -8.8],
+      "rotation": [0, 0, 0],
+      "requirement": {
+        "type": "discovery",
+        "id": "COLLECTIVE_SYNTHESIS"
+      }
+    }
+  ],
+  "state": {
+    "rememberVisits": true,
+    "variables": {
+      "witnessesAligned": false
+    }
+  },
+  "metadata": {
+    "tags": ["group", "trust", "collective-intelligence", "ROOM_0204"],
+    "license": "CC-BY-4.0"
+  }
+}

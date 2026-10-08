@@ -1,0 +1,175 @@
+{
+  "specVersion": "1.0",
+  "id": "ROOM_0107",
+  "version": "1.0",
+  "protocolStage": "V. MIRROR (Identity) · VI. TRIAL (Action Verification)",
+  "title": "The Archivist's Mirror",
+  "titleRu": "Зеркало Архивариуса (Идентичность и Испытание)",
+  "author": "Alex",
+  "description": "The Mirror asks: 'Who are you here?' Choosing an identity changes your downstream route—and requires proving that identity through action.",
+  "descriptionRu": "Зеркало задаёт вопрос: «Кем ты являешься здесь?» Выбор меняет дальнейший маршрут и требует доказать выбранную идентичность действием.",
+  "type": "custom",
+  "environment": {
+    "scene": "assets/models/room_0107.glb",
+    "scale": 1.0,
+    "dimensions": [15, 5.4, 15],
+    "palette": {
+      "wall": "#16151c",
+      "floor": "#0e0d12",
+      "ceiling": "#08070b",
+      "fog": "#0b0a10",
+      "accent": "#b89c64"
+    },
+    "spawn": {
+      "position": [0, 1.7, 5.5],
+      "rotation": [0, 0, 0]
+    }
+  },
+  "rules": {
+    "entryAllowed": true,
+    "gravity": true,
+    "locomotion": "standard",
+    "returnAllowed": true
+  },
+  "audio": {
+    "track": "audio/archivist_sanctum.ogg",
+    "loop": true,
+    "volume": 0.75,
+    "baseFrequency": 130.81,
+    "harmonicProfile": "cathedral"
+  },
+  "paintings": [
+    {
+      "id": "painting_r107_01",
+      "image": "assets/images/index_1149.jpg",
+      "frame": "classic_gold",
+      "position": [-4.8, 2.2, -1.0],
+      "rotation": [0, 1.5708, 0],
+      "scale": 1.3,
+      "metadata": {
+        "title": "Taxonomy of Unbuilt Rooms",
+        "titleRu": "Таксономия Непостроенных Комнат",
+        "author": "The First Archivist",
+        "license": "CC-BY-4.0",
+        "source": "ArtMaze-Room-0107 Archive",
+        "url": "https://github.com/AlexSheff/ArtMaze-Room-0107",
+        "inscription": "Identity → Action → Consequence. To claim the Archivist's mantle, decipher the Stele of Directed Edges.",
+        "inscriptionRu": "Идентичность → Действие → Последствие. Чтобы доказать роль Исследователя/Архивариуса, изучите Стелу Направленных Рёбер."
+      },
+      "interaction": {
+        "type": "inspect",
+        "discovery": "ARCHIVE_TAXONOMY_INSPECTED"
+      }
+    }
+  ],
+  "objects": [
+    {
+      "id": "obj_inscription_stele",
+      "title": "Stele of Directed Edges (Identity Trial)",
+      "titleRu": "Стела Направленных Рёбер (Испытание Действием)",
+      "type": "inscription",
+      "model": "assets/models/stele.glb",
+      "portable": false,
+      "position": [2.4, 0, -1.2],
+      "rotation": [0, -0.4, 0],
+      "interactions": ["read", "inspect", "observe"],
+      "discoveryId": "DIRECTED_TOPOLOGY_READ",
+      "castsShadow": true,
+      "visibleInMirror": true
+    }
+  ],
+  "quest": {
+    "id": "quest_107_identity",
+    "type": "identity",
+    "question": "Who are you here? Choose your identity in the Mirror, then prove it by action at the Trial Stele.",
+    "questionRu": "Кем ты являешься здесь? Выберите идентичность в Зеркале и докажите её действием у Стелы Испытания.",
+    "objective": "Consult the Mirror at the northern altar and complete the Trial of the Stele.",
+    "objectiveRu": "Обратитесь к Зеркалу у северного алтаря и пройдите Испытание у Стелы.",
+    "completion": {
+      "type": "discover",
+      "target": "DIRECTED_TOPOLOGY_READ"
+    }
+  },
+  "mirror": {
+    "id": "mirror_01",
+    "mode": "identity",
+    "characterState": "THE_ARCHIVIST",
+    "characterStateRu": "ИССЛЕДОВАТЕЛЬ · АРХИВАРИУС",
+    "proposition": "Who are you here? Accepting this identity commits you to uncovering the hidden structure of the labyrinth.",
+    "propositionRu": "Кем ты являешься здесь? Принятие этой идентичности требует доказать её исследованием скрытой структуры лабиринта.",
+    "appearance": "assets/models/avatar.glb",
+    "position": [0, 0, -6.5],
+    "choices": {
+      "accept": {
+        "identity": {
+          "archivist": 1,
+          "observer": 1
+        }
+      },
+      "reject": {
+        "identity": {
+          "creator": 1
+        }
+      },
+      "return": {}
+    }
+  },
+  "doors": [
+    {
+      "id": "A",
+      "label": "A",
+      "subtitle": "ROOM_0000 · Central Labyrinth",
+      "subtitleRu": "ROOM_0000 · Центральный Лабиринт",
+      "symbol": "←",
+      "destination": "ROOM_0000",
+      "status": "ready",
+      "visibility": "visible",
+      "type": "standard",
+      "position": [-4.85, 0, 3.8],
+      "rotation": [0, 1.5708, 0]
+    },
+    {
+      "id": "B",
+      "label": "B",
+      "subtitle": "ROOM_0204 · Chamber of Four Witnesses (Group & Trust)",
+      "subtitleRu": "ROOM_0204 · Зал Четырёх Свидетелей (Группа и Доверие)",
+      "symbol": "→",
+      "destination": "ROOM_0204",
+      "status": "ready",
+      "visibility": "visible",
+      "type": "monumental",
+      "position": [4.85, 0, 3.8],
+      "rotation": [0, -1.5708, 0]
+    },
+    {
+      "id": "RH",
+      "label": "TRIAL",
+      "subtitle": "ROOM_0404 · The Loom of Rules (Proven Identity Shortcut)",
+      "subtitleRu": "ROOM_0404 · Станок Правил (Проход Доказанной Идентичности)",
+      "symbol": "◊",
+      "destination": "ROOM_0404",
+      "status": "conditional",
+      "visibility": "hidden",
+      "type": "rabbit-hole",
+      "position": [3.2, 0, -6.85],
+      "rotation": [0, 0, 0],
+      "fallback": {
+        "type": "unknown"
+      },
+      "requirement": {
+        "type": "discovery",
+        "id": "DIRECTED_TOPOLOGY_READ"
+      }
+    }
+  ],
+  "state": {
+    "rememberVisits": true,
+    "variables": {
+      "mirrorConsulted": false
+    }
+  },
+  "metadata": {
+    "tags": ["mirror", "identity", "trial", "ROOM_0107"],
+    "license": "CC-BY-4.0"
+  }
+}

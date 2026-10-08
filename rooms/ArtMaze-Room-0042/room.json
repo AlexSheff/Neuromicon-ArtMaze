@@ -1,0 +1,187 @@
+{
+  "specVersion": "1.0",
+  "id": "ROOM_0042",
+  "version": "1.0",
+  "protocolStage": "IV. DISORIENTATION (Temporal Memory & Paradox)",
+  "title": "The Room That Remembers",
+  "titleRu": "Комната, Которая Помнит",
+  "author": "Alex",
+  "description": "A room that changes after the player leaves. On the first visit it is sparse; upon returning, objects materialize according to memory.",
+  "descriptionRu": "Комната, которая меняется после ухода игрока. При первом визите она пуста; при возвращении объекты проявляются согласно памяти.",
+  "type": "custom",
+  "environment": {
+    "scene": "assets/models/room.glb",
+    "scale": 1.0,
+    "dimensions": [14, 5.0, 14],
+    "palette": {
+      "wall": "#1d1815",
+      "floor": "#14100e",
+      "ceiling": "#0c0a08",
+      "fog": "#110d0b",
+      "accent": "#d49b54"
+    },
+    "spawn": {
+      "position": [0, 1.7, 5.2],
+      "rotation": [0, 0, 0]
+    }
+  },
+  "rules": {
+    "entryAllowed": true,
+    "gravity": true,
+    "locomotion": "standard",
+    "returnAllowed": false
+  },
+  "audio": {
+    "track": "audio/room.ogg",
+    "loop": true,
+    "volume": 0.8,
+    "baseFrequency": 98.0,
+    "harmonicProfile": "memory"
+  },
+  "paintings": [
+    {
+      "id": "painting_r42_01",
+      "image": "assets/images/palimpsest.jpg",
+      "frame": "travertine_deep",
+      "position": [0, 2.2, -6.8],
+      "rotation": [0, 0, 0],
+      "scale": 1.35,
+      "metadata": {
+        "title": "Palimpsest of Return",
+        "titleRu": "Палимпсест Возвращения",
+        "author": "Alex",
+        "license": "CC-BY-4.0",
+        "source": "ArtMaze-Room-0042 Archive",
+        "url": "https://github.com/AlexSheff/ArtMaze-Room-0042",
+        "inscription": "A space is not identical to itself once it has been remembered.",
+        "inscriptionRu": "Пространство не тождественно самому себе после того, как его запомнили."
+      },
+      "interaction": {
+        "type": "observe",
+        "discovery": "MEMORY_PALIMPSEST_READ"
+      }
+    }
+  ],
+  "objects": [
+    {
+      "id": "obj_plinth_memory",
+      "title": "Chronicle Stone (Visit I+)",
+      "titleRu": "Камень Хроники (Визит I+)",
+      "type": "plinth",
+      "model": "assets/models/plinth.glb",
+      "portable": false,
+      "position": [-2.2, 0, -1.0],
+      "rotation": [0, 0.3, 0],
+      "interactions": ["inspect", "read"],
+      "minVisitCount": 1,
+      "castsShadow": true,
+      "visibleInMirror": true
+    },
+    {
+      "id": "obj_chair_returned",
+      "title": "The Chair That Appeared (Visit II+)",
+      "titleRu": "Появившийся Стул (Визит II+)",
+      "type": "chair",
+      "model": "assets/models/chair.glb",
+      "portable": false,
+      "position": [0, 0, -1.5],
+      "rotation": [0, 3.1415, 0],
+      "interactions": ["inspect", "observe", "touch"],
+      "discoveryId": "TEMPORAL_CHAIR_OBSERVED",
+      "minVisitCount": 2,
+      "castsShadow": true,
+      "visibleInMirror": true
+    },
+    {
+      "id": "obj_sundial_third",
+      "title": "Nocturnal Sundial (Visit III+)",
+      "titleRu": "Ночные Солнечные Часы (Визит III+)",
+      "type": "sundial",
+      "model": "assets/models/sundial.glb",
+      "portable": false,
+      "position": [2.2, 0, -1.0],
+      "rotation": [0, -0.5, 0],
+      "interactions": ["inspect", "rotate", "observe"],
+      "discoveryId": "THIRD_VISIT_RESONANCE",
+      "minVisitCount": 3,
+      "castsShadow": true,
+      "visibleInMirror": true
+    }
+  ],
+  "quest": {
+    "id": "quest_42_memory",
+    "type": "return",
+    "question": "What changes in a room that forbids a direct return, yet remembers your departure?",
+    "questionRu": "Что меняется в комнате, которая запрещает прямой возврат, но помнит ваш уход?",
+    "objective": "Step through a Void or return to observe how the room reconstructs itself.",
+    "objectiveRu": "Шагните через Пустоту и вернитесь, чтобы увидеть, как комната перестраивает себя.",
+    "completion": {
+      "type": "discover",
+      "target": "TEMPORAL_CHAIR_OBSERVED"
+    }
+  },
+  "mirror": null,
+  "doors": [
+    {
+      "id": "A",
+      "label": "A",
+      "subtitle": "ROOM_0777 · Silent Observatory (Planned → Infinity)",
+      "subtitleRu": "ROOM_0777 · Безмолвная Обсерватория (Планируется → Бесконечность)",
+      "symbol": "→",
+      "destination": "ROOM_0777",
+      "status": "planned",
+      "visibility": "visible",
+      "type": "monumental",
+      "position": [-4.85, 0, -2.5],
+      "rotation": [0, 1.5708, 0],
+      "fallback": {
+        "type": "infinity"
+      }
+    },
+    {
+      "id": "B",
+      "label": "B",
+      "subtitle": "VOID · Deep Starfield",
+      "subtitleRu": "ПУСТОТА · Глубокое Звёздное Поле",
+      "symbol": "✦",
+      "destination": null,
+      "status": "void",
+      "visibility": "visible",
+      "type": "monumental",
+      "position": [4.85, 0, -2.5],
+      "rotation": [0, -1.5708, 0],
+      "fallback": {
+        "type": "starfield"
+      }
+    },
+    {
+      "id": "RH",
+      "label": "RH",
+      "subtitle": "ROOM_0000 · Memory Fold (Requires 2+ Visits)",
+      "subtitleRu": "ROOM_0000 · Складка Памяти (Требуется 2+ Визита)",
+      "symbol": "↺",
+      "destination": "ROOM_0000",
+      "status": "conditional",
+      "visibility": "hidden",
+      "type": "rabbit-hole",
+      "position": [0, 0, 6.85],
+      "rotation": [0, 3.1415, 0],
+      "requirement": {
+        "type": "visit-count",
+        "id": "ROOM_0042",
+        "minValue": 2
+      }
+    }
+  ],
+  "state": {
+    "rememberVisits": true,
+    "variables": {
+      "doorOpened": false,
+      "puzzleSolved": false
+    }
+  },
+  "metadata": {
+    "tags": ["memory", "state", "revisit", "ROOM_0042"],
+    "license": "CC-BY-4.0"
+  }
+}

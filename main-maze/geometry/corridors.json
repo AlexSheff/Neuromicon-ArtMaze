@@ -1,0 +1,12 @@
+{
+  "roomId": "ROOM_0000",
+  "corridorWidth": 10.0,
+  "corridorHeight": 5.2,
+  "corridorLength": 20.0,
+  "pillars": [
+    { "position": [-3.4, 0, -1.0], "radius": 0.45, "height": 5.2 },
+    { "position": [3.4, 0, -1.0], "radius": 0.45, "height": 5.2 },
+    { "position": [-3.4, 0, -6.0], "radius": 0.45, "height": 5.2 },
+    { "position": [3.4, 0, -6.0], "radius": 0.45, "height": 5.2 }
+  ]
+}

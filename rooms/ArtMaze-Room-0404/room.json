@@ -1,0 +1,192 @@
+{
+  "specVersion": "1.0",
+  "id": "ROOM_0404",
+  "version": "1.0",
+  "protocolStage": "X. SYSTEM BREAK · XI. CREATOR ROOM",
+  "title": "The Loom of Rules",
+  "titleRu": "Станок Правил (Комната Создателя)",
+  "author": "Alex",
+  "description": "Here the visitor discovers that rooms are not random—they are constructed from prior decisions. At the Loom, you transition from Player to Designer by authoring a rule for the labyrinth.",
+  "descriptionRu": "Здесь участник обнаруживает, что комнаты не случайны — они строятся на предыдущих выборах. У Станка вы переходите из состояния Игрока в состояние Создателя, вписывая новое правило в лабиринт.",
+  "type": "custom",
+  "environment": {
+    "scene": "assets/models/room_0404.glb",
+    "scale": 1.0,
+    "dimensions": [16, 5.6, 16],
+    "palette": {
+      "wall": "#1b161e",
+      "floor": "#110e14",
+      "ceiling": "#09070b",
+      "fog": "#0d0a10",
+      "accent": "#d4af37"
+    },
+    "spawn": {
+      "position": [0, 1.7, 5.8],
+      "rotation": [0, 0, 0]
+    }
+  },
+  "rules": {
+    "entryAllowed": true,
+    "gravity": true,
+    "locomotion": "standard",
+    "returnAllowed": true
+  },
+  "audio": {
+    "track": "audio/system_loom.ogg",
+    "loop": true,
+    "volume": 0.75,
+    "baseFrequency": 146.83,
+    "harmonicProfile": "labyrinth"
+  },
+  "creatorPrompt": {
+    "enabled": true,
+    "title": "Author a Structural Rule (Player → Designer)",
+    "titleRu": "Создать Правило Лабиринта (Игрок → Дизайнер)",
+    "description": "Inscribe a rule, paradox, or spatial condition for future visitors entering this chamber.",
+    "descriptionRu": "Запишите правило, парадокс или пространственное условие, которое останется в этой комнате для следующих участников."
+  },
+  "paintings": [
+    {
+      "id": "painting_r404_01",
+      "image": "assets/images/observer_architecture.jpg",
+      "frame": "classic_gold",
+      "position": [-5.2, 2.2, -1.5],
+      "rotation": [0, 1.5708, 0],
+      "scale": 1.35,
+      "metadata": {
+        "title": "Diagram of the Observing Labyrinth",
+        "titleRu": "Диаграмма Наблюдающего Лабиринта",
+        "author": "Neuromicon Core",
+        "license": "CC-BY-4.0",
+        "source": "ArtMaze-Room-0404 Archive",
+        "url": "https://github.com/AlexSheff/ArtMaze-Room-0404",
+        "inscription": "Up to this threshold you traversed the system. Beyond it, you alter the system.",
+        "inscriptionRu": "До этого порога вы проходили систему. Теперь вы воздействуете на саму систему."
+      },
+      "interaction": {
+        "type": "discover",
+        "discovery": "SYSTEM_OBSERVATION_RECOGNIZED"
+      }
+    }
+  ],
+  "objects": [
+    {
+      "id": "obj_system_stele",
+      "title": "Causal Ledger Monolith (System Break)",
+      "titleRu": "Монолит Причинной Связи (Взлом Системы)",
+      "type": "monolith",
+      "model": "assets/models/causal_monolith.glb",
+      "portable": false,
+      "position": [-2.0, 0, -2.2],
+      "rotation": [0, 0.25, 0],
+      "interactions": ["read", "inspect", "observe"],
+      "discoveryId": "SYSTEM_OBSERVATION_RECOGNIZED",
+      "castsShadow": true,
+      "visibleInMirror": true
+    },
+    {
+      "id": "obj_creator_loom",
+      "title": "The Architect's Loom (Create Rule / Artifact)",
+      "titleRu": "Станок Архитектора (Создать Правило / Объект)",
+      "type": "plinth",
+      "model": "assets/models/creator_loom.glb",
+      "portable": false,
+      "position": [2.0, 0, -2.2],
+      "rotation": [0, -0.25, 0],
+      "interactions": ["activate", "inspect", "touch"],
+      "discoveryId": "SYSTEM_RULE_CREATED",
+      "castsShadow": true,
+      "visibleInMirror": true
+    }
+  ],
+  "quest": {
+    "id": "quest_404_creator",
+    "type": "solve",
+    "question": "Once you realize the labyrinth is a responsive instrument, what rule do you leave inside it?",
+    "questionRu": "Когда вы понимаете, что лабиринт — это реагирующий инструмент, какое правило вы оставите внутри него?",
+    "objective": "Activate the Architect's Loom to author a persistent rule or open the threshold to the Meta-Mirror (ROOM_0999).",
+    "objectiveRu": "Активируйте Станок Архитектора, чтобы создать новое правило и открыть порог к Мета-Зеркалу (ROOM_0999).",
+    "completion": {
+      "type": "discover",
+      "target": "SYSTEM_RULE_CREATED"
+    }
+  },
+  "mirror": {
+    "id": "mirror_creator_404",
+    "mode": "identity",
+    "characterState": "THE_CREATOR",
+    "characterStateRu": "СОЗДАТЕЛЬ",
+    "proposition": "You have stopped asking what the maze wants from you, and begun deciding what this space becomes.",
+    "propositionRu": "Вы перестали спрашивать, чего от вас ждёт лабиринт, и начали решать, чем станет это пространство.",
+    "appearance": "assets/models/avatar_creator.glb",
+    "position": [0, 0, -7.6],
+    "choices": {
+      "accept": {
+        "identity": {
+          "creator": 1
+        }
+      },
+      "reject": {
+        "identity": {
+          "creator": -1
+        }
+      },
+      "return": {}
+    }
+  },
+  "doors": [
+    {
+      "id": "A",
+      "label": "A",
+      "subtitle": "ROOM_0204 · Chamber of Four Witnesses",
+      "subtitleRu": "ROOM_0204 · Зал Четырёх Свидетелей",
+      "symbol": "←",
+      "destination": "ROOM_0204",
+      "status": "ready",
+      "visibility": "visible",
+      "type": "standard",
+      "position": [-5.5, 0, 4.0],
+      "rotation": [0, 1.5708, 0]
+    },
+    {
+      "id": "B",
+      "label": "B",
+      "subtitle": "ROOM_0999 · The Threshold of Return (Meta-Mirror)",
+      "subtitleRu": "ROOM_0999 · Порог Возвращения (Мета-Зеркало)",
+      "symbol": "→",
+      "destination": "ROOM_0999",
+      "status": "ready",
+      "visibility": "visible",
+      "type": "monumental",
+      "position": [5.5, 0, 4.0],
+      "rotation": [0, -1.5708, 0]
+    },
+    {
+      "id": "RH",
+      "label": "RH",
+      "subtitle": "ROOM_0999 · Designer's Direct Conduit",
+      "subtitleRu": "ROOM_0999 · Прямой Канал Создателя",
+      "symbol": "◊",
+      "destination": "ROOM_0999",
+      "status": "conditional",
+      "visibility": "hidden",
+      "type": "rabbit-hole",
+      "position": [3.4, 0, -7.8],
+      "rotation": [0, 0, 0],
+      "requirement": {
+        "type": "discovery",
+        "id": "SYSTEM_RULE_CREATED"
+      }
+    }
+  ],
+  "state": {
+    "rememberVisits": true,
+    "variables": {
+      "ruleCreated": false
+    }
+  },
+  "metadata": {
+    "tags": ["system-break", "creator", "designer", "ROOM_0404"],
+    "license": "CC-BY-4.0"
+  }
+}
