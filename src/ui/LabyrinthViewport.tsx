@@ -5,6 +5,7 @@ import {
   labyrinthRenderer,
   RaycastTarget,
 } from '../engine/renderer/labyrinthRenderer';
+import { webxrManager } from '../engine/xr/webxrManager';
 import { spatialAudioSystem } from '../systems/audio/spatialAudioSystem';
 import { evaluateDoor } from '../systems/doors/doorSystem';
 import {
@@ -148,6 +149,100 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
     };
     canvas.addEventListener('webglcontextlost', onContextLost);
 
+    // Register Oculus Quest 2 stereo WebXR frame callback
+    webxrManager.setFrameRenderCallback(
+      (timeSec, dt, xrInput, eyeIndex, eyeOffsetX, targetCanvas) => {
+        const xrCtx = targetCanvas.getContext('2d');
+        if (!xrCtx) return;
+
+        const latestState = playerStateStore.getState();
+        const manifest =
+          loadRoomManifest(latestState.currentRoomId) ??
+          loadRoomManifest('ROOM_0000')!;
+
+        if (eyeIndex === 0 && dt > 0) {
+          locomotionRef.current.step(
+            {
+              forward: xrInput.moveZ < -0.2,
+              backward: xrInput.moveZ > 0.2,
+              left: xrInput.moveX < -0.2,
+              right: xrInput.moveX > 0.2,
+              turnLeft: xrInput.turnX < -0.25,
+              turnRight: xrInput.turnX > 0.25,
+              yawDelta: 0,
+              pitchDelta: xrInput.headPitch ?? 0,
+              interactPressed: xrInput.triggerJustPressed,
+            },
+            dt,
+            manifest,
+            Boolean(latestState.activeVoid)
+          );
+        }
+
+        const basePose = locomotionRef.current.getPose();
+        const eyePose: CameraPose = {
+          ...basePose,
+          x: basePose.x + Math.cos(basePose.yaw) * eyeOffsetX,
+          z: basePose.z - Math.sin(basePose.yaw) * eyeOffsetX,
+          yaw:
+            xrInput.headYaw !== null
+              ? basePose.yaw + xrInput.headYaw
+              : basePose.yaw,
+          pitch: xrInput.headPitch ?? basePose.pitch,
+        };
+
+        const w = targetCanvas.width;
+        const h = targetCanvas.height;
+        const { hovered } = labyrinthRenderer.render(
+          xrCtx,
+          w,
+          h,
+          eyePose,
+          manifest,
+          latestState,
+          getRoomRegistry(),
+          timeSec
+        );
+
+        // Draw in-headset VR reticle & hovered prompt directly onto the XR canvas
+        xrCtx.save();
+        xrCtx.fillStyle = hovered ? '#c8a464' : 'rgba(255,255,255,0.55)';
+        xrCtx.beginPath();
+        xrCtx.arc(w * 0.5, h * 0.5, hovered ? 5 : 3.5, 0, Math.PI * 2);
+        xrCtx.fill();
+
+        if (hovered) {
+          xrCtx.font = '600 20px "Cinzel", Georgia, serif';
+          xrCtx.textAlign = 'center';
+          xrCtx.fillStyle = '#f3ede2';
+          xrCtx.fillText(
+            `[Trigger] ${lang === 'ru' ? hovered.titleRu || hovered.title : hovered.title}`,
+            w * 0.5,
+            h * 0.62
+          );
+        }
+        xrCtx.restore();
+
+        if (eyeIndex === 0) {
+          setHoveredTarget(hovered);
+          const gazeRes = observationSystem.updateGaze(
+            hovered?.id ?? null,
+            dt,
+            hovered?.discoveryId,
+            manifest.id
+          );
+          setGazeProgress(gazeRes.progress);
+          if (xrInput.triggerJustPressed && hovered) {
+            triggerTargetInteraction(hovered);
+          } else if (xrInput.triggerJustPressed && latestState.activeVoid) {
+            playerStateStore.exitVoidToRoom(
+              latestState.currentRoomId || 'ROOM_0000'
+            );
+          }
+        }
+      }
+    );
+
     let animId = 0;
     let lastTime = performance.now();
 
@@ -231,6 +326,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
 
     return () => {
       window.cancelAnimationFrame(animId);
+      webxrManager.setFrameRenderCallback(null);
       canvas.removeEventListener('webglcontextlost', onContextLost);
       input.detach();
     };
