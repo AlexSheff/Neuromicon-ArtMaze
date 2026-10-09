@@ -11,8 +11,7 @@ const roomModule: RoomModule = {
   },
 
   async mount(ctx: RoomContext): Promise<void> {
-    const { THREE, root, manifest } = ctx;
-    ctx.audio.playRoomTrack(manifest.audio.track, manifest.audio.baseHz ?? 108);
+    const { THREE, root } = ctx;
 
     // Floating sacred astrolabe ring in the center of the room
     const ringGeo = new THREE.TorusGeometry(0.65, 0.035, 16, 48);

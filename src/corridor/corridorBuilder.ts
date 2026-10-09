@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import worldGraphData from '../../content/world.graph.json';
-import artManifestData from '../../content/art/manifest.json';
 import { t } from '../i18n/strings';
 import { OnboardingVisualState } from '../onboarding/types';
 import { CorridorBranch } from '../room-sdk';
@@ -13,7 +12,7 @@ export interface WorldGraphNode {
   symbol: string;
   dimension: string;
   branch: CorridorBranch;
-  segment: 1 | 2;
+  segment: 1 | 2 | 3;
   status: 'ready' | 'planned';
   repo: string;
   ref: string;
@@ -39,7 +38,7 @@ export interface SpatialInteractiveTarget {
   subtitle: string;
   subtitleRu: string;
   branch?: CorridorBranch;
-  segment?: 1 | 2;
+  segment?: 1 | 2 | 3;
   roomId?: string;
   doorId?: 'A' | 'B' | 'C' | 'RH';
   objectId?: string;
@@ -69,22 +68,22 @@ export function createSignageTexture(
   canvas.height = 256;
   const ctx = canvas.getContext('2d')!;
 
-  ctx.fillStyle = '#0d0c0a';
+  ctx.fillStyle = '#090b12';
   ctx.fillRect(0, 0, 512, 256);
 
   ctx.strokeStyle = accentHex;
   ctx.lineWidth = 4;
   ctx.strokeRect(6, 6, 500, 244);
 
-  // Symbol medallion box on left (distinct geometry for color-blind safety §2.8)
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+  // Symbol medallion box on left
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
   ctx.fillRect(20, 24, 116, 208);
   ctx.strokeStyle = accentHex;
   ctx.lineWidth = 2;
   ctx.strokeRect(20, 24, 116, 208);
 
   ctx.fillStyle = accentHex;
-  ctx.font = '700 34px "Cinzel", Georgia, serif';
+  ctx.font = '700 32px "Cinzel", Georgia, serif';
   ctx.textAlign = 'center';
   ctx.fillText(symbol.slice(0, 6), 78, 140);
 
@@ -92,11 +91,11 @@ export function createSignageTexture(
   ctx.textAlign = 'left';
   ctx.fillStyle = '#f3ede2';
   ctx.font = '600 22px "Cinzel", Georgia, serif';
-  ctx.fillText(title.slice(0, 24), 154, 92);
+  ctx.fillText(title.slice(0, 25), 154, 92);
 
   ctx.fillStyle = '#b5ab99';
   ctx.font = '400 17px system-ui, sans-serif';
-  ctx.fillText(subtitle.slice(0, 32), 154, 138);
+  ctx.fillText(subtitle.slice(0, 34), 154, 138);
 
   ctx.fillStyle = badgeHex;
   ctx.font = '600 15px monospace';
@@ -110,36 +109,27 @@ export function createSignageTexture(
 }
 
 /**
- * Power-of-Two (512x512) Macro-Variation Floor/Pool Texture (§4.1 & §4.3).
- * Blends primary tile grid with a second low-frequency macro noise layer to prevent tiling repeats.
+ * Power-of-Two (512x512) Cosmic Constellation & Astral Grid Floor Texture.
  */
-function createMacroFloorTexture(
-  isAscent: boolean
-): THREE.CanvasTexture {
+function createCosmicFloorTexture(accentRgba: string): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 512;
   const ctx = canvas.getContext('2d')!;
 
-  ctx.fillStyle = isAscent ? '#1c1814' : '#091119';
+  ctx.fillStyle = '#070a14';
   ctx.fillRect(0, 0, 512, 512);
 
-  // Macro-variation gradient overlay
-  const grad = ctx.createRadialGradient(256, 256, 20, 256, 256, 360);
-  grad.addColorStop(
-    0,
-    isAscent ? 'rgba(200, 164, 100, 0.12)' : 'rgba(78, 168, 222, 0.16)'
-  );
-  grad.addColorStop(1, 'rgba(0, 0, 0, 0.25)');
+  const grad = ctx.createRadialGradient(256, 256, 16, 256, 256, 360);
+  grad.addColorStop(0, accentRgba);
+  grad.addColorStop(1, 'rgba(3, 5, 12, 0.45)');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 512, 512);
 
-  const step = 128;
-  ctx.strokeStyle = isAscent
-    ? 'rgba(200, 164, 100, 0.22)'
-    : 'rgba(78, 168, 222, 0.25)';
-  ctx.lineWidth = 2;
-  for (let i = 0; i <= 512; i += step) {
+  // Astral grid + sacred circles
+  ctx.strokeStyle = 'rgba(200, 164, 100, 0.22)';
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i <= 512; i += 128) {
     ctx.beginPath();
     ctx.moveTo(i, 0);
     ctx.lineTo(i, 512);
@@ -148,69 +138,117 @@ function createMacroFloorTexture(
     ctx.stroke();
   }
 
+  ctx.strokeStyle = 'rgba(124, 198, 242, 0.18)';
+  ctx.beginPath();
+  ctx.arc(256, 256, 180, 0, Math.PI * 2);
+  ctx.stroke();
+
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(4, 4);
-  tex.anisotropy = 4; // §4.1: Anisotropy 2–4 on floors only
+  tex.anisotropy = 4;
   tex.generateMipmaps = true;
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
 /**
- * Power-of-Two (1024x512) Hero Artwork Texture (§4.1).
+ * Power-of-Two (1024x512) Deep Cosmic Nebula Sky Dome Texture.
  */
-function createProceduralArtworkTexture(
-  title: string,
-  author: string,
-  license: string,
-  motif: string,
-  accentHex: string
-): THREE.CanvasTexture {
+function createCosmicNebulaDomeTexture(): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
   canvas.height = 512;
   const ctx = canvas.getContext('2d')!;
 
-  const grad = ctx.createRadialGradient(512, 240, 30, 512, 256, 480);
-  if (motif.includes('abyss') || motif.includes('reflection')) {
-    grad.addColorStop(0, '#162c3d');
-    grad.addColorStop(0.65, '#0b1620');
-    grad.addColorStop(1, '#05090e');
-  } else {
-    grad.addColorStop(0, '#362919');
-    grad.addColorStop(0.65, '#1a140d');
-    grad.addColorStop(1, '#090705');
-  }
-  ctx.fillStyle = grad;
+  const bg = ctx.createLinearGradient(0, 0, 0, 512);
+  bg.addColorStop(0, '#02040a');
+  bg.addColorStop(0.45, '#070d1e');
+  bg.addColorStop(0.75, '#0c1328');
+  bg.addColorStop(1, '#03050c');
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, 1024, 512);
 
-  ctx.strokeStyle = accentHex;
-  ctx.lineWidth = 2.5;
+  // Nebula clouds
+  const clouds = [
+    { x: 260, y: 190, r: 240, c: 'rgba(78, 168, 222, 0.18)' },
+    { x: 540, y: 150, r: 280, c: 'rgba(155, 105, 225, 0.16)' },
+    { x: 780, y: 230, r: 220, c: 'rgba(229, 193, 88, 0.15)' },
+    { x: 512, y: 310, r: 300, c: 'rgba(56, 189, 248, 0.12)' },
+  ];
+  clouds.forEach((cl) => {
+    const g = ctx.createRadialGradient(cl.x, cl.y, 10, cl.x, cl.y, cl.r);
+    g.addColorStop(0, cl.c);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 1024, 512);
+  });
 
-  for (let i = 1; i <= 6; i++) {
-    const r = i * 34;
+  // Embedded fine background stars
+  for (let i = 0; i < 600; i++) {
+    const sx = (i * 173) % 1024;
+    const sy = (i * 97) % 512;
+    const sr = (i % 3) * 0.65 + 0.5;
+    ctx.fillStyle =
+      i % 5 === 0 ? '#ffe6a3' : i % 3 === 0 ? '#9be2ff' : '#ffffff';
     ctx.beginPath();
-    ctx.arc(512, 225, r, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.strokeRect(512 - r * 1.45, 225 - r * 0.85, r * 2.9, r * 1.7);
+    ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+    ctx.fill();
   }
-
-  ctx.fillStyle = '#f3ede2';
-  ctx.font = '600 24px "Cinzel", Georgia, serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(title, 512, 448);
-
-  ctx.fillStyle = accentHex;
-  ctx.font = '400 16px system-ui, sans-serif';
-  ctx.fillText(`${author} · ${license}`, 512, 480);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.generateMipmaps = true;
-  tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
+}
+
+/**
+ * Builds a 3D Starfield Point Cloud surrounding the Grand Cosmic Starting Room.
+ */
+function createStarfieldPoints(count = 1600, radius = 58): THREE.Points {
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const palette = [
+    new THREE.Color('#ffffff'),
+    new THREE.Color('#ffe4a0'),
+    new THREE.Color('#8ce0ff'),
+    new THREE.Color('#c8a4ff'),
+    new THREE.Color('#f0d27a'),
+  ];
+
+  for (let i = 0; i < count; i++) {
+    const u = ((i * 613) % 1000) / 1000;
+    const v = ((i * 397) % 1000) / 1000;
+    const theta = u * Math.PI * 2;
+    const phi = Math.acos(2 * v - 1);
+    const r = radius * (0.65 + ((i * 131) % 35) / 100);
+
+    positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+    positions[i * 3 + 1] = r * Math.cos(phi);
+    positions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+
+    const col = palette[i % palette.length];
+    colors[i * 3] = col.r;
+    colors[i * 3 + 1] = col.g;
+    colors[i * 3 + 2] = col.b;
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+  const mat = new THREE.PointsMaterial({
+    size: 0.34,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.92,
+    depthWrite: false,
+  });
+
+  const points = new THREE.Points(geo, mat);
+  points.name = 'cosmic_starfield_points';
+  return points;
 }
 
 /**
@@ -222,8 +260,8 @@ function createLightShaftAlphaTexture(): THREE.CanvasTexture {
   canvas.height = 256;
   const ctx = canvas.getContext('2d')!;
   const grad = ctx.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0, 'rgba(255, 236, 188, 0.36)');
-  grad.addColorStop(0.6, 'rgba(255, 224, 156, 0.12)');
+  grad.addColorStop(0, 'rgba(165, 220, 255, 0.42)');
+  grad.addColorStop(0.5, 'rgba(229, 193, 88, 0.18)');
   grad.addColorStop(1, 'rgba(255, 224, 156, 0.0)');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 128, 256);
@@ -232,12 +270,50 @@ function createLightShaftAlphaTexture(): THREE.CanvasTexture {
   return tex;
 }
 
+const SECTOR_HALL_META: Record<
+  1 | 2 | 3,
+  {
+    title: string;
+    subtitle: string;
+    symbol: string;
+    range: string;
+    accentHex: string;
+    bgHex: string;
+    branch: CorridorBranch;
+  }
+> = {
+  1: {
+    title: 'ROOM I · THE SOURCE CODE',
+    subtitle: 'Sector A · Rooms 01–11 (Purpose to Action)',
+    symbol: 'I·☉',
+    range: '11 ROOMS (01–11)',
+    accentHex: '#e5c158',
+    bgHex: '#070a14',
+    branch: 'ascend',
+  },
+  2: {
+    title: 'ROOM II · OPERATING SYSTEM',
+    subtitle: 'Sector B · Rooms 12–19 (Solitude to Algorithm)',
+    symbol: 'II·◯',
+    range: '8 ROOMS (12–19)',
+    accentHex: '#4ea8de',
+    bgHex: '#060c18',
+    branch: 'descend',
+  },
+  3: {
+    title: 'ROOM III · UPGRADE & MIRROR',
+    subtitle: 'Sector C & D · Rooms 20–25 (Signal to Mirror)',
+    symbol: 'III·🪞',
+    range: '6 ROOMS (20–25)',
+    accentHex: '#b388ff',
+    bgHex: '#090718',
+    branch: 'ascend',
+  },
+};
+
 /**
- * Builds the Threshold Hall and chunked Corridor Segments strictly within
- * EXPERIENCE_PROTOCOL.md budgets:
- * - <= 2 real-time lights per active scene
- * - <= 12 unique materials (MeshLambertMaterial/MeshBasicMaterial for architecture; MeshStandardMaterial on hero objects)
- * - Show, don't tell onboarding geometry (pulsing ring, glowing pedestal, posture orbs, vertical shaft)
+ * Builds the Grand Cosmic Starting Room (Threshold) and the 3 Sector Rooms (Halls I, II, III)
+ * that house the doors to all 25 Neuromicon Artwork & Audio Rooms.
  */
 export class CorridorBuilder {
   public static buildThresholdHall(
@@ -250,42 +326,67 @@ export class CorridorBuilder {
     ) => void,
     walkableMeshes: THREE.Object3D[]
   ): void {
-    scene.background = new THREE.Color('#080706');
-    scene.fog = new THREE.FogExp2('#080706', 0.022);
+    scene.background = new THREE.Color('#03050c');
+    scene.fog = new THREE.FogExp2('#03050c', 0.011);
 
     // Budget §5.1: Strictly 2 real-time lights (1 HemisphereLight + 1 PointLight)
-    const hemi = new THREE.HemisphereLight('#f5e4c3', '#122638', 0.72);
+    const hemi = new THREE.HemisphereLight('#c8e4ff', '#16122e', 0.92);
     hemi.name = 'threshold_hemi_light';
     root.add(hemi);
 
-    const centralKeyLight = new THREE.PointLight('#ffd88a', 32, 42, 1.35);
+    const centralKeyLight = new THREE.PointLight('#ffe094', 44, 58, 1.25);
     centralKeyLight.name = 'threshold_key_light';
-    centralKeyLight.position.set(0, 7.5, -2.0);
+    centralKeyLight.position.set(0, 10.5, -2.0);
     root.add(centralKeyLight);
 
-    // Shared Materials (Budget §4.3: <= 12 unique materials, MeshLambertMaterial for corridor stone)
-    const floorTex = createMacroFloorTexture(true);
-    const stoneLambertMat = new THREE.MeshLambertMaterial({
-      color: '#201c18',
+    // 0. Grand Cosmic Sky Dome & 3D Starfield
+    const skyDomeTex = createCosmicNebulaDomeTexture();
+    const skyDome = new THREE.Mesh(
+      new THREE.SphereGeometry(68, 32, 20),
+      new THREE.MeshBasicMaterial({
+        map: skyDomeTex,
+        side: THREE.BackSide,
+        depthWrite: false,
+      })
+    );
+    root.add(skyDome);
+
+    const starfield = createStarfieldPoints(1600, 58);
+    root.add(starfield);
+
+    // Shared Materials
+    const floorTex = createCosmicFloorTexture('rgba(124, 198, 242, 0.22)');
+    const cosmicFloorMat = new THREE.MeshStandardMaterial({
+      color: '#0d1324',
       map: floorTex,
+      roughness: 0.2,
+      metalness: 0.65,
     });
-    const basaltLambertMat = new THREE.MeshLambertMaterial({
-      color: '#101720',
+    const obsidianMat = new THREE.MeshLambertMaterial({
+      color: '#0b101d',
     });
     const goldHeroMat = new THREE.MeshStandardMaterial({
-      color: '#c8a464',
-      roughness: 0.26,
-      metalness: 0.82,
-      emissive: '#382910',
-      emissiveIntensity: 0.35,
+      color: '#e5c158',
+      roughness: 0.22,
+      metalness: 0.88,
+      emissive: '#42300e',
+      emissiveIntensity: 0.45,
     });
     const cyanHeroMat = new THREE.MeshStandardMaterial({
       color: '#4ea8de',
-      roughness: 0.2,
-      metalness: 0.78,
-      emissive: '#143852',
+      roughness: 0.18,
+      metalness: 0.84,
+      emissive: '#103452',
       emissiveIntensity: 0.55,
     });
+    const violetHeroMat = new THREE.MeshStandardMaterial({
+      color: '#b388ff',
+      roughness: 0.2,
+      metalness: 0.85,
+      emissive: '#2c1654',
+      emissiveIntensity: 0.5,
+    });
+
     const shaftTex = createLightShaftAlphaTexture();
     const shaftAdditiveMat = new THREE.MeshBasicMaterial({
       map: shaftTex,
@@ -295,29 +396,105 @@ export class CorridorBuilder {
       side: THREE.DoubleSide,
     });
 
-    // 1. Central Threshold Bridge Platform (y = 0, walkable)
-    const bridgeFloor = new THREE.Mesh(
-      new THREE.BoxGeometry(22, 0.5, 24),
-      stoneLambertMat
+    // 1. Grand Circular Cosmic Observatory Platform (y = 0, walkable)
+    const platformDisc = new THREE.Mesh(
+      new THREE.CylinderGeometry(14.5, 15.8, 0.6, 48),
+      cosmicFloorMat
     );
-    bridgeFloor.position.set(0, -0.25, 0);
-    root.add(bridgeFloor);
-    walkableMeshes.push(bridgeFloor);
+    platformDisc.position.set(0, -0.3, 0);
+    root.add(platformDisc);
+    walkableMeshes.push(platformDisc);
 
-    // 2. Beat 0–8 s (AWAKEN): Faint Vertical Line of Light far above (+22m) and below (-22m) (§2.2)
+    // Concentric glowing astral rings on the cosmic floor
+    [4.5, 9.2, 13.8].forEach((r, idx) => {
+      const floorRing = new THREE.Mesh(
+        new THREE.RingGeometry(r, r + 0.12, 64),
+        new THREE.MeshBasicMaterial({
+          color: idx === 0 ? '#e5c158' : idx === 1 ? '#4ea8de' : '#b388ff',
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.6,
+        })
+      );
+      floorRing.rotation.x = -Math.PI * 0.5;
+      floorRing.position.set(0, 0.015, 0);
+      root.add(floorRing);
+    });
+
+    // 2. Infinite Cosmic Pillar of Starlight & Rotating Celestial Astrolabe Rings Overhead
     const verticalLineMesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.06, 0.06, 44, 12),
+      new THREE.CylinderGeometry(0.14, 0.14, 76, 16),
       new THREE.MeshBasicMaterial({
-        color: '#f3e3b8',
+        color: '#9be2ff',
         transparent: true,
-        opacity: 0.65,
+        opacity: 0.55,
       })
     );
     verticalLineMesh.name = 'onboarding_vertical_line';
-    verticalLineMesh.position.set(0, 0, -4.5);
+    verticalLineMesh.position.set(0, 0, -3.8);
     root.add(verticalLineMesh);
 
-    // 3. Beat 8–25 s (LEARN_MOVE): Soft Pulsing Ring on Floor at z = 2.2m (2–3m ahead of spawn z = 5.2m)
+    const astrolabeGroup = new THREE.Group();
+    astrolabeGroup.name = 'cosmic_astrolabe_rings';
+    astrolabeGroup.position.set(0, 12.5, -3.8);
+
+    const ring1 = new THREE.Mesh(
+      new THREE.TorusGeometry(9.5, 0.14, 16, 64),
+      goldHeroMat
+    );
+    ring1.rotation.x = Math.PI * 0.35;
+    astrolabeGroup.add(ring1);
+
+    const ring2 = new THREE.Mesh(
+      new THREE.TorusGeometry(12.5, 0.12, 16, 64),
+      cyanHeroMat
+    );
+    ring2.rotation.y = Math.PI * 0.25;
+    ring2.rotation.x = -Math.PI * 0.28;
+    astrolabeGroup.add(ring2);
+
+    const ring3 = new THREE.Mesh(
+      new THREE.TorusGeometry(15.5, 0.1, 16, 64),
+      violetHeroMat
+    );
+    ring3.rotation.z = Math.PI * 0.2;
+    astrolabeGroup.add(ring3);
+
+    // Central Singularity Sun Core overhead
+    const sunCore = new THREE.Mesh(
+      new THREE.OctahedronGeometry(1.35, 2),
+      goldHeroMat
+    );
+    astrolabeGroup.add(sunCore);
+
+    root.add(astrolabeGroup);
+
+    // Additive Cosmic Light Cone descending from the Singularity Core
+    const cosmicShaft = new THREE.Mesh(
+      new THREE.ConeGeometry(6.5, 22, 32, 1, true),
+      shaftAdditiveMat
+    );
+    cosmicShaft.position.set(0, 10.5, -3.8);
+    root.add(cosmicShaft);
+
+    // 3. Perimeter Cosmic Colonnade (12 Astral Monoliths = 1 draw call)
+    const colGeo = new THREE.CylinderGeometry(0.42, 0.55, 16, 12);
+    const colInst = new THREE.InstancedMesh(colGeo, obsidianMat, 12);
+    const dummy = new THREE.Object3D();
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2;
+      dummy.position.set(
+        Math.sin(angle) * 13.6,
+        8.0,
+        Math.cos(angle) * 13.6
+      );
+      dummy.updateMatrix();
+      colInst.setMatrixAt(i, dummy.matrix);
+    }
+    colInst.instanceMatrix.needsUpdate = true;
+    root.add(colInst);
+
+    // 4. Soft Pulsing Ring on Floor at z = 2.2m
     const moveRingGroup = new THREE.Group();
     moveRingGroup.name = 'onboarding_move_ring';
     moveRingGroup.position.set(0, 0.02, 2.2);
@@ -334,43 +511,43 @@ export class CorridorBuilder {
     moveRingGroup.add(moveRingMesh);
     root.add(moveRingGroup);
 
-    // 4. Beat 25–45 s (LEARN_INTERACT): Central Awakening Monolith Pedestal at (0, 0, 1.0)
+    // 5. Central Awakening Monolith Pedestal at (0, 0, 1.2)
     const pedestalGroup = new THREE.Group();
     pedestalGroup.name = 'onboarding_pedestal';
-    pedestalGroup.position.set(0, 0, 1.0);
+    pedestalGroup.position.set(0, 0, 1.2);
 
     const pedBase = new THREE.Mesh(
-      new THREE.BoxGeometry(0.9, 1.05, 0.9),
-      stoneLambertMat
+      new THREE.CylinderGeometry(0.52, 0.68, 1.05, 8),
+      obsidianMat
     );
     pedBase.position.y = 0.525;
     pedestalGroup.add(pedBase);
 
     const pedCrystal = new THREE.Mesh(
-      new THREE.OctahedronGeometry(0.32, 0),
+      new THREE.OctahedronGeometry(0.34, 0),
       goldHeroMat
     );
     pedCrystal.name = 'onboarding_pedestal_crystal';
-    pedCrystal.position.y = 1.42;
+    pedCrystal.position.y = 1.45;
     pedestalGroup.add(pedCrystal);
 
     root.add(pedestalGroup);
     registerTarget(pedestalGroup, {
       id: 'ONBOARDING_PEDESTAL',
       kind: 'onboarding-pedestal',
-      title: '◈',
-      titleRu: '◈',
-      subtitle: '',
-      subtitleRu: '',
+      title: '◈ COSMIC NEXUS CORE',
+      titleRu: '◈ COSMIC NEXUS CORE',
+      subtitle: '25 Rooms · 3 Sector Chambers',
+      subtitleRu: '25 Rooms · 3 Sector Chambers',
     });
 
-    // 5. Comfort Calibration Ritual Marks at AWAKEN (§2.4: Lower = Seated, Higher = Standing)
+    // 6. Comfort Calibration Ritual Marks (Seated vs Standing)
     const postureGroup = new THREE.Group();
     postureGroup.name = 'onboarding_posture_marks';
-    postureGroup.position.set(-1.75, 0, 3.8);
+    postureGroup.position.set(-2.4, 0, 3.6);
 
     const seatedOrb = new THREE.Mesh(
-      new THREE.OctahedronGeometry(0.14, 0),
+      new THREE.OctahedronGeometry(0.16, 0),
       cyanHeroMat
     );
     seatedOrb.position.set(0, 1.05, 0);
@@ -379,14 +556,14 @@ export class CorridorBuilder {
       id: 'COMFORT_SEATED_ORB',
       kind: 'comfort-posture',
       seatedChoice: true,
-      title: '◎',
-      titleRu: '◎',
-      subtitle: '',
-      subtitleRu: '',
+      title: '◎ SEATED POSTURE',
+      titleRu: '◎ SEATED POSTURE',
+      subtitle: 'Calibrate Seated Eye Level',
+      subtitleRu: 'Calibrate Seated Eye Level',
     });
 
     const standingOrb = new THREE.Mesh(
-      new THREE.OctahedronGeometry(0.14, 1),
+      new THREE.OctahedronGeometry(0.16, 1),
       goldHeroMat
     );
     standingOrb.position.set(0, 1.68, 0);
@@ -395,101 +572,174 @@ export class CorridorBuilder {
       id: 'COMFORT_STANDING_ORB',
       kind: 'comfort-posture',
       seatedChoice: false,
-      title: '◈',
-      titleRu: '◈',
-      subtitle: '',
-      subtitleRu: '',
+      title: '◈ STANDING POSTURE',
+      titleRu: '◈ STANDING POSTURE',
+      subtitle: 'Calibrate Standing Eye Level',
+      subtitleRu: 'Calibrate Standing Eye Level',
     });
     root.add(postureGroup);
 
-    // 6. Physical Smooth-Movement Switch in World (Unlocked after 5 teleports per §2.4!)
+    // 7. Physical Smooth-Movement Switch in World (Unlocked after 5 teleports)
     if (state.teleportCount >= 5) {
       const locoSwitch = new THREE.Mesh(
         new THREE.CylinderGeometry(0.22, 0.26, 1.2, 12),
         goldHeroMat
       );
-      locoSwitch.position.set(1.85, 0.6, 2.8);
+      locoSwitch.position.set(2.4, 0.6, 3.6);
       root.add(locoSwitch);
       registerTarget(locoSwitch, {
         id: 'WORLD_LOCOMOTION_SWITCH',
         kind: 'locomotion-switch',
-        title: '⇄',
-        titleRu: '⇄',
-        subtitle: '',
-        subtitleRu: '',
+        title: '⇄ LOCOMOTION MODE',
+        titleRu: '⇄ LOCOMOTION MODE',
+        subtitle: 'Toggle Teleport / Smooth',
+        subtitleRu: 'Toggle Teleport / Smooth',
       });
     }
 
-    // 7. Revealable Atrium Architecture Group (Opens during REVEAL 45–70s)
+    // 8. THE 3 GRAND COSMIC DOORS INTO THE 3 ROOMS (Halls I, II, III housing all 25 Artwork & Audio Rooms!)
     const atriumGroup = new THREE.Group();
     atriumGroup.name = 'threshold_atrium_reveal_group';
     root.add(atriumGroup);
 
-    // Instanced Colonnade (16 columns = 1 draw call)
-    const colGeo = new THREE.CylinderGeometry(0.45, 0.52, 24, 14);
-    const colInst = new THREE.InstancedMesh(colGeo, stoneLambertMat, 16);
-    const dummy = new THREE.Object3D();
-    let idx = 0;
-    for (let side = -1; side <= 1; side += 2) {
-      for (let iz = -3; iz <= 4; iz++) {
-        dummy.position.set(side * 9.8, 4.0, iz * 3.2);
-        dummy.updateMatrix();
-        colInst.setMatrixAt(idx++, dummy.matrix);
-      }
-    }
-    colInst.instanceMatrix.needsUpdate = true;
-    atriumGroup.add(colInst);
+    const cosmicDoorsSpec: Array<{
+      segment: 1 | 2 | 3;
+      x: number;
+      z: number;
+      rotY: number;
+      mat: THREE.Material;
+    }> = [
+      {
+        segment: 1,
+        x: -5.8,
+        z: -6.2,
+        rotY: Math.PI * 0.16,
+        mat: goldHeroMat,
+      },
+      {
+        segment: 2,
+        x: 0,
+        z: -7.6,
+        rotY: 0,
+        mat: cyanHeroMat,
+      },
+      {
+        segment: 3,
+        x: 5.8,
+        z: -6.2,
+        rotY: -Math.PI * 0.16,
+        mat: violetHeroMat,
+      },
+    ];
 
-    // Additive Light Shaft from Upper Oculus (§3.3: cheap additive cone mesh, no post-processing)
-    const upperShaft = new THREE.Mesh(
-      new THREE.ConeGeometry(4.2, 18, 24, 1, true),
-      shaftAdditiveMat
-    );
-    upperShaft.position.set(-4.6, 9.0, -5.5);
-    atriumGroup.add(upperShaft);
+    cosmicDoorsSpec.forEach((spec) => {
+      const meta = SECTOR_HALL_META[spec.segment];
+      const doorGroup = new THREE.Group();
+      doorGroup.position.set(spec.x, 0, spec.z);
+      doorGroup.rotation.y = spec.rotY;
 
-    // LEFT-NORTH PATH: UP — ASCENT (Warm gold, travertine, pyramidal/triangular form for color-blind safety §2.8)
-    const ascentGroup = new THREE.Group();
-    ascentGroup.position.set(-4.6, 0, -5.5);
-
-    for (let s = 0; s < 5; s++) {
-      const step = new THREE.Mesh(
-        new THREE.BoxGeometry(4.4, 0.24, 0.9),
-        stoneLambertMat
+      // Grounded Cosmic Step Plinth
+      const plinth = new THREE.Mesh(
+        new THREE.BoxGeometry(3.6, 0.24, 0.9),
+        obsidianMat
       );
-      step.position.set(0, 0.12 + s * 0.24, 2.4 - s * 0.75);
-      ascentGroup.add(step);
-    }
+      plinth.position.set(0, 0.12, 0.2);
+      doorGroup.add(plinth);
+
+      // Twin Cosmic Pillars
+      [-1.45, 1.45].forEach((jx) => {
+        const pillar = new THREE.Mesh(
+          new THREE.BoxGeometry(0.36, 4.6, 0.48),
+          spec.mat
+        );
+        pillar.position.set(jx, 2.3, 0.18);
+        doorGroup.add(pillar);
+      });
+
+      // Upper Arch Lintel
+      const lintel = new THREE.Mesh(
+        new THREE.BoxGeometry(3.7, 0.52, 0.58),
+        spec.mat
+      );
+      lintel.position.set(0, 4.75, 0.22);
+      doorGroup.add(lintel);
+
+      // Shimmering Starlight Portal Leaf
+      const leaf = new THREE.Mesh(
+        new THREE.BoxGeometry(2.55, 4.3, 0.16),
+        new THREE.MeshStandardMaterial({
+          color: '#0e172c',
+          roughness: 0.15,
+          metalness: 0.85,
+          emissive: meta.accentHex,
+          emissiveIntensity: 0.22,
+        })
+      );
+      leaf.position.set(0, 0.24 + 2.15, 0.12);
+      doorGroup.add(leaf);
+
+      // Overhead Plaque
+      const plaqueTex = createSignageTexture(
+        meta.symbol,
+        meta.title,
+        meta.subtitle,
+        meta.range,
+        meta.accentHex,
+        '#f3ede2'
+      );
+      const plaque = new THREE.Mesh(
+        new THREE.PlaneGeometry(3.2, 1.35),
+        new THREE.MeshBasicMaterial({ map: plaqueTex })
+      );
+      plaque.position.set(0, 5.75, 0.28);
+      doorGroup.add(plaque);
+
+      atriumGroup.add(doorGroup);
+      registerTarget(doorGroup, {
+        id: `COSMIC_HALL_DOOR_${spec.segment}`,
+        kind: 'segment-portal',
+        branch: meta.branch,
+        segment: spec.segment,
+        title: meta.title,
+        titleRu: meta.title,
+        subtitle: `${meta.subtitle} · Click to Enter`,
+        subtitleRu: `${meta.subtitle} · Click to Enter`,
+      });
+    });
+
+    // 9. Ascent & Descent Cosmic Dais Lifts on West and East Wings
+    const ascentGroup = new THREE.Group();
+    ascentGroup.position.set(-8.6, 0, -0.8);
+    ascentGroup.rotation.y = Math.PI * 0.35;
 
     const ascentDais = new THREE.Mesh(
-      new THREE.CylinderGeometry(2.3, 2.5, 0.36, 32),
+      new THREE.CylinderGeometry(2.1, 2.3, 0.32, 32),
       goldHeroMat
     );
-    ascentDais.position.set(0, 1.2, -1.6);
+    ascentDais.position.set(0, 0.16, 0);
     ascentGroup.add(ascentDais);
     walkableMeshes.push(ascentDais);
 
-    // Triangular Apex Spire above Ascent (Form difference vs Descent §2.8)
     const ascentSpire = new THREE.Mesh(
-      new THREE.ConeGeometry(1.6, 2.6, 4),
+      new THREE.ConeGeometry(1.2, 2.2, 4),
       goldHeroMat
     );
-    ascentSpire.position.set(0, 5.6, -1.6);
+    ascentSpire.position.set(0, 4.4, 0);
     ascentGroup.add(ascentSpire);
 
     const ascentPlaqueTex = createSignageTexture(
       '▲',
-      'ASCENT',
-      'EMBODY · GROW',
-      state.path === 'ascend' ? 'COMMITTED' : 'I',
-      '#c8a464',
+      'ASCENT · ROOM I',
+      'EMBODY · GROW (01–11)',
+      'SECTOR A',
+      '#e5c158',
       '#f0d27a'
     );
     const ascentPlaque = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.8, 1.4),
+      new THREE.PlaneGeometry(2.5, 1.2),
       new THREE.MeshBasicMaterial({ map: ascentPlaqueTex })
     );
-    ascentPlaque.position.set(0, 3.4, -1.3);
+    ascentPlaque.position.set(0, 2.7, 0);
     ascentGroup.add(ascentPlaque);
 
     atriumGroup.add(ascentGroup);
@@ -497,54 +747,44 @@ export class CorridorBuilder {
       id: 'THRESHOLD_ASCENT',
       kind: 'threshold-branch',
       branch: 'ascend',
-      title: '▲ ASCENT',
-      titleRu: '▲ ASCENT',
-      subtitle: 'Embody · Grow',
-      subtitleRu: 'Embody · Grow',
+      title: '▲ ASCENT · ROOM I',
+      titleRu: '▲ ASCENT · ROOM I',
+      subtitle: 'Enter Room I · Sector A (Rooms 01–11)',
+      subtitleRu: 'Enter Room I · Sector A (Rooms 01–11)',
     });
 
-    // RIGHT-NORTH PATH: DOWN — DESCENT (Cold cyan, glossy reflective pool, inverted ring form §2.8 & §3.2)
     const descentGroup = new THREE.Group();
-    descentGroup.position.set(4.6, 0, -5.5);
+    descentGroup.position.set(8.6, 0, -0.8);
+    descentGroup.rotation.y = -Math.PI * 0.35;
 
-    for (let s = 0; s < 4; s++) {
-      const step = new THREE.Mesh(
-        new THREE.BoxGeometry(4.4, 0.24, 0.9),
-        basaltLambertMat
-      );
-      step.position.set(0, 0.12 + (3 - s) * 0.12, 2.1 - s * 0.75);
-      descentGroup.add(step);
-    }
-
-    // Reflective Caustic Pool Dais (§3.3: high-gloss Fresnel-style Standard material, no planar XR pass)
     const descentDais = new THREE.Mesh(
-      new THREE.CylinderGeometry(2.3, 2.5, 0.36, 32),
+      new THREE.CylinderGeometry(2.1, 2.3, 0.32, 32),
       cyanHeroMat
     );
-    descentDais.position.set(0, 0.18, -1.6);
+    descentDais.position.set(0, 0.16, 0);
     descentGroup.add(descentDais);
     walkableMeshes.push(descentDais);
 
     const descentTorus = new THREE.Mesh(
-      new THREE.TorusGeometry(1.35, 0.14, 14, 36),
+      new THREE.TorusGeometry(1.15, 0.12, 14, 36),
       cyanHeroMat
     );
-    descentTorus.position.set(0, 4.6, -1.6);
+    descentTorus.position.set(0, 4.2, 0);
     descentGroup.add(descentTorus);
 
     const descentPlaqueTex = createSignageTexture(
       '▼',
-      'DESCENT',
-      'SEARCH · EXPLORE',
-      state.path === 'descend' ? 'COMMITTED' : 'II',
+      'DESCENT · ROOM II',
+      'SEARCH · EXPLORE (12–19)',
+      'SECTOR B',
       '#4ea8de',
       '#7cc6f2'
     );
     const descentPlaque = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.8, 1.4),
+      new THREE.PlaneGeometry(2.5, 1.2),
       new THREE.MeshBasicMaterial({ map: descentPlaqueTex })
     );
-    descentPlaque.position.set(0, 2.8, -1.3);
+    descentPlaque.position.set(0, 2.7, 0);
     descentGroup.add(descentPlaque);
 
     atriumGroup.add(descentGroup);
@@ -552,19 +792,19 @@ export class CorridorBuilder {
       id: 'THRESHOLD_DESCENT',
       kind: 'threshold-branch',
       branch: 'descend',
-      title: '▼ DESCENT',
-      titleRu: '▼ DESCENT',
-      subtitle: 'Search · Explore',
-      subtitleRu: 'Search · Explore',
+      title: '▼ DESCENT · ROOM II',
+      titleRu: '▼ DESCENT · ROOM II',
+      subtitle: 'Enter Room II · Sector B (Rooms 12–19)',
+      subtitleRu: 'Enter Room II · Sector B (Rooms 12–19)',
     });
 
-    // Rung 3 Hint Engraved Plaque in World Space (Visible only if player is stuck >= 45s per §2.6!)
+    // Rung 3 Hint Engraved Plaque in World Space (Visible only if player is stuck >= 45s)
     const hintPlaqueTex = createSignageTexture(
       '◈',
       t('onboarding.hint.engraving', 'en'),
-      'THE THRESHOLD',
-      'PATH',
-      '#c8a464',
+      'COSMIC NEXUS',
+      '3 ROOMS',
+      '#e5c158',
       '#f3ede2'
     );
     const hintPlaqueMesh = new THREE.Mesh(
@@ -572,14 +812,14 @@ export class CorridorBuilder {
       new THREE.MeshBasicMaterial({ map: hintPlaqueTex })
     );
     hintPlaqueMesh.name = 'onboarding_rung3_plaque';
-    hintPlaqueMesh.position.set(0, 2.2, -1.8);
+    hintPlaqueMesh.position.set(0, 2.4, -2.2);
     hintPlaqueMesh.visible = false;
     root.add(hintPlaqueMesh);
   }
 
   /**
-   * Updates the Threshold Hall's diegetic onboarding lights, pulsing ring, and reveal state per frame
-   * with zero object allocations.
+   * Animates the Grand Cosmic Starting Room's celestial astrolabe rings, starfield, and onboarding beacons
+   * with zero per-frame allocations.
    */
   public static updateThresholdOnboardingVisuals(
     root: THREE.Group,
@@ -595,10 +835,19 @@ export class CorridorBuilder {
 
     const pedCrystal = root.getObjectByName('onboarding_pedestal_crystal');
     if (pedCrystal) {
-      pedCrystal.rotation.y = timeSec * 0.8;
-      pedCrystal.position.y =
-        1.42 +
-        Math.sin(timeSec * 2.2) * 0.06 * visual.pedestalGlowIntensity;
+      pedCrystal.rotation.y = timeSec * 0.85;
+      pedCrystal.position.y = 1.45 + Math.sin(timeSec * 2.2) * 0.07;
+    }
+
+    const astrolabe = root.getObjectByName('cosmic_astrolabe_rings');
+    if (astrolabe) {
+      astrolabe.rotation.y = timeSec * 0.14;
+      astrolabe.rotation.z = Math.sin(timeSec * 0.25) * 0.12;
+    }
+
+    const stars = root.getObjectByName('cosmic_starfield_points');
+    if (stars) {
+      stars.rotation.y = timeSec * 0.018;
     }
 
     const postureMarks = root.getObjectByName('onboarding_posture_marks');
@@ -606,16 +855,17 @@ export class CorridorBuilder {
       postureMarks.visible = visual.showComfortCalibrationMarks;
     }
 
+    // Keep the Grand Cosmic Doors and Architecture ALWAYS visible and majestic!
     const atriumGroup = root.getObjectByName('threshold_atrium_reveal_group');
     if (atriumGroup) {
-      atriumGroup.visible = visual.atriumRevealProgress > 0.15;
+      atriumGroup.visible = true;
     }
 
     const keyLight = root.getObjectByName(
       'threshold_key_light'
     ) as THREE.PointLight | null;
     if (keyLight) {
-      keyLight.intensity = 4 + visual.atriumRevealProgress * 30;
+      keyLight.intensity = 38 + Math.sin(timeSec * 1.4) * 4;
     }
 
     const rung3Plaque = root.getObjectByName('onboarding_rung3_plaque');
@@ -625,14 +875,17 @@ export class CorridorBuilder {
   }
 
   /**
-   * Builds a chunked Corridor Segment (`ascend` or `descend`, Segment 1 or 2)
-   * applying the Branch Visual Language (§3.2, §3.3, §3.4) and strict material/light budgets (§4.3, §5.1).
+   * Builds one of the 3 Grand Sector Rooms (`segment = 1 | 2 | 3`):
+   * - Room I (Sector A): 11 Doors to Rooms 01–11
+   * - Room II (Sector B): 8 Doors to Rooms 12–19
+   * - Room III (Sector C & D): 6 Doors to Rooms 20–25
+   * Each door inside these 3 rooms leads directly into a dedicated room with its own Painting, Essay, and MP3 audio track!
    */
   public static buildCorridorSegment(
     root: THREE.Group,
     scene: THREE.Scene,
-    branch: CorridorBranch,
-    segment: 1 | 2,
+    _branch: CorridorBranch,
+    segment: 1 | 2 | 3,
     state: HubPlayerState,
     registerTarget: (
       mesh: THREE.Object3D,
@@ -640,62 +893,56 @@ export class CorridorBuilder {
     ) => void,
     walkableMeshes: THREE.Object3D[]
   ): void {
-    const isAscent = branch === 'ascend';
-    // §3.1 Wayfinding without text: each segment has a distinct color temperature and landmark silhouette
-    const bgHex = isAscent
-      ? segment === 1
-        ? '#14110d'
-        : '#19140e'
-      : segment === 1
-      ? '#070c12'
-      : '#05080e';
-    const accentHex = isAscent ? '#c8a464' : '#4ea8de';
+    const meta = SECTOR_HALL_META[segment] ?? SECTOR_HALL_META[1];
+    const accentHex = meta.accentHex;
+    const bgHex = meta.bgHex;
 
     scene.background = new THREE.Color(bgHex);
-    scene.fog = new THREE.FogExp2(bgHex, 0.02);
+    scene.fog = new THREE.FogExp2(bgHex, 0.015);
 
     // Strictly 2 real-time lights (§5.1)
-    const hemi = new THREE.HemisphereLight(
-      isAscent ? '#fff0d4' : '#99ccff',
-      isAscent ? '#1f1a14' : '#0a1018',
-      0.8
-    );
+    const hemi = new THREE.HemisphereLight('#d8ecff', '#0b1020', 0.85);
     root.add(hemi);
 
-    const centerLight = new THREE.PointLight(
-      isAscent ? '#ffe2a8' : '#5cb8ff',
-      36,
-      36,
-      1.35
-    );
-    centerLight.position.set(0, 8.2, 0);
+    const centerLight = new THREE.PointLight(accentHex, 42, 48, 1.3);
+    centerLight.position.set(0, 9.2, 0);
     root.add(centerLight);
 
-    const width = 18;
-    const height = 9.2;
-    const depth = 26;
+    // Cosmic Starfield dome visible above the open celestial gallery colonnade
+    const starfield = createStarfieldPoints(1100, 56);
+    root.add(starfield);
+
+    const width = 20;
+    const height = 9.6;
+    const depth = 36;
     const halfW = width * 0.5;
     const halfD = depth * 0.5;
 
-    // §4.3: MeshLambertMaterial for corridor surfaces; MeshStandardMaterial only for hero pools/frames
-    const floorTex = createMacroFloorTexture(isAscent);
+    const floorTex = createCosmicFloorTexture(
+      segment === 1
+        ? 'rgba(229, 193, 88, 0.2)'
+        : segment === 2
+        ? 'rgba(78, 168, 222, 0.22)'
+        : 'rgba(179, 136, 255, 0.22)'
+    );
     const wallLambertMat = new THREE.MeshLambertMaterial({
-      color: isAscent ? '#241f19' : '#111821',
+      color:
+        segment === 1 ? '#18151f' : segment === 2 ? '#0e1726' : '#161128',
     });
-    const floorMat = isAscent
-      ? new THREE.MeshLambertMaterial({ map: floorTex })
-      : new THREE.MeshStandardMaterial({
-          map: floorTex,
-          roughness: 0.14, // Wet glossy reflective basalt for Descent (§3.2)
-          metalness: 0.45,
-        });
+    const floorMat = new THREE.MeshStandardMaterial({
+      map: floorTex,
+      roughness: 0.18,
+      metalness: 0.5,
+    });
     const heroTrimMat = new THREE.MeshStandardMaterial({
       color: accentHex,
-      roughness: 0.26,
-      metalness: 0.82,
+      roughness: 0.24,
+      metalness: 0.84,
+      emissive: accentHex,
+      emissiveIntensity: 0.18,
     });
 
-    // 1. Walkable Corridor Floor (y = 0)
+    // 1. Walkable Sector Room Floor (y = 0)
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(width, depth),
       floorMat
@@ -704,46 +951,7 @@ export class CorridorBuilder {
     root.add(floor);
     walkableMeshes.push(floor);
 
-    // Branch Visual Language (§3.2 & §3.3):
-    // Ascent -> Additive Light Shafts from above; Descent -> Glowing Caustic Pool in floor center
-    if (isAscent) {
-      const shaftTex = createLightShaftAlphaTexture();
-      const shaftMesh = new THREE.Mesh(
-        new THREE.ConeGeometry(3.4, height, 24, 1, true),
-        new THREE.MeshBasicMaterial({
-          map: shaftTex,
-          transparent: true,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-          side: THREE.DoubleSide,
-        })
-      );
-      shaftMesh.position.set(0, height * 0.5, -2.0);
-      root.add(shaftMesh);
-    } else {
-      const causticPool = new THREE.Mesh(
-        new THREE.RingGeometry(1.2, 2.8, 36),
-        new THREE.MeshBasicMaterial({
-          color: '#4ea8de',
-          transparent: true,
-          opacity: 0.35,
-          side: THREE.DoubleSide,
-        })
-      );
-      causticPool.rotation.x = -Math.PI * 0.5;
-      causticPool.position.set(0, 0.012, -1.5);
-      root.add(causticPool);
-    }
-
-    // 2. Ceiling & Outer Walls
-    const ceiling = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, depth),
-      wallLambertMat
-    );
-    ceiling.rotation.x = Math.PI * 0.5;
-    ceiling.position.y = height;
-    root.add(ceiling);
-
+    // 2. Side & End Walls (with open celestial skylight above)
     [-halfW, halfW].forEach((wx) => {
       const sideWall = new THREE.Mesh(
         new THREE.PlaneGeometry(depth, height),
@@ -764,17 +972,17 @@ export class CorridorBuilder {
       root.add(endWall);
     });
 
-    // 3. Instanced Colonnade Pillars (12 columns = 1 draw call, §5.2)
-    const colGeo = new THREE.CylinderGeometry(0.38, 0.44, height, 14);
+    // 3. Instanced Colonnade Pillars (12 columns = 1 draw call)
+    const colGeo = new THREE.CylinderGeometry(0.36, 0.44, height, 12);
     const colInst = new THREE.InstancedMesh(colGeo, wallLambertMat, 12);
     const dummy = new THREE.Object3D();
     let cIdx = 0;
     for (let side = -1; side <= 1; side += 2) {
-      for (let iz = -2; iz <= 3; iz++) {
+      for (let iz = 0; iz < 6; iz++) {
         dummy.position.set(
-          side * (halfW - 2.1),
+          side * (halfW - 2.3),
           height * 0.5,
-          iz * 4.0 - 2.0
+          -12.5 + iz * 5.0
         );
         dummy.updateMatrix();
         colInst.setMatrixAt(cIdx++, dummy.matrix);
@@ -783,15 +991,22 @@ export class CorridorBuilder {
     colInst.instanceMatrix.needsUpdate = true;
     root.add(colInst);
 
-    // 4. Doors with State Beacons (Changing Material & Light per §3.4!)
-    const segmentNodes = getWorldNodes().filter(
-      (n) => n.branch === branch && n.segment === segment
-    );
+    // 4. Doors to every Artwork & Audio Room in this Sector (Zero overlapping slots!)
+    const segmentNodes = getWorldNodes().filter((n) => n.segment === segment);
 
+    // 11 distinct architectural door bays (6 on West wall, 5 on East wall)
     const doorSlots: Array<{ x: number; z: number; rotY: number }> = [
-      { x: -halfW + 0.08, z: -3.5, rotY: Math.PI * 0.5 },
-      { x: halfW - 0.08, z: -3.5, rotY: -Math.PI * 0.5 },
-      { x: -halfW + 0.08, z: 3.8, rotY: Math.PI * 0.5 },
+      { x: -halfW + 0.1, z: -12.5, rotY: Math.PI * 0.5 },
+      { x: halfW - 0.1, z: -12.5, rotY: -Math.PI * 0.5 },
+      { x: -halfW + 0.1, z: -7.5, rotY: Math.PI * 0.5 },
+      { x: halfW - 0.1, z: -7.5, rotY: -Math.PI * 0.5 },
+      { x: -halfW + 0.1, z: -2.5, rotY: Math.PI * 0.5 },
+      { x: halfW - 0.1, z: -2.5, rotY: -Math.PI * 0.5 },
+      { x: -halfW + 0.1, z: 2.5, rotY: Math.PI * 0.5 },
+      { x: halfW - 0.1, z: 2.5, rotY: -Math.PI * 0.5 },
+      { x: -halfW + 0.1, z: 7.5, rotY: Math.PI * 0.5 },
+      { x: halfW - 0.1, z: 7.5, rotY: -Math.PI * 0.5 },
+      { x: -halfW + 0.1, z: 12.5, rotY: Math.PI * 0.5 },
     ];
 
     segmentNodes.forEach((node, index) => {
@@ -806,7 +1021,7 @@ export class CorridorBuilder {
         ? 'COMPLETED'
         : isVisited
         ? 'VISITED'
-        : 'UNVISITED';
+        : 'ART & AUDIO';
 
       const statusColor = isPlanned
         ? '#555555'
@@ -821,44 +1036,47 @@ export class CorridorBuilder {
       dGroup.rotation.y = slot.rotY;
 
       const step = new THREE.Mesh(
-        new THREE.BoxGeometry(2.8, 0.16, 0.6),
+        new THREE.BoxGeometry(2.6, 0.16, 0.55),
         wallLambertMat
       );
       step.position.set(0, 0.08, 0.22);
       dGroup.add(step);
 
-      [-1.15, 1.15].forEach((jx) => {
+      [-1.08, 1.08].forEach((jx) => {
         const jamb = new THREE.Mesh(
-          new THREE.BoxGeometry(0.28, 3.8, 0.42),
+          new THREE.BoxGeometry(0.24, 3.6, 0.38),
           heroTrimMat
         );
-        jamb.position.set(jx, 1.9, 0.18);
+        jamb.position.set(jx, 1.8, 0.18);
         dGroup.add(jamb);
       });
 
       const lintel = new THREE.Mesh(
-        new THREE.BoxGeometry(2.9, 0.45, 0.5),
+        new THREE.BoxGeometry(2.65, 0.42, 0.46),
         heroTrimMat
       );
-      lintel.position.set(0, 3.95, 0.22);
+      lintel.position.set(0, 3.75, 0.22);
       dGroup.add(lintel);
 
-      // §3.4 State indicator changes material and light on the door leaf & beacon gem
       const stateBeaconMat = new THREE.MeshBasicMaterial({
         color: statusColor,
       });
       const beaconGem = new THREE.Mesh(
-        new THREE.OctahedronGeometry(0.18, 0),
+        new THREE.OctahedronGeometry(0.16, 0),
         stateBeaconMat
       );
-      beaconGem.position.set(0, 3.95, 0.52);
+      beaconGem.position.set(0, 3.75, 0.5);
       dGroup.add(beaconGem);
 
       const leaf = new THREE.Mesh(
-        new THREE.BoxGeometry(2.1, 3.64, 0.16),
-        wallLambertMat
+        new THREE.BoxGeometry(1.95, 3.45, 0.15),
+        new THREE.MeshStandardMaterial({
+          color: '#111624',
+          roughness: 0.28,
+          metalness: 0.65,
+        })
       );
-      leaf.position.set(0, 0.16 + 1.82, 0.12);
+      leaf.position.set(0, 0.16 + 1.72, 0.12);
       dGroup.add(leaf);
 
       const plaqueTex = createSignageTexture(
@@ -870,10 +1088,10 @@ export class CorridorBuilder {
         statusColor
       );
       const plaque = new THREE.Mesh(
-        new THREE.PlaneGeometry(2.4, 1.2),
+        new THREE.PlaneGeometry(2.25, 1.1),
         new THREE.MeshBasicMaterial({ map: plaqueTex })
       );
-      plaque.position.set(0, 4.8, 0.28);
+      plaque.position.set(0, 4.55, 0.26);
       dGroup.add(plaque);
 
       root.add(dGroup);
@@ -883,139 +1101,91 @@ export class CorridorBuilder {
         roomId: node.id,
         status: node.status,
         title: `${node.symbol} · ${node.title}`,
-        titleRu: `${node.symbol} · ${node.titleRu || node.title}`,
-        subtitle: node.dimension,
-        subtitleRu: node.dimension,
+        titleRu: `${node.symbol} · ${node.title}`,
+        subtitle: `${node.dimension} · Enter Room with Painting & MP3`,
+        subtitleRu: `${node.dimension} · Enter Room with Painting & MP3`,
       });
     });
 
-    // 5. Licensed Framed Artwork on East Wall (§4.1 & §9)
-    const artworks = artManifestData.artworks.filter(
-      (a) => a.branch === branch
-    );
-    const art = artworks[(segment - 1) % artworks.length];
-    if (art) {
-      const artGroup = new THREE.Group();
-      artGroup.position.set(halfW - 0.1, 2.5, 3.8);
-      artGroup.rotation.y = -Math.PI * 0.5;
+    // 5. North Wall: Portals to the other 2 Sector Rooms
+    const otherSegments = ([1, 2, 3] as const).filter((s) => s !== segment);
+    otherSegments.forEach((targetSeg, idx) => {
+      const targetMeta = SECTOR_HALL_META[targetSeg];
+      const px = idx === 0 ? -3.4 : 3.4;
 
-      const frame = new THREE.Mesh(
-        new THREE.BoxGeometry(2.9, 1.65, 0.12),
+      const northPortal = new THREE.Group();
+      northPortal.position.set(px, 0, -halfD + 0.28);
+
+      const nArch = new THREE.Mesh(
+        new THREE.BoxGeometry(3.1, 4.1, 0.34),
         heroTrimMat
       );
-      artGroup.add(frame);
+      nArch.position.y = 2.05;
+      northPortal.add(nArch);
 
-      const fallbackTex = createProceduralArtworkTexture(
-        art.title,
-        art.author,
-        art.license,
-        art.motif,
-        accentHex
+      const nPlaqueTex = createSignageTexture(
+        targetMeta.symbol,
+        targetMeta.title,
+        targetMeta.range,
+        'SECTOR ROOM',
+        targetMeta.accentHex,
+        '#f3ede2'
       );
-      const canvasMat = new THREE.MeshBasicMaterial({ map: fallbackTex });
-      if (art.url && art.url.startsWith('http')) {
-        const loader = new THREE.TextureLoader();
-        loader.setCrossOrigin('anonymous');
-        loader.load(art.url, (loadedTex) => {
-          loadedTex.colorSpace = THREE.SRGBColorSpace;
-          loadedTex.generateMipmaps = true;
-          canvasMat.map = loadedTex;
-          canvasMat.needsUpdate = true;
-        });
-      }
-      const canvasMesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(2.65, 1.4),
-        canvasMat
+      const nPlaque = new THREE.Mesh(
+        new THREE.PlaneGeometry(2.5, 1.15),
+        new THREE.MeshBasicMaterial({ map: nPlaqueTex })
       );
-      canvasMesh.position.z = 0.07;
-      artGroup.add(canvasMesh);
+      nPlaque.position.set(0, 4.75, 0.25);
+      northPortal.add(nPlaque);
 
-      root.add(artGroup);
-      registerTarget(artGroup, {
-        id: art.id,
-        kind: 'artwork',
-        roomId: (art as { roomId?: string }).roomId ?? 'ROOM_001',
-        title: art.title,
-        titleRu: art.titleRu || art.title,
-        subtitle: art.author,
-        subtitleRu: art.author,
+      root.add(northPortal);
+      registerTarget(northPortal, {
+        id: `PORTAL_SEG_${targetSeg}`,
+        kind: 'segment-portal',
+        branch: targetMeta.branch,
+        segment: targetSeg,
+        title: targetMeta.title,
+        titleRu: targetMeta.title,
+        subtitle: targetMeta.subtitle,
+        subtitleRu: targetMeta.subtitle,
       });
-    }
-
-    // 6. North Portal: Segment Transition
-    const nextSeg: 1 | 2 = segment === 1 ? 2 : 1;
-    const northPortal = new THREE.Group();
-    northPortal.position.set(0, 0, -halfD + 0.25);
-
-    const nArch = new THREE.Mesh(
-      new THREE.BoxGeometry(3.6, 4.4, 0.35),
-      heroTrimMat
-    );
-    nArch.position.y = 2.2;
-    northPortal.add(nArch);
-
-    const nPlaqueTex = createSignageTexture(
-      nextSeg === 2 ? 'II' : 'I',
-      `${branch.toUpperCase()} ${nextSeg}`,
-      `SEGMENT ${nextSeg}`,
-      'PORTAL',
-      accentHex,
-      '#f3ede2'
-    );
-    const nPlaque = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.4, 1.2),
-      new THREE.MeshBasicMaterial({ map: nPlaqueTex })
-    );
-    nPlaque.position.set(0, 5.0, 0.25);
-    northPortal.add(nPlaque);
-
-    root.add(northPortal);
-    registerTarget(northPortal, {
-      id: `PORTAL_SEG_${nextSeg}`,
-      kind: 'segment-portal',
-      branch,
-      segment: nextSeg,
-      title: `${branch.toUpperCase()} · ${nextSeg}`,
-      titleRu: `${branch === 'ascend' ? 'ВОСХОЖДЕНИЕ' : 'НИСХОЖДЕНИЕ'} · ${nextSeg}`,
-      subtitle: '',
-      subtitleRu: '',
     });
 
-    // 7. South Portal: Return to Threshold
+    // 6. South Portal: Return to Grand Cosmic Starting Room
     const southPortal = new THREE.Group();
-    southPortal.position.set(0, 0, halfD - 0.25);
+    southPortal.position.set(0, 0, halfD - 0.28);
     southPortal.rotation.y = Math.PI;
 
     const sArch = new THREE.Mesh(
-      new THREE.BoxGeometry(3.2, 4.0, 0.35),
-      wallLambertMat
+      new THREE.BoxGeometry(3.4, 4.2, 0.36),
+      heroTrimMat
     );
-    sArch.position.y = 2.0;
+    sArch.position.y = 2.1;
     southPortal.add(sArch);
 
     const sPlaqueTex = createSignageTexture(
       '↺',
-      'THRESHOLD',
-      'ATRIUM',
-      'HUB',
+      'COSMIC NEXUS',
+      'STARTING COSMIC ROOM',
+      '3 ROOMS HUB',
       accentHex,
       '#d8cfc0'
     );
     const sPlaque = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.2, 1.1),
+      new THREE.PlaneGeometry(2.5, 1.15),
       new THREE.MeshBasicMaterial({ map: sPlaqueTex })
     );
-    sPlaque.position.set(0, 4.6, 0.25);
+    sPlaque.position.set(0, 4.8, 0.25);
     southPortal.add(sPlaque);
 
     root.add(southPortal);
     registerTarget(southPortal, {
       id: 'PORTAL_THRESHOLD',
       kind: 'corridor-return',
-      title: '↺ THRESHOLD',
-      titleRu: '↺ ПОРОГ',
-      subtitle: '',
-      subtitleRu: '',
+      title: '↺ COSMIC STARTING ROOM',
+      titleRu: '↺ COSMIC STARTING ROOM',
+      subtitle: 'Return to the Grand Cosmic Nexus',
+      subtitleRu: 'Return to the Grand Cosmic Nexus',
     });
   }
 }

@@ -16,7 +16,7 @@ export interface RadioMessage {
 export interface HubPlayerState {
   version: number;
   path: CorridorBranch | null;
-  segment: { branch: CorridorBranch; index: 1 | 2 } | null;
+  segment: { branch: CorridorBranch; index: 1 | 2 | 3 } | null;
   visited: Record<string, { at: number; completed: boolean }>;
   identity: Record<string, 'accept' | 'reject'>;
   onboarding: {
@@ -42,7 +42,7 @@ export interface HubPlayerState {
   // Convenience derived/runtime fields for corridor & room streamer
   location: HubLocation;
   branch: CorridorBranch;
-  segmentIndex: 1 | 2;
+  segmentIndex: 1 | 2 | 3;
   currentRoomId: string | null;
   visitedRooms: string[];
   completedRooms: string[];
@@ -53,9 +53,9 @@ export interface HubPlayerState {
   radioChannels: Record<string, RadioMessage[]>;
 }
 
-const STORAGE_KEY = 'neuromicon_artmaze_protocol_state_v2';
+const STORAGE_KEY = 'neuromicon_artmaze_protocol_state_v3';
 const LEGACY_KEY = 'neuromicon_artmaze_hub_v1';
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
 
 function createDefaultState(): HubPlayerState {
   return {
@@ -184,7 +184,7 @@ function syncDerivedFields(state: HubPlayerState): HubPlayerState {
     .filter(([, v]) => v.completed)
     .map(([k]) => k);
   const branch = state.segment?.branch ?? state.path ?? state.branch ?? 'ascend';
-  const segmentIndex = (state.segment?.index ?? state.segmentIndex ?? 1) as 1 | 2;
+  const segmentIndex = (state.segment?.index ?? state.segmentIndex ?? 1) as 1 | 2 | 3;
   const comfortMode: ComfortMode = state.comfort.seated
     ? 'seated'
     : state.comfort.locomotion;
@@ -222,12 +222,11 @@ class HubPlayerStateStore {
       const { state, readOnly } = migrateState(parsed);
       this.isReadOnly = readOnly;
 
-      // Returning player check (§2.3): if COMMITTED was already reached, start directly in last segment
+      // Always start in the Grand Cosmic Starting Room (threshold) on initial page load
+      state.location = 'threshold';
+      state.currentRoomId = null;
       if (state.onboarding.completedSteps.includes('COMMITTED')) {
         state.onboarding.currentStep = 'COMMITTED';
-        if (state.location === 'threshold' && state.path) {
-          state.location = 'corridor';
-        }
       }
       return syncDerivedFields(state);
     } catch {
@@ -322,10 +321,11 @@ class HubPlayerStateStore {
   }
 
   public chooseBranchFromThreshold(branch: CorridorBranch): void {
+    const seg: 1 | 2 | 3 = branch === 'ascend' ? 1 : 2;
     this.state.path = branch;
     this.state.branch = branch;
-    this.state.segmentIndex = 1;
-    this.state.segment = { branch, index: 1 };
+    this.state.segmentIndex = seg;
+    this.state.segment = { branch, index: seg };
     this.state.location = 'corridor';
     this.state.currentRoomId = null;
     if (!this.state.onboarding.completedSteps.includes('COMMITTED')) {
@@ -342,7 +342,7 @@ class HubPlayerStateStore {
     this.notifyAndDebounceSave();
   }
 
-  public setCorridorSegment(branch: CorridorBranch, segment: 1 | 2): void {
+  public setCorridorSegment(branch: CorridorBranch, segment: 1 | 2 | 3): void {
     if (!this.state.path) {
       this.state.path = branch;
     }
@@ -351,13 +351,17 @@ class HubPlayerStateStore {
     this.state.segment = { branch, index: segment };
     this.state.location = 'corridor';
     this.state.currentRoomId = null;
+    if (!this.state.onboarding.completedSteps.includes('COMMITTED')) {
+      this.state.onboarding.completedSteps.push('COMMITTED');
+    }
+    this.state.onboarding.currentStep = 'COMMITTED';
     this.notifyAndDebounceSave();
   }
 
   public enterRoom(
     roomId: string,
     fromBranch?: CorridorBranch,
-    fromSegment?: 1 | 2
+    fromSegment?: 1 | 2 | 3
   ): void {
     if (fromBranch && fromSegment) {
       this.state.branch = fromBranch;

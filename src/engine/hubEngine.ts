@@ -274,7 +274,11 @@ export class HubEngine {
       },
       audio: {
         playRoomTrack: (trackUrl, baseHz) => {
-          spatialAudioSystem.playRoomSoundtrack(trackUrl, baseHz ?? 108);
+          spatialAudioSystem.playRoomSoundtrack(
+            trackUrl,
+            baseHz ?? 108,
+            manifest.identity.name
+          );
         },
         triggerTone: (freqHz) => {
           spatialAudioSystem.triggerChime(freqHz);
@@ -361,6 +365,7 @@ export class HubEngine {
     };
 
     if (state.location === 'threshold') {
+      spatialAudioSystem.stopRoomSoundtrack();
       CorridorBuilder.buildThresholdHall(
         this.worldRoot,
         this.scene,
@@ -368,12 +373,16 @@ export class HubEngine {
         registerTarget,
         this.walkableMeshes
       );
-      this.pose = { x: 0, y: 0, z: 5.2, yaw: 0, pitch: 0 };
-      spatialAudioSystem.setCorridorVerticalCrossfade(0.5);
+      this.pose = { x: 0, y: 0, z: 5.8, yaw: 0, pitch: 0 };
+      spatialAudioSystem.setCorridorVerticalCrossfade(
+        0.5,
+        'Grand Cosmic Starting Room'
+      );
       return;
     }
 
     if (state.location === 'corridor') {
+      spatialAudioSystem.stopRoomSoundtrack();
       CorridorBuilder.buildCorridorSegment(
         this.worldRoot,
         this.scene,
@@ -383,14 +392,16 @@ export class HubEngine {
         registerTarget,
         this.walkableMeshes
       );
-      this.pose = { x: 0, y: 0, z: 6.8, yaw: 0, pitch: 0 };
+      this.pose = { x: 0, y: 0, z: 12.5, yaw: 0, pitch: 0 };
       spatialAudioSystem.setCorridorVerticalCrossfade(
-        state.branch === 'ascend' ? 1.0 : 0.0
+        state.branch === 'ascend' ? 1.0 : 0.0,
+        `Sector Room ${state.segmentIndex}`
       );
       return;
     }
 
     if (state.location === 'void') {
+      spatialAudioSystem.stopRoomSoundtrack();
       roomStreamer.mountVoidFallback(
         state.currentRoomId || 'ROOM_412',
         this.worldRoot,
@@ -400,12 +411,12 @@ export class HubEngine {
         this.walkableMeshes
       );
       this.pose = { x: 0, y: 0, z: 4.2, yaw: 0, pitch: 0 };
-      spatialAudioSystem.playRoomSoundtrack('audio/void_fallback.ogg', 82);
       return;
     }
 
     // location === 'room'
-    const roomId = state.currentRoomId || 'ROOM_073';
+    spatialAudioSystem.stopRoomSoundtrack();
+    const roomId = state.currentRoomId || 'ROOM_001';
     const ctx = this.buildRoomContext(roomId, state);
     roomStreamer.mountRoom(
       roomId,
@@ -670,15 +681,15 @@ export class HubEngine {
   ): void {
     const maxW =
       state.location === 'threshold'
-        ? 9.2
+        ? 12.2
         : state.location === 'corridor'
-        ? 7.6
+        ? 8.5
         : 6.8;
     const maxD =
       state.location === 'threshold'
-        ? 10.2
+        ? 12.2
         : state.location === 'corridor'
-        ? 11.6
+        ? 16.5
         : 7.8;
     this.pose.x = Math.max(-maxW, Math.min(maxW, nx));
     this.pose.z = Math.max(-maxD, Math.min(maxD, nz));

@@ -513,10 +513,11 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
         </div>
       </div>
 
-      {/* Onboarding String #1: Single Terse Glyph on Hover (`◈`, §2.2 & §2.7) */}
+      {/* Hover Target Label */}
       {hoveredTarget && (
         <div className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 bg-[#0d0c0a]/85 border border-[#c8a464]/40 px-4 py-2 rounded text-center backdrop-blur-md">
-          {isOnboardingActive ? (
+          {isOnboardingActive &&
+          hoveredTarget.kind === 'onboarding-pedestal' ? (
             <span className="font-display text-lg text-[#e5c158] tracking-widest">
               {t('onboarding.glyph.interact', 'en')}
             </span>
@@ -685,19 +686,49 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
             )}
           </div>
 
-          {/* Visited Rooms & Identity Record */}
-          <div className="border-t border-white/10 pt-3 mb-4 space-y-1.5 text-[11px] font-mono text-[#b5ab99]">
-            <div>
-              Branch:{' '}
+          {/* Visited Rooms & 3 Sector Rooms Quick Navigation */}
+          <div className="border-t border-white/10 pt-3 mb-4 space-y-2 text-[11px] font-mono text-[#b5ab99]">
+            <div className="flex items-center justify-between">
+              <span>Location:</span>
               <span className="text-[#f3ede2]">
-                {hubState.path ? hubState.path.toUpperCase() : '—'}
+                {hubState.location === 'threshold'
+                  ? 'GRAND COSMIC STARTING ROOM'
+                  : hubState.location === 'corridor'
+                  ? `SECTOR ROOM ${hubState.segmentIndex}`
+                  : hubState.currentRoomId || 'VOID'}
               </span>
             </div>
-            <div>
-              Visited Rooms:{' '}
+            <div className="flex items-center justify-between">
+              <span>Visited Artwork & Audio Rooms:</span>
               <span className="text-[#f3ede2]">
-                {hubState.visitedRooms.length} / 1149
+                {hubState.visitedRooms.length} / 25
               </span>
+            </div>
+            <div className="pt-1 grid grid-cols-3 gap-1.5">
+              {([1, 2, 3] as const).map((seg) => (
+                <button
+                  key={seg}
+                  onClick={() => {
+                    hubPlayerState.setCorridorSegment(
+                      seg === 2 ? 'descend' : 'ascend',
+                      seg
+                    );
+                    setActiveDrawer('none');
+                  }}
+                  className={`py-1.5 px-2 rounded border text-[10px] font-mono transition-colors ${
+                    hubState.location === 'corridor' &&
+                    hubState.segmentIndex === seg
+                      ? 'bg-[#c8a464] text-[#0b0a09] border-[#c8a464] font-semibold'
+                      : 'bg-white/5 hover:bg-white/10 text-[#f3ede2] border-white/10'
+                  }`}
+                >
+                  {seg === 1
+                    ? 'Room I (01–11)'
+                    : seg === 2
+                    ? 'Room II (12–19)'
+                    : 'Room III (20–25)'}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -950,12 +981,12 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
             </div>
             <div className="text-[#a89f91] truncate text-[10px]">
               {spatialAudioSystem.getCurrentMp3Url() ||
-                'Synthesizer Harmonic Bed'}
+                'Silent outside Artwork & Audio Rooms (Zero Overlap)'}
             </div>
           </div>
 
           <div className="flex items-center justify-between">
-            <span>Carrier Stream:</span>
+            <span>Room Audio Carrier:</span>
             <button
               onClick={() => {
                 const next = spatialAudioSystem.toggle();
@@ -967,7 +998,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
                   : 'bg-white/10 text-[#a89f91]'
               }`}
             >
-              {audioActive ? 'PLAYING MP3 + BED' : 'MUTED'}
+              {audioActive ? 'ENABLED (IN ROOMS ONLY)' : 'MUTED'}
             </button>
           </div>
 

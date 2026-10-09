@@ -144,7 +144,7 @@ const NEUROMICON_25_SPECS: NeuromiconNodeSpec[] = [
     characterState: 'THE_FINITE_WITNESS',
     doorA: 'ROOM_008',
     doorB: 'ROOM_013',
-    doorC: 'ROOM_073',
+    doorC: 'ROOM_014',
   },
   {
     num: '08',
@@ -219,7 +219,7 @@ const NEUROMICON_25_SPECS: NeuromiconNodeSpec[] = [
     characterState: 'THE_SOLITARY_KEEPER',
     doorA: 'ROOM_013',
     doorB: 'ROOM_014',
-    doorC: 'ROOM_073',
+    doorC: 'ROOM_016',
   },
   {
     num: '13',
@@ -400,7 +400,7 @@ const NEUROMICON_25_SPECS: NeuromiconNodeSpec[] = [
     characterState: 'THE_UNIFIED_MIND',
     doorA: 'ROOM_025',
     doorB: 'ROOM_001',
-    doorC: 'ROOM_1149',
+    doorC: 'ROOM_012',
   },
   {
     num: '25',
@@ -417,8 +417,8 @@ const NEUROMICON_25_SPECS: NeuromiconNodeSpec[] = [
     imgFile:
       'https://raw.githubusercontent.com/AlexSheff/Neuromicon/main/Sector_B_The_Operating_System/17_Creativity/25_The_Mirror.png',
     doorA: 'ROOM_001',
-    doorB: 'ROOM_073',
-    doorC: 'ROOM_1149',
+    doorB: 'ROOM_012',
+    doorC: 'ROOM_020',
     hasRabbitHole: true,
   },
 ];
@@ -1244,7 +1244,45 @@ export class RoomStreamer {
 
     root.add(mirrorGroup);
 
-    // 7. Execute Room API v1 `mount(ctx)` from `room-template/index.ts`
+    // 7. South Exit Portal: Return to the Sector Room (Stops Room MP3 on exit)
+    const southExitGroup = new THREE.Group();
+    southExitGroup.position.set(0, 0, halfD - 0.12);
+    southExitGroup.rotation.y = Math.PI;
+
+    const sArch = new THREE.Mesh(
+      new THREE.BoxGeometry(2.6, 3.6, 0.28),
+      trimMat
+    );
+    sArch.position.y = 1.8;
+    southExitGroup.add(sArch);
+
+    const sPlaqueTex = createSignageTexture(
+      '↺',
+      `SECTOR ROOM ${state.segmentIndex}`,
+      'EXIT ROOM (STOPS TRACK)',
+      'RETURN',
+      accentHex,
+      '#d8cfc0'
+    );
+    const sPlaque = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.2, 0.8),
+      new THREE.MeshBasicMaterial({ map: sPlaqueTex })
+    );
+    sPlaque.position.set(0, 4.15, 0.22);
+    southExitGroup.add(sPlaque);
+
+    root.add(southExitGroup);
+    registerTarget(southExitGroup, {
+      id: `ROOM_SOUTH_EXIT_${manifest.id}`,
+      kind: 'room-mirror',
+      mirrorChoice: 'back',
+      title: `↺ RETURN TO SECTOR ROOM ${state.segmentIndex}`,
+      titleRu: `↺ RETURN TO SECTOR ROOM ${state.segmentIndex}`,
+      subtitle: 'Leave Room & Stop Track',
+      subtitleRu: 'Leave Room & Stop Track',
+    });
+
+    // 8. Execute Room API v1 `mount(ctx)` from `room-template/index.ts`
     this.activeModule = templateRoomModule;
     this.activeCtx = ctx;
     void this.activeModule.mount(ctx);
@@ -1369,6 +1407,13 @@ export class RoomStreamer {
   } {
     const testRoot = new THREE.Group();
     scene.add(testRoot);
+    const silentCtx: RoomContext = {
+      ...ctx,
+      audio: {
+        playRoomTrack: () => {},
+        triggerTone: () => {},
+      },
+    };
 
     for (let i = 0; i < 30; i++) {
       const dummyWalkables: THREE.Object3D[] = [];
@@ -1377,7 +1422,7 @@ export class RoomStreamer {
         testRoot,
         scene,
         state,
-        ctx,
+        silentCtx,
         () => {},
         dummyWalkables
       );
