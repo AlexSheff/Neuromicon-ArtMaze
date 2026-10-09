@@ -2,5 +2,7 @@
   "name": "Neuromicon ArtMaze",
   "description": "A modular WebXR and desktop 3D multidimensional labyrinth of independent rooms, framed artworks, doors, and void spaces.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

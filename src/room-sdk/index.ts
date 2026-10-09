@@ -51,6 +51,12 @@ export interface RoomV1Manifest {
     loop: boolean;
     baseHz?: number;
   };
+  artwork?: {
+    title: string;
+    imageUrl: string;
+    essayUrl?: string;
+    sector?: string;
+  };
   quest: {
     question: string;
     questionRu?: string;

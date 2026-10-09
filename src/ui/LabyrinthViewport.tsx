@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import essay01PurposeRaw from '../../content/art/01_Purpose.md?raw';
 import { SpatialInteractiveTarget } from '../corridor/corridorBuilder';
 import { HubEngine, HubRenderTelemetry } from '../engine/hubEngine';
 import { InputController } from '../engine/input/inputController';
@@ -20,7 +21,13 @@ interface LabyrinthViewportProps {
   ) => void;
 }
 
-type ActiveContextualDrawer = 'none' | 'codex' | 'radio' | 'comfort' | 'audio';
+type ActiveContextualDrawer =
+  | 'none'
+  | 'codex'
+  | 'radio'
+  | 'comfort'
+  | 'audio'
+  | 'essay';
 
 export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
   onOpenStudioSection,
@@ -51,6 +58,9 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
   });
   const [activeDrawer, setActiveDrawer] =
     useState<ActiveContextualDrawer>('none');
+  const [inspectedArtRoomId, setInspectedArtRoomId] =
+    useState<string>('ROOM_001');
+  const [essayText, setEssayText] = useState<string>(essay01PurposeRaw);
   const [zoomActive, setZoomActive] = useState<boolean>(false);
   const [xrActive, setXrActive] = useState<boolean>(() =>
     webxrManager.isSessionActive()
@@ -302,10 +312,32 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
       return;
     }
 
-    // 11. Artwork Inspection
+    // 11. Artwork & Neuromicon Essay Inspection
     if (target.kind === 'artwork') {
       spatialAudioSystem.triggerChime(493.88);
       hubPlayerState.revealControl('zoom');
+      const artRoomId = target.roomId || st.currentRoomId || 'ROOM_001';
+      const manifest = getRoomV1Manifest(artRoomId);
+      setInspectedArtRoomId(artRoomId);
+      setActiveDrawer('essay');
+      if (st.location === 'room' && st.currentRoomId) {
+        hubPlayerState.markQuestCompleted(st.currentRoomId);
+      }
+      if (artRoomId === 'ROOM_001') {
+        setEssayText(essay01PurposeRaw);
+      }
+      if (manifest.artwork?.essayUrl) {
+        void fetch(manifest.artwork.essayUrl)
+          .then((res) => (res.ok ? res.text() : ''))
+          .then((txt) => {
+            if (txt.trim().length > 0) {
+              setEssayText(txt);
+            }
+          })
+          .catch(() => {
+            // Keep local fallback essay
+          });
+      }
     }
   };
 
@@ -899,10 +931,10 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
 
       {/* Contextual Drawer: AUDIO (`Z`, §2.5) */}
       {activeDrawer === 'audio' && (
-        <div className="absolute top-16 right-4 w-[350px] max-w-[calc(100vw-2rem)] bg-[#0e0c0a]/95 border border-[#c8a464]/40 rounded p-5 text-xs text-[#e8e2d5] backdrop-blur-md shadow-2xl z-20 space-y-3">
+        <div className="absolute top-16 right-4 w-[370px] max-w-[calc(100vw-2rem)] bg-[#0e0c0a]/95 border border-[#c8a464]/40 rounded p-5 text-xs text-[#e8e2d5] backdrop-blur-md shadow-2xl z-20 space-y-3">
           <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
             <span className="font-display text-sm font-semibold text-[#e5c158]">
-              ♫ RESONANCE
+              ♫ NEUROMICON AUDIO CARRIER
             </span>
             <button
               onClick={() => setActiveDrawer('none')}
@@ -912,8 +944,18 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
             </button>
           </div>
 
+          <div className="p-2.5 rounded bg-white/5 border border-white/10 font-mono text-[11px] space-y-1">
+            <div className="text-[#e5c158] font-semibold truncate">
+              {spatialAudioSystem.getCurrentTrackLabel()}
+            </div>
+            <div className="text-[#a89f91] truncate text-[10px]">
+              {spatialAudioSystem.getCurrentMp3Url() ||
+                'Synthesizer Harmonic Bed'}
+            </div>
+          </div>
+
           <div className="flex items-center justify-between">
-            <span>Synthesizer:</span>
+            <span>Carrier Stream:</span>
             <button
               onClick={() => {
                 const next = spatialAudioSystem.toggle();
@@ -925,7 +967,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
                   : 'bg-white/10 text-[#a89f91]'
               }`}
             >
-              {audioActive ? 'ACTIVE' : 'MUTED'}
+              {audioActive ? 'PLAYING MP3 + BED' : 'MUTED'}
             </button>
           </div>
 
@@ -948,6 +990,48 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
           </div>
         </div>
       )}
+
+      {/* Contextual Drawer: NEUROMICON PAINTING & ESSAY TRANSMISSION */}
+      {activeDrawer === 'essay' &&
+        (() => {
+          const artManifest = getRoomV1Manifest(inspectedArtRoomId);
+          return (
+            <div className="absolute top-16 right-4 w-[480px] max-w-[calc(100vw-2rem)] max-h-[84vh] overflow-y-auto bg-[#0e0c0a]/95 border border-[#c8a464]/50 rounded p-5 text-xs text-[#e8e2d5] backdrop-blur-md shadow-2xl z-20 space-y-4">
+              <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+                <div>
+                  <span className="font-display text-sm font-semibold text-[#e5c158] block">
+                    {artManifest.artwork?.title || artManifest.identity.name}
+                  </span>
+                  <span className="font-mono text-[10px] text-[#a89f91]">
+                    {artManifest.artwork?.sector || artManifest.id} · MP3:{' '}
+                    {artManifest.audio.track.split('/').pop()}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setActiveDrawer('none')}
+                  className="text-[#a89f91] hover:text-white font-mono text-sm px-2"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {artManifest.artwork?.imageUrl && (
+                <div className="rounded overflow-hidden border border-[#c8a464]/35 bg-black">
+                  <img
+                    src={artManifest.artwork.imageUrl}
+                    alt={artManifest.identity.name}
+                    crossOrigin="anonymous"
+                    className="w-full max-h-60 object-contain mx-auto"
+                  />
+                </div>
+              )}
+
+              <div className="p-3.5 rounded bg-white/5 border border-white/10 whitespace-pre-wrap leading-relaxed text-[#f3ede2] font-sans text-xs max-h-72 overflow-y-auto">
+                {essayText}
+              </div>
+            </div>
+          );
+        })()}
     </div>
   );
 };

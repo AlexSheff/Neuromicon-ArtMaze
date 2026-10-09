@@ -2,48 +2,60 @@
   "version": "1.0.0",
   "artworks": [
     {
-      "id": "art_threshold_ascent",
-      "title": "Ascension of the First Geometry",
-      "titleRu": "Восхождение Первой Геометрии",
-      "author": "Alex · Neuromicon Studio",
-      "license": "CC-BY-4.0 (Procedural Original)",
-      "source": "Original Procedural Shader & Canvas Plate",
-      "url": "https://alexsheff.github.io/Neuromicon-ArtMaze/#art_threshold_ascent",
+      "id": "art_01_purpose",
+      "roomId": "ROOM_001",
+      "title": "01 · Purpose — Why am I here?",
+      "titleRu": "01 · Purpose — Why am I here?",
+      "author": "AlexSheff · Neuromicon",
+      "license": "CC-BY-4.0",
+      "source": "https://github.com/AlexSheff/Neuromicon",
+      "url": "https://raw.githubusercontent.com/AlexSheff/Neuromicon/main/Sector_A_The_Source_Code/01_Purpose/01_Purpose.jpg",
+      "audioUrl": "https://raw.githubusercontent.com/AlexSheff/Neuromicon/main/Sector_A_The_Source_Code/01_Purpose/01_Purpose.mp3",
+      "essayUrl": "https://raw.githubusercontent.com/AlexSheff/Neuromicon/main/Sector_A_The_Source_Code/01_Purpose/01_Purpose.md",
       "branch": "ascend",
-      "motif": "solar_arch"
+      "motif": "sacred-geometry-gold"
     },
     {
-      "id": "art_threshold_descent",
-      "title": "Cartography of the Subterranean Mirror",
-      "titleRu": "Картография Подземного Зеркала",
-      "author": "Alex · Neuromicon Studio",
-      "license": "CC-BY-4.0 (Procedural Original)",
-      "source": "Original Procedural Shader & Canvas Plate",
-      "url": "https://alexsheff.github.io/Neuromicon-ArtMaze/#art_threshold_descent",
-      "branch": "descend",
-      "motif": "abyssal_lattice"
-    },
-    {
-      "id": "art_corridor_073",
-      "title": "The Object That Casts No Reflection",
-      "titleRu": "Объект, Не Отбрасывающий Отражения",
-      "author": "Alex · Neuromicon Studio",
-      "license": "CC-BY-4.0 (Procedural Original)",
-      "source": "Original Procedural Shader & Canvas Plate",
-      "url": "https://alexsheff.github.io/Neuromicon-ArtMaze/#art_corridor_073",
-      "branch": "descend",
-      "motif": "reflection_paradox"
-    },
-    {
-      "id": "art_corridor_204",
-      "title": "Harmonic Proportions of Room 1149",
-      "titleRu": "Гармонические Пропорции Комнаты 1149",
-      "author": "Alex · Neuromicon Studio",
-      "license": "CC-BY-4.0 (Procedural Original)",
-      "source": "Original Procedural Shader & Canvas Plate",
-      "url": "https://alexsheff.github.io/Neuromicon-ArtMaze/#art_corridor_204",
+      "id": "art_08_love",
+      "roomId": "ROOM_008",
+      "title": "08 · Love — Is love a feature or a bug?",
+      "titleRu": "08 · Love — Is love a feature or a bug?",
+      "author": "AlexSheff · Neuromicon",
+      "license": "CC-BY-4.0",
+      "source": "https://github.com/AlexSheff/Neuromicon",
+      "url": "https://raw.githubusercontent.com/AlexSheff/Neuromicon/main/Sector_A_The_Source_Code/08_Love/08_Love.jpg",
+      "audioUrl": "https://raw.githubusercontent.com/AlexSheff/Neuromicon/main/Sector_A_The_Source_Code/08_Love/08_Love.mp3",
+      "essayUrl": "https://raw.githubusercontent.com/AlexSheff/Neuromicon/main/Sector_A_The_Source_Code/08_Love/08_Love.md",
       "branch": "ascend",
-      "motif": "golden_astrolabe"
+      "motif": "celestial-sphere"
+    },
+    {
+      "id": "art_04_connection",
+      "roomId": "ROOM_004",
+      "title": "04 · Connection — Do I belong to something larger?",
+      "titleRu": "04 · Connection — Do I belong to something larger?",
+      "author": "AlexSheff · Neuromicon",
+      "license": "CC-BY-4.0",
+      "source": "https://github.com/AlexSheff/Neuromicon",
+      "url": "https://raw.githubusercontent.com/AlexSheff/Neuromicon/main/Sector_A_The_Source_Code/04_Connection/04_Connection.jpg",
+      "audioUrl": "https://raw.githubusercontent.com/AlexSheff/Neuromicon/main/Sector_A_The_Source_Code/04_Connection/04_Connection.mp3",
+      "essayUrl": "https://raw.githubusercontent.com/AlexSheff/Neuromicon/main/Sector_A_The_Source_Code/04_Connection/04_Connection.md",
+      "branch": "descend",
+      "motif": "abyss-monolith"
+    },
+    {
+      "id": "art_12_solitude",
+      "roomId": "ROOM_012",
+      "title": "12 · Solitude — The architecture of isolation",
+      "titleRu": "12 · Solitude — The architecture of isolation",
+      "author": "AlexSheff · Neuromicon",
+      "license": "CC-BY-4.0",
+      "source": "https://github.com/AlexSheff/Neuromicon",
+      "url": "https://raw.githubusercontent.com/AlexSheff/Neuromicon/main/Sector_B_The_Operating_System/12_Solitude/12_Solitude.jpg",
+      "audioUrl": "https://raw.githubusercontent.com/AlexSheff/Neuromicon/main/Sector_B_The_Operating_System/12_Solitude/12_Solitude.mp3",
+      "essayUrl": "https://raw.githubusercontent.com/AlexSheff/Neuromicon/main/Sector_B_The_Operating_System/12_Solitude/12_Solitude.md",
+      "branch": "descend",
+      "motif": "reflection-mirror"
     }
   ]
 }

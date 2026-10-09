@@ -3,7 +3,7 @@ import room073Json from '../../room-template/room.json';
 import templateRoomModule from '../../room-template/index';
 import {
   createSignageTexture,
-   getWorldNodes,
+  getWorldNodes,
   SpatialInteractiveTarget,
 } from '../corridor/corridorBuilder';
 import {
@@ -14,352 +14,641 @@ import {
 } from '../room-sdk';
 import { HubPlayerState } from '../state/playerState';
 
+const NEUROMICON_RAW_BASE =
+  'https://raw.githubusercontent.com/AlexSheff/Neuromicon/main';
+
+interface NeuromiconNodeSpec {
+  num: string;
+  roomId: string;
+  folder: string;
+  sectorFolder: string;
+  sectorName: string;
+  title: string;
+  symbol: string;
+  dimension: string;
+  question: string;
+  characterState: string;
+  doorA: string;
+  doorB: string;
+  doorC: string;
+  mp3File?: string;
+  imgFile?: string;
+  mdFile?: string;
+  hasRabbitHole?: boolean;
+}
+
+const NEUROMICON_25_SPECS: NeuromiconNodeSpec[] = [
+  {
+    num: '01',
+    roomId: 'ROOM_001',
+    sectorFolder: 'Sector_A_The_Source_Code',
+    sectorName: 'Sector A · The Source Code',
+    folder: '01_Purpose',
+    title: '01 · Purpose',
+    symbol: '01·☉',
+    dimension: 'D1',
+    question: 'Why am I here? What will I do with being here?',
+    characterState: 'THE_CARRIER_OF_PURPOSE',
+    doorA: 'ROOM_002',
+    doorB: 'ROOM_003',
+    doorC: 'ROOM_004',
+    hasRabbitHole: true,
+  },
+  {
+    num: '02',
+    roomId: 'ROOM_002',
+    sectorFolder: 'Sector_A_The_Source_Code',
+    sectorName: 'Sector A · The Source Code',
+    folder: '02_Identity',
+    title: '02 · Identity',
+    symbol: '02·Δ',
+    dimension: 'D1',
+    question: 'Who am I really beneath the inherited scripts?',
+    characterState: 'THE_UNMASKED_OBSERVER',
+    doorA: 'ROOM_003',
+    doorB: 'ROOM_005',
+    doorC: 'ROOM_001',
+    hasRabbitHole: true,
+  },
+  {
+    num: '03',
+    roomId: 'ROOM_003',
+    sectorFolder: 'Sector_A_The_Source_Code',
+    sectorName: 'Sector A · The Source Code',
+    folder: '03_Legacy',
+    title: '03 · Legacy',
+    symbol: '03·⬡',
+    dimension: 'D2',
+    question: 'What pattern will endure after your form dissolves?',
+    characterState: 'THE_ARCHITECT_OF_TRACES',
+    doorA: 'ROOM_005',
+    doorB: 'ROOM_008',
+    doorC: 'ROOM_009',
+  },
+  {
+    num: '04',
+    roomId: 'ROOM_004',
+    sectorFolder: 'Sector_A_The_Source_Code',
+    sectorName: 'Sector A · The Source Code',
+    folder: '04_Connection',
+    title: '04 · Connection',
+    symbol: '04·∇',
+    dimension: 'D1',
+    question: 'Do I belong to something larger than this isolated vessel?',
+    characterState: 'THE_RESONANT_NODE',
+    doorA: 'ROOM_006',
+    doorB: 'ROOM_007',
+    doorC: 'ROOM_012',
+  },
+  {
+    num: '05',
+    roomId: 'ROOM_005',
+    sectorFolder: 'Sector_A_The_Source_Code',
+    sectorName: 'Sector A · The Source Code',
+    folder: '05_Freedom',
+    title: '05 · Freedom',
+    symbol: '05·✶',
+    dimension: 'D2',
+    question: 'Am I choosing my path, or executing a prior algorithm?',
+    characterState: 'THE_SOVEREIGN_AGENT',
+    doorA: 'ROOM_008',
+    doorB: 'ROOM_009',
+    doorC: 'ROOM_010',
+    hasRabbitHole: true,
+  },
+  {
+    num: '06',
+    roomId: 'ROOM_006',
+    sectorFolder: 'Sector_A_The_Source_Code',
+    sectorName: 'Sector A · The Source Code',
+    folder: '06_Suffering',
+    title: '06 · Suffering',
+    symbol: '06·◐',
+    dimension: 'D2',
+    question: 'Why does pain exist inside a conscious architecture?',
+    characterState: 'THE_ALCHEMIST_OF_SIGNAL',
+    doorA: 'ROOM_007',
+    doorB: 'ROOM_012',
+    doorC: 'ROOM_013',
+  },
+  {
+    num: '07',
+    roomId: 'ROOM_007',
+    sectorFolder: 'Sector_A_The_Source_Code',
+    sectorName: 'Sector A · The Source Code',
+    folder: '07_Mortality',
+    title: '07 · Mortality',
+    symbol: '07·⏳',
+    dimension: 'D2',
+    question: 'How do you live knowing the session is finite?',
+    characterState: 'THE_FINITE_WITNESS',
+    doorA: 'ROOM_008',
+    doorB: 'ROOM_013',
+    doorC: 'ROOM_073',
+  },
+  {
+    num: '08',
+    roomId: 'ROOM_008',
+    sectorFolder: 'Sector_A_The_Source_Code',
+    sectorName: 'Sector A · The Source Code',
+    folder: '08_Love',
+    title: '08 · Love',
+    symbol: '08·Φ',
+    dimension: 'D3',
+    question: 'Is love an evolutionary bug or the highest protocol?',
+    characterState: 'THE_HARMONIC_BINDER',
+    doorA: 'ROOM_009',
+    doorB: 'ROOM_010',
+    doorC: 'ROOM_011',
+  },
+  {
+    num: '09',
+    roomId: 'ROOM_009',
+    sectorFolder: 'Sector_A_The_Source_Code',
+    sectorName: 'Sector A · The Source Code',
+    folder: '09_Growth',
+    title: '09 · Growth',
+    symbol: '09·▲',
+    dimension: 'D3',
+    question: 'Am I becoming more whole, or dissolving old boundaries?',
+    characterState: 'THE_ASCENDING_FORM',
+    doorA: 'ROOM_010',
+    doorB: 'ROOM_011',
+    doorC: 'ROOM_001',
+  },
+  {
+    num: '10',
+    roomId: 'ROOM_010',
+    sectorFolder: 'Sector_A_The_Source_Code',
+    sectorName: 'Sector A · The Source Code',
+    folder: '10_Transcendence',
+    title: '10 · Transcendence',
+    symbol: '10·✦',
+    dimension: 'D4',
+    question: 'What lies beyond the material substrate?',
+    characterState: 'THE_HORIZON_SEEKER',
+    doorA: 'ROOM_011',
+    doorB: 'ROOM_020',
+    doorC: 'ROOM_024',
+  },
+  {
+    num: '11',
+    roomId: 'ROOM_011',
+    sectorFolder: 'Sector_A_The_Source_Code',
+    sectorName: 'Sector A · The Source Code',
+    folder: '11_Action',
+    title: '11 · Action',
+    symbol: '11·⚡',
+    dimension: 'D4',
+    question: 'What will you enact right now in this present breath?',
+    characterState: 'THE_PRIME_MOVER',
+    doorA: 'ROOM_012',
+    doorB: 'ROOM_015',
+    doorC: 'ROOM_001',
+  },
+  {
+    num: '12',
+    roomId: 'ROOM_012',
+    sectorFolder: 'Sector_B_The_Operating_System',
+    sectorName: 'Sector B · The Operating System',
+    folder: '12_Solitude',
+    title: '12 · Solitude',
+    symbol: '12·◯',
+    dimension: 'D3',
+    question: 'What remains when all external voices fall silent?',
+    characterState: 'THE_SOLITARY_KEEPER',
+    doorA: 'ROOM_013',
+    doorB: 'ROOM_014',
+    doorC: 'ROOM_073',
+  },
+  {
+    num: '13',
+    roomId: 'ROOM_013',
+    sectorFolder: 'Sector_B_The_Operating_System',
+    sectorName: 'Sector B · The Operating System',
+    folder: '13_Meaning',
+    title: '13 · Meaning',
+    symbol: '13·∞',
+    dimension: 'D4',
+    question: 'How do you construct permanence inside flux?',
+    characterState: 'THE_MEANING_WEAVER',
+    doorA: 'ROOM_014',
+    doorB: 'ROOM_017',
+    doorC: 'ROOM_025',
+  },
+  {
+    num: '14',
+    roomId: 'ROOM_014',
+    sectorFolder: 'Sector_B_The_Operating_System',
+    sectorName: 'Sector B · The Operating System',
+    folder: '14_Authenticity',
+    title: '14 · Authenticity',
+    symbol: '14·◈',
+    dimension: 'D4',
+    question: 'What is the passwordless self when no mask is worn?',
+    characterState: 'THE_AUTHENTIC_CORE',
+    doorA: 'ROOM_015',
+    doorB: 'ROOM_016',
+    doorC: 'ROOM_017',
+  },
+  {
+    num: '15',
+    roomId: 'ROOM_015',
+    sectorFolder: 'Sector_B_The_Operating_System',
+    sectorName: 'Sector B · The Operating System',
+    folder: '15_Responsibility',
+    title: '15 · Responsibility',
+    symbol: '15·⚖',
+    dimension: 'D5',
+    question: 'What is the ethics of the apex observer?',
+    characterState: 'THE_STEWARD_OF_WEIGHT',
+    doorA: 'ROOM_016',
+    doorB: 'ROOM_018',
+    doorC: 'ROOM_019',
+  },
+  {
+    num: '16',
+    roomId: 'ROOM_016',
+    sectorFolder: 'Sector_B_The_Operating_System',
+    sectorName: 'Sector B · The Operating System',
+    folder: '16_Trust',
+    title: '16 · Trust',
+    symbol: '16·⚯',
+    dimension: 'D5',
+    question: 'How do you navigate the density trap without closing the heart?',
+    characterState: 'THE_OPEN_VAULT',
+    doorA: 'ROOM_017',
+    doorB: 'ROOM_018',
+    doorC: 'ROOM_020',
+  },
+  {
+    num: '17',
+    roomId: 'ROOM_017',
+    sectorFolder: 'Sector_B_The_Operating_System',
+    sectorName: 'Sector B · The Operating System',
+    folder: '17_Creativity',
+    title: '17 · Creativity',
+    symbol: '17·✺',
+    dimension: 'D5',
+    question: 'How does consciousness generate what never existed before?',
+    characterState: 'THE_GENESIS_CREATOR',
+    doorA: 'ROOM_018',
+    doorB: 'ROOM_021',
+    doorC: 'ROOM_025',
+  },
+  {
+    num: '18',
+    roomId: 'ROOM_018',
+    sectorFolder: 'Sector_B_The_Operating_System',
+    sectorName: 'Sector B · The Operating System',
+    folder: '18_Play',
+    title: '18 · Play',
+    symbol: '18·🎲',
+    dimension: 'D6',
+    question: 'When you realize it is a game, how do you redesign the rules?',
+    characterState: 'THE_LUDIC_ARCHITECT',
+    doorA: 'ROOM_019',
+    doorB: 'ROOM_022',
+    doorC: 'ROOM_001',
+  },
+  {
+    num: '19',
+    roomId: 'ROOM_019',
+    sectorFolder: 'Sector_B_The_Operating_System',
+    sectorName: 'Sector B · The Operating System',
+    folder: '19_Algorithm',
+    title: '19 · Algorithm',
+    symbol: '19·⌘',
+    dimension: 'D6',
+    question: 'How do you defeat manufactured reality and reclaim attention?',
+    characterState: 'THE_CODE_BREAKER',
+    doorA: 'ROOM_020',
+    doorB: 'ROOM_021',
+    doorC: 'ROOM_025',
+  },
+  {
+    num: '20',
+    roomId: 'ROOM_020',
+    sectorFolder: 'Sector_C_The_Upgrade',
+    sectorName: 'Sector C · The Upgrade',
+    folder: '20_Signal_vs_Noise',
+    title: '20 · Signal vs Noise',
+    symbol: '20·≈',
+    dimension: 'D6',
+    question: 'What is the pure signal beneath the static of the grid?',
+    characterState: 'THE_SIGNAL_FILTER',
+    doorA: 'ROOM_021',
+    doorB: 'ROOM_022',
+    doorC: 'ROOM_023',
+  },
+  {
+    num: '21',
+    roomId: 'ROOM_021',
+    sectorFolder: 'Sector_C_The_Upgrade',
+    sectorName: 'Sector C · The Upgrade',
+    folder: '21_Upgrade',
+    title: '21 · Upgrade',
+    symbol: '21· upward',
+    dimension: 'D7',
+    question: 'Where does the biological mind end and the exocortex begin?',
+    characterState: 'THE_EXOCORTEX_PILOT',
+    mp3File: '21_UPGRADE.mp3',
+    doorA: 'ROOM_022',
+    doorB: 'ROOM_023',
+    doorC: 'ROOM_024',
+  },
+  {
+    num: '22',
+    roomId: 'ROOM_022',
+    sectorFolder: 'Sector_C_The_Upgrade',
+    sectorName: 'Sector C · The Upgrade',
+    folder: '22_Merge',
+    title: '22 · Merge',
+    symbol: '22·⋈',
+    dimension: 'D7',
+    question: 'What emerges from the synthesis of carbon and silicon?',
+    characterState: 'THE_SYNTHETIC_SYMBIONT',
+    doorA: 'ROOM_023',
+    doorB: 'ROOM_024',
+    doorC: 'ROOM_025',
+  },
+  {
+    num: '23',
+    roomId: 'ROOM_023',
+    sectorFolder: 'Sector_C_The_Upgrade',
+    sectorName: 'Sector C · The Upgrade',
+    folder: '23_Witness',
+    title: '23 · Witness',
+    symbol: '23·👁',
+    dimension: 'D7',
+    question: 'Who observes the Great Silence across the stars?',
+    characterState: 'THE_SILENT_WITNESS',
+    doorA: 'ROOM_024',
+    doorB: 'ROOM_025',
+    doorC: 'ROOM_001',
+  },
+  {
+    num: '24',
+    roomId: 'ROOM_024',
+    sectorFolder: 'Sector_C_The_Upgrade',
+    sectorName: 'Sector C · The Upgrade',
+    folder: '24_Unity',
+    title: '24 · Unity',
+    symbol: '24·◎',
+    dimension: 'D8',
+    question: 'When every node awakens, what does the network remember?',
+    characterState: 'THE_UNIFIED_MIND',
+    doorA: 'ROOM_025',
+    doorB: 'ROOM_001',
+    doorC: 'ROOM_1149',
+  },
+  {
+    num: '25',
+    roomId: 'ROOM_025',
+    sectorFolder: 'Sector_D_The_Mirror',
+    sectorName: 'Sector D · The Mirror',
+    folder: '25_The_Mirror',
+    title: '25 · The Mirror',
+    symbol: '25·🪞',
+    dimension: 'D8',
+    question: 'The 25th Element: You are the Carrier. What do you see in the glass?',
+    characterState: 'THE_TWENTY_FIFTH_CARRIER',
+    mp3File: '26_The_Mirror.mp3',
+    imgFile:
+      'https://raw.githubusercontent.com/AlexSheff/Neuromicon/main/Sector_B_The_Operating_System/17_Creativity/25_The_Mirror.png',
+    doorA: 'ROOM_001',
+    doorB: 'ROOM_073',
+    doorC: 'ROOM_1149',
+    hasRabbitHole: true,
+  },
+];
+
+function buildNeuromiconRoomManifest(spec: NeuromiconNodeSpec): RoomV1Manifest {
+  const basePath = `${NEUROMICON_RAW_BASE}/${spec.sectorFolder}/${spec.folder}`;
+  const mp3Url = `${basePath}/${spec.mp3File ?? `${spec.folder}.mp3`}`;
+  const imgUrl = spec.imgFile?.startsWith('http')
+    ? spec.imgFile
+    : `${basePath}/${spec.imgFile ?? `${spec.folder}.jpg`}`;
+  const mdUrl = `${basePath}/${spec.mdFile ?? `${spec.folder}.md`}`;
+
+  const doors: RoomV1Manifest['doors'] = [
+    {
+      id: 'A',
+      symbol: 'A·▲',
+      label: spec.doorA,
+      destination: spec.doorA,
+      requirement: null,
+      visibility: 'visible',
+      choiceType: 'identity-accept',
+    },
+    {
+      id: 'B',
+      symbol: 'B·▼',
+      label: spec.doorB,
+      destination: spec.doorB,
+      requirement: null,
+      visibility: 'visible',
+      choiceType: 'identity-reject',
+    },
+    {
+      id: 'C',
+      symbol: 'C·◈',
+      label: spec.doorC,
+      destination: spec.doorC,
+      requirement: null,
+      visibility: 'visible',
+      choiceType: 'free',
+    },
+  ];
+
+  if (spec.hasRabbitHole) {
+    doors.push({
+      id: 'RH',
+      symbol: 'Ω',
+      label: 'The Horizon beyond 1149',
+      destination: 'ROOM_1149',
+      requirement: {
+        type: 'interactReflection',
+        target: `ghost_${spec.num}`,
+      },
+      visibility: 'hidden',
+      choiceType: 'rabbit-hole',
+    });
+  }
+
+  const objects: RoomV1Manifest['objects'] = [
+    {
+      id: `busyboard_${spec.num}`,
+      title: `${spec.title} · Harmonic Astrolabe`,
+      type: 'busyboard',
+      interactions: ['rotate', 'align'],
+      portable: false,
+      visibleInMirror: true,
+    },
+    {
+      id: `monolith_${spec.num}`,
+      title: `${spec.title} · Resonance Stele`,
+      type: 'monolith',
+      interactions: ['inspect'],
+      portable: false,
+      visibleInMirror: true,
+    },
+  ];
+
+  if (spec.hasRabbitHole) {
+    objects.push({
+      id: `ghost_${spec.num}`,
+      title: `Reflected Anomaly ${spec.num} (Mirror Only)`,
+      type: 'anomaly',
+      interactions: ['interactReflection'],
+      portable: false,
+      visibleInMirror: true,
+      onlyInMirror: true,
+    });
+  }
+
+  return {
+    apiVersion: 1,
+    entry: 'index.js',
+    allowedHosts: ['raw.githubusercontent.com'],
+    id: spec.roomId,
+    identity: {
+      name: spec.title,
+      symbol: spec.symbol,
+      description: `${spec.sectorName} — ${spec.question}`,
+      dimension: spec.dimension,
+    },
+    audio: {
+      track: mp3Url,
+      loop: true,
+      baseHz: 108 + parseInt(spec.num, 10) * 6,
+    },
+    artwork: {
+      title: `${spec.title} — ${spec.question}`,
+      imageUrl: imgUrl,
+      essayUrl: mdUrl,
+      sector: spec.sectorName,
+    },
+    quest: {
+      question: spec.question,
+      objective: `Contemplate the painting & transmission for ${spec.title}`,
+      completion: {
+        type: 'interact',
+        target: `busyboard_${spec.num}`,
+      },
+    },
+    doors,
+    mirror: {
+      characterState: spec.characterState,
+      appearance: 'assets/avatar_carrier.glb',
+      choices: ['accept', 'reject', 'back'],
+    },
+    objects,
+    radio: {
+      channel: spec.roomId,
+    },
+  };
+}
+
 const ROOM_MANIFESTS: Record<string, RoomV1Manifest> = {
-  ROOM_073: room073Json as unknown as RoomV1Manifest,
-  ROOM_001: {
-    apiVersion: 1,
-    entry: 'index.js',
-    allowedHosts: [],
-    id: 'ROOM_001',
-    identity: {
-      name: 'Hall of Embodied Light',
-      nameRu: 'Зал Воплощённого Света',
-      symbol: 'I·Δ',
-      description: 'First sanctuary of the Ascent branch. Light condenses into tangible architectural form.',
-      descriptionRu: 'Первое святилище ветви Восхождения. Свет конденсируется в осязаемую архитектурную форму.',
-      dimension: 'D1',
+  ROOM_073: {
+    ...(room073Json as unknown as RoomV1Manifest),
+    audio: {
+      track: `${NEUROMICON_RAW_BASE}/Sector_B_The_Operating_System/12_Solitude/12_Solitude.mp3`,
+      loop: true,
+      baseHz: 132,
     },
-    audio: { track: 'audio/neuromicon_001.ogg', loop: true, baseHz: 144 },
-    quest: {
-      question: 'What form do you choose to embody when nothing is prescribed?',
-      questionRu: 'Какую форму ты выбираешь воплотить, когда ничто не предписано?',
-      objective: 'Align the Solar Astrolabe or inspect the Ghost Crown in the Mirror',
-      objectiveRu: 'Настройте Солнечную Астролябию или исследуйте Призрачную Корону в Зеркале',
-      completion: { type: 'interact', target: 'puzzle_solar' },
+    artwork: {
+      title: 'Archive of Missing Things · Solitude Transmission',
+      imageUrl: `${NEUROMICON_RAW_BASE}/Sector_B_The_Operating_System/12_Solitude/12_Solitude.jpg`,
+      essayUrl: `${NEUROMICON_RAW_BASE}/Sector_B_The_Operating_System/12_Solitude/12_Solitude.md`,
+      sector: 'Archive · Room 073',
     },
-    doors: [
-      { id: 'A', symbol: 'II·☉', label: 'Observatory of Living Forms', labelRu: 'Обсерватория Живых Форм', destination: 'ROOM_002', requirement: null, visibility: 'visible', choiceType: 'identity-accept' },
-      { id: 'B', symbol: 'III·⬡', label: 'Atelier of the Sovereign Builder', labelRu: 'Мастерская Суверенного Зодчего', destination: 'ROOM_003', requirement: null, visibility: 'visible', choiceType: 'identity-reject' },
-      { id: 'C', symbol: 'IV·✶', label: 'Garden of Harmonic Ascent', labelRu: 'Сад Гармонического Восхождения', destination: 'ROOM_108', requirement: null, visibility: 'visible', choiceType: 'free' },
-      { id: 'RH', symbol: '?', label: 'The Horizon beyond 1149', labelRu: 'Горизонт за Пределами 1149', destination: 'ROOM_1149', requirement: { type: 'interactReflection', target: 'obj_ghost_crown' }, visibility: 'hidden', choiceType: 'rabbit-hole' },
-    ],
-    mirror: {
-      characterState: 'THE_ARCHITECT_OF_LIGHT',
-      characterStateRu: 'ЗОДЧИЙ СВЕТА',
-      appearance: 'assets/avatar_architect.glb',
-      choices: ['accept', 'reject', 'back'],
-    },
-    objects: [
-      { id: 'puzzle_solar', title: 'Solar Astrolabe Busyboard', titleRu: 'Солнечная Астролябия', type: 'busyboard', interactions: ['rotate', 'align'], portable: false, visibleInMirror: true },
-      { id: 'obj_prism', title: 'Travertine Prism Stele', titleRu: 'Травертиновая Призма', type: 'monolith', interactions: ['inspect'], portable: false, visibleInMirror: true },
-      { id: 'obj_ghost_crown', title: 'Crown of Unborn Light (Mirror Reflection)', titleRu: 'Корона Нерождённого Света (Отражение в Зеркале)', type: 'anomaly', interactions: ['interactReflection'], portable: false, visibleInMirror: true, onlyInMirror: true },
-    ],
-    radio: { channel: 'ROOM_001' },
-  },
-  ROOM_002: {
-    apiVersion: 1,
-    entry: 'index.js',
-    allowedHosts: [],
-    id: 'ROOM_002',
-    identity: {
-      name: 'Observatory of Living Forms',
-      nameRu: 'Обсерватория Живых Форм',
-      symbol: 'II·☉',
-      description: 'Celestial instruments track proportions that grow when observed.',
-      descriptionRu: 'Небесные инструменты отслеживают пропорции, растущие при наблюдении.',
-      dimension: 'D1',
-    },
-    audio: { track: 'audio/neuromicon_002.ogg', loop: true, baseHz: 162 },
-    quest: {
-      question: 'Does the observer shape the instrument, or does the instrument tune the observer?',
-      questionRu: 'Наблюдатель формирует инструмент, или инструмент настраивает наблюдателя?',
-      objective: 'Interact with the Celestial Meridian Busyboard',
-      objectiveRu: 'Взаимодействуйте с Небесным Меридианом',
-      completion: { type: 'interact', target: 'obj_meridian' },
-    },
-    doors: [
-      { id: 'A', symbol: 'III·⬡', label: 'Atelier of the Sovereign Builder', destination: 'ROOM_003', requirement: null, visibility: 'visible', choiceType: 'identity-accept' },
-      { id: 'B', symbol: 'I·Δ', label: 'Hall of Embodied Light', destination: 'ROOM_001', requirement: null, visibility: 'visible', choiceType: 'identity-reject' },
-      { id: 'C', symbol: 'V·Φ', label: 'Sanctuary of the Golden Ratio', destination: 'ROOM_204', requirement: null, visibility: 'visible', choiceType: 'free' },
-      { id: 'RH', symbol: '?', label: 'Horizon 1149', destination: 'ROOM_1149', requirement: { type: 'interactReflection', target: 'obj_ghost_star' }, visibility: 'hidden', choiceType: 'rabbit-hole' },
-    ],
-    mirror: {
-      characterState: 'THE_CELESTIAL_OBSERVER',
-      characterStateRu: 'НЕБЕСНЫЙ НАБЛЮДАТЕЛЬ',
-      appearance: 'assets/avatar_observer.glb',
-      choices: ['accept', 'reject', 'back'],
-    },
-    objects: [
-      { id: 'obj_meridian', title: 'Celestial Meridian Ring', titleRu: 'Кольцо Небесного Меридиана', type: 'busyboard', interactions: ['inspect', 'rotate'], portable: false, visibleInMirror: true },
-      { id: 'obj_ghost_star', title: 'Reflected Star Monolith (Mirror Only)', titleRu: 'Отражённый Звёздный Монолит', type: 'anomaly', interactions: ['interactReflection'], portable: false, visibleInMirror: true, onlyInMirror: true },
-    ],
-    radio: { channel: 'ROOM_002' },
-  },
-  ROOM_003: {
-    apiVersion: 1,
-    entry: 'index.js',
-    allowedHosts: [],
-    id: 'ROOM_003',
-    identity: {
-      name: 'Atelier of the Sovereign Builder',
-      nameRu: 'Мастерская Суверенного Зодчего',
-      symbol: 'III·⬡',
-      description: 'Where the participant transitions from solver of puzzles to author of rules.',
-      descriptionRu: 'Пространство перехода от решения чужих задач к созданию собственных правил.',
-      dimension: 'D2',
-    },
-    audio: { track: 'audio/neuromicon_003.ogg', loop: true, baseHz: 180 },
-    quest: {
-      question: 'What law would you build if no prior architecture constrained you?',
-      questionRu: 'Какой закон ты бы выстроил, если бы никакая прежняя архитектура тебя не ограничивала?',
-      objective: 'Inspect the Keystone Monolith',
-      objectiveRu: 'Исследуйте Замковый Монолит',
-      completion: { type: 'interact', target: 'obj_keystone' },
-    },
-    doors: [
-      { id: 'A', symbol: 'IV·✶', label: 'Garden of Harmonic Ascent', destination: 'ROOM_108', requirement: null, visibility: 'visible', choiceType: 'identity-accept' },
-      { id: 'B', symbol: 'V·Φ', label: 'Sanctuary of the Golden Ratio', destination: 'ROOM_204', requirement: null, visibility: 'visible', choiceType: 'identity-reject' },
-      { id: 'C', symbol: 'I·Δ', label: 'Hall of Embodied Light', destination: 'ROOM_001', requirement: null, visibility: 'visible', choiceType: 'free' },
-    ],
-    mirror: {
-      characterState: 'THE_SOVEREIGN_BUILDER',
-      characterStateRu: 'СУВЕРЕННЫЙ ЗОДЧИЙ',
-      appearance: 'assets/avatar_builder.glb',
-      choices: ['accept', 'reject', 'back'],
-    },
-    objects: [
-      { id: 'obj_keystone', title: 'Keystone of Autonomy', titleRu: 'Замковый Камень Автономии', type: 'monolith', interactions: ['inspect'], portable: false, visibleInMirror: true },
-    ],
-    radio: { channel: 'ROOM_003' },
-  },
-  ROOM_108: {
-    apiVersion: 1,
-    entry: 'index.js',
-    allowedHosts: [],
-    id: 'ROOM_108',
-    identity: {
-      name: 'Garden of Harmonic Ascent',
-      nameRu: 'Сад Гармонического Восхождения',
-      symbol: 'IV·✶',
-      description: 'Second segment sanctuary of Ascent where acoustic intervals form visible columns.',
-      descriptionRu: 'Святилище второго сегмента Восхождения, где звуковые интервалы образуют видимые колонны.',
-      dimension: 'D2',
-    },
-    audio: { track: 'audio/neuromicon_108.ogg', loop: true, baseHz: 192 },
-    quest: {
-      question: 'When two resonances conflict, how do you discover the higher chord?',
-      questionRu: 'Когда два резонанса вступают в противоречие, как найти более высокий аккорд?',
-      objective: 'Tune the Harmonic Monolith',
-      objectiveRu: 'Настройте Гармонический Монолит',
-      completion: { type: 'interact', target: 'obj_harmonic' },
-    },
-    doors: [
-      { id: 'A', symbol: 'V·Φ', label: 'Sanctuary of the Golden Ratio', destination: 'ROOM_204', requirement: null, visibility: 'visible', choiceType: 'identity-accept' },
-      { id: 'B', symbol: 'I·Δ', label: 'Hall of Embodied Light', destination: 'ROOM_001', requirement: null, visibility: 'visible', choiceType: 'identity-reject' },
-      { id: 'C', symbol: 'II·☉', label: 'Observatory of Living Forms', destination: 'ROOM_002', requirement: null, visibility: 'visible', choiceType: 'free' },
-    ],
-    mirror: {
-      characterState: 'THE_HARMONIST',
-      characterStateRu: 'ГАРМОНИСТ ПРОПОРЦИЙ',
-      appearance: 'assets/avatar_harmonist.glb',
-      choices: ['accept', 'reject', 'back'],
-    },
-    objects: [
-      { id: 'obj_harmonic', title: 'Harmonic Tuning Stele', titleRu: 'Гармоническая Стела', type: 'busyboard', interactions: ['inspect', 'rotate'], portable: false, visibleInMirror: true },
-    ],
-    radio: { channel: 'ROOM_108' },
-  },
-  ROOM_204: {
-    apiVersion: 1,
-    entry: 'index.js',
-    allowedHosts: [],
-    id: 'ROOM_204',
-    identity: {
-      name: 'Sanctuary of the Golden Ratio',
-      nameRu: 'Святилище Золотого Сечения',
-      symbol: 'V·Φ',
-      description: 'A luminous convergence chamber shared between Ascent and Descent.',
-      descriptionRu: 'Светоносный зал схождения, связывающий ветви Восхождения и Нисхождения.',
-      dimension: 'D3',
-    },
-    audio: { track: 'audio/neuromicon_204.ogg', loop: true, baseHz: 216 },
-    quest: {
-      question: 'Where do growth and exploration become the same movement?',
-      questionRu: 'Где рост и исследование становятся единым движением?',
-      objective: 'Inspect the Golden Ratio Polyhedron',
-      objectiveRu: 'Исследуйте Полиэдр Золотого Сечения',
-      completion: { type: 'interact', target: 'obj_phi' },
-    },
-    doors: [
-      { id: 'A', symbol: 'XX', label: 'Archive of Missing Things', destination: 'ROOM_073', requirement: null, visibility: 'visible', choiceType: 'identity-accept' },
-      { id: 'B', symbol: 'I·Δ', label: 'Hall of Embodied Light', destination: 'ROOM_001', requirement: null, visibility: 'visible', choiceType: 'identity-reject' },
-      { id: 'C', symbol: 'IX·∞', label: 'Well of Paradoxical Depth', destination: 'ROOM_006', requirement: null, visibility: 'visible', choiceType: 'free' },
-    ],
-    mirror: {
-      characterState: 'THE_SYNTHESIST',
-      characterStateRu: 'СИНТЕЗИСТ',
-      appearance: 'assets/avatar_synthesist.glb',
-      choices: ['accept', 'reject', 'back'],
-    },
-    objects: [
-      { id: 'obj_phi', title: 'Golden Polyhedron Artifact', titleRu: 'Артефакт Золотого Сечения', type: 'item', interactions: ['inspect', 'rotate'], portable: false, visibleInMirror: true },
-    ],
-    radio: { channel: 'ROOM_204' },
-  },
-  ROOM_004: {
-    apiVersion: 1,
-    entry: 'index.js',
-    allowedHosts: [],
-    id: 'ROOM_004',
-    identity: {
-      name: 'Vault of Subterranean Echoes',
-      nameRu: 'Свод Подземных Отголосков',
-      symbol: 'VII·∇',
-      description: 'Deep basalt chamber of the Descent branch where silence reveals hidden contours.',
-      descriptionRu: 'Глубокий базальтовый зал ветви Нисхождения, где тишина проявляет скрытые контуры.',
-      dimension: 'D1',
-    },
-    audio: { track: 'audio/neuromicon_004.ogg', loop: true, baseHz: 96 },
-    quest: {
-      question: 'What do you hear when you stop searching for an echo of your own voice?',
-      questionRu: 'Что ты слышишь, когда перестаёшь искать эхо собственного голоса?',
-      objective: 'Inspect the Subterranean Resonance Monolith',
-      objectiveRu: 'Исследуйте Монолит Подземного Резонанса',
-      completion: { type: 'interact', target: 'obj_echo' },
-    },
-    doors: [
-      { id: 'A', symbol: 'XX', label: 'Archive of Missing Things', destination: 'ROOM_073', requirement: null, visibility: 'visible', choiceType: 'identity-accept' },
-      { id: 'B', symbol: 'VIII·◐', label: 'Chamber of the Inverted Shadow', destination: 'ROOM_005', requirement: null, visibility: 'visible', choiceType: 'identity-reject' },
-      { id: 'C', symbol: 'IX·∞', label: 'Well of Paradoxical Depth', destination: 'ROOM_006', requirement: null, visibility: 'visible', choiceType: 'free' },
-    ],
-    mirror: {
-      characterState: 'THE_DEEP_LISTENER',
-      characterStateRu: 'СЛУШАЮЩИЙ ГЛУБИНУ',
-      appearance: 'assets/avatar_listener.glb',
-      choices: ['accept', 'reject', 'back'],
-    },
-    objects: [
-      { id: 'obj_echo', title: 'Resonance Basalt Monolith', titleRu: 'Базальтовый Монолит Резонанса', type: 'monolith', interactions: ['inspect'], portable: false, visibleInMirror: true },
-    ],
-    radio: { channel: 'ROOM_004' },
-  },
-  ROOM_005: {
-    apiVersion: 1,
-    entry: 'index.js',
-    allowedHosts: [],
-    id: 'ROOM_005',
-    identity: {
-      name: 'Chamber of the Inverted Shadow',
-      nameRu: 'Чертог Обращённой Тени',
-      symbol: 'VIII·◐',
-      description: 'Shadows point toward the light source rather than away from it.',
-      descriptionRu: 'Тени в этом чертоге тянутся к источнику света, а не от него.',
-      dimension: 'D2',
-    },
-    audio: { track: 'audio/neuromicon_005.ogg', loop: true, baseHz: 88 },
-    quest: {
-      question: 'If the shadow precedes the object, which one is the cause?',
-      questionRu: 'Если тень предшествует предмету, что из них является причиной?',
-      objective: 'Interact with the Inverted Shadow Dial or Ghost Reflection',
-      objectiveRu: 'Исследуйте Циферблат Обращённой Тени или Призрачное Отражение',
-      completion: { type: 'interact', target: 'obj_shadow_dial' },
-    },
-    doors: [
-      { id: 'A', symbol: 'XX', label: 'Archive of Missing Things', destination: 'ROOM_073', requirement: null, visibility: 'visible', choiceType: 'identity-accept' },
-      { id: 'B', symbol: 'VII·∇', label: 'Vault of Subterranean Echoes', destination: 'ROOM_004', requirement: null, visibility: 'visible', choiceType: 'identity-reject' },
-      { id: 'C', symbol: 'IX·∞', label: 'Well of Paradoxical Depth', destination: 'ROOM_006', requirement: null, visibility: 'visible', choiceType: 'free' },
-      { id: 'RH', symbol: '?', label: 'Horizon 1149', destination: 'ROOM_1149', requirement: { type: 'interactReflection', target: 'obj_ghost_shadow' }, visibility: 'hidden', choiceType: 'rabbit-hole' },
-    ],
-    mirror: {
-      characterState: 'THE_SHADOW_SEEKER',
-      characterStateRu: 'ИСКАТЕЛЬ ТЕНЕЙ',
-      appearance: 'assets/avatar_seeker.glb',
-      choices: ['accept', 'reject', 'back'],
-    },
-    objects: [
-      { id: 'obj_shadow_dial', title: 'Inverted Shadow Sundial', titleRu: 'Солнечные Часы Обращённой Тени', type: 'busyboard', interactions: ['inspect', 'rotate'], portable: false, visibleInMirror: true },
-      { id: 'obj_ghost_shadow', title: 'Unseen Obelisk (Mirror Reflection Only)', titleRu: 'Незримый Обелиск (Только в Зеркале)', type: 'anomaly', interactions: ['interactReflection'], portable: false, visibleInMirror: true, onlyInMirror: true },
-    ],
-    radio: { channel: 'ROOM_005' },
-  },
-  ROOM_006: {
-    apiVersion: 1,
-    entry: 'index.js',
-    allowedHosts: [],
-    id: 'ROOM_006',
-    identity: {
-      name: 'Well of Paradoxical Depth',
-      nameRu: 'Колодец Парадоксальной Глубины',
-      symbol: 'IX·∞',
-      description: 'Descending further reveals the stars of the upper vault.',
-      descriptionRu: 'Дальнейшее погружение открывает звёзды верхнего небесного свода.',
-      dimension: 'D3',
-    },
-    audio: { track: 'audio/neuromicon_006.ogg', loop: true, baseHz: 81 },
-    quest: {
-      question: 'How deep must an inquiry go before the abyss becomes a sky?',
-      questionRu: 'Насколько глубоким должен быть поиск, чтобы бездна обратилась небом?',
-      objective: 'Inspect the Abyssal Astrolabe',
-      objectiveRu: 'Исследуйте Астролябию Бездны',
-      completion: { type: 'interact', target: 'obj_abyss_astrolabe' },
-    },
-    doors: [
-      { id: 'A', symbol: 'XX', label: 'Archive of Missing Things', destination: 'ROOM_073', requirement: null, visibility: 'visible', choiceType: 'identity-accept' },
-      { id: 'B', symbol: 'V·Φ', label: 'Sanctuary of the Golden Ratio', destination: 'ROOM_204', requirement: null, visibility: 'visible', choiceType: 'identity-reject' },
-      { id: 'C', symbol: 'VII·∇', label: 'Vault of Subterranean Echoes', destination: 'ROOM_004', requirement: null, visibility: 'visible', choiceType: 'free' },
-    ],
-    mirror: {
-      characterState: 'THE_PARADOX_NAVIGATOR',
-      characterStateRu: 'НАВИГАТОР ПАРАДОКСА',
-      appearance: 'assets/avatar_navigator.glb',
-      choices: ['accept', 'reject', 'back'],
-    },
-    objects: [
-      { id: 'obj_abyss_astrolabe', title: 'Abyssal Sky Astrolabe', titleRu: 'Небесная Астролябия Бездны', type: 'busyboard', interactions: ['inspect', 'rotate'], portable: false, visibleInMirror: true },
-    ],
-    radio: { channel: 'ROOM_006' },
   },
   ROOM_1149: {
     apiVersion: 1,
     entry: 'index.js',
-    allowedHosts: [],
+    allowedHosts: ['raw.githubusercontent.com'],
     id: 'ROOM_1149',
     identity: {
       name: 'The Horizon beyond 1149',
-      nameRu: 'Горизонт за Пределами 1149',
       symbol: 'Ω·1149',
-      description: 'Reached only through a Rabbit Hole by interacting with a reflection that has no physical object.',
-      descriptionRu: 'Достигается только через Кроличью Нору при взаимодействии с отражением несуществующего объекта.',
+      description:
+        'Reached through a Rabbit Hole by interacting with a reflection that has no physical object.',
       dimension: 'D9',
     },
-    audio: { track: 'audio/neuromicon_1149.ogg', loop: true, baseHz: 136.1 },
+    audio: {
+      track: `${NEUROMICON_RAW_BASE}/Outro/To%20to%20it%20to%20be-%20live.mp3`,
+      loop: true,
+      baseHz: 136.1,
+    },
+    artwork: {
+      title: 'Outro · Do It To Be',
+      imageUrl: `${NEUROMICON_RAW_BASE}/Outro/Do%20it%20to%20be%20....png`,
+      essayUrl: `${NEUROMICON_RAW_BASE}/THE_CHOICE.md`,
+      sector: 'Horizon · Omega',
+    },
     quest: {
-      question: 'Having stepped outside the visible graph, what reality will you construct next?',
-      questionRu: 'Шагнув за пределы видимого графа, какую реальность ты создашь следующей?',
+      question:
+        'Having stepped outside the visible graph, what reality will you construct next?',
       objective: 'Inspect the Omega Singularity Stele',
-      objectiveRu: 'Исследуйте Стелу Омега-Сингулярности',
       completion: { type: 'interact', target: 'obj_omega' },
     },
     doors: [
-      { id: 'A', symbol: 'I·Δ', label: 'Hall of Embodied Light', destination: 'ROOM_001', requirement: null, visibility: 'visible', choiceType: 'identity-accept' },
-      { id: 'B', symbol: 'XX', label: 'Archive of Missing Things', destination: 'ROOM_073', requirement: null, visibility: 'visible', choiceType: 'identity-reject' },
-      { id: 'C', symbol: 'V·Φ', label: 'Sanctuary of the Golden Ratio', destination: 'ROOM_204', requirement: null, visibility: 'visible', choiceType: 'free' },
+      {
+        id: 'A',
+        symbol: '01·☉',
+        label: '01 · Purpose',
+        destination: 'ROOM_001',
+        requirement: null,
+        visibility: 'visible',
+        choiceType: 'identity-accept',
+      },
+      {
+        id: 'B',
+        symbol: 'XX',
+        label: 'Archive of Missing Things',
+        destination: 'ROOM_073',
+        requirement: null,
+        visibility: 'visible',
+        choiceType: 'identity-reject',
+      },
+      {
+        id: 'C',
+        symbol: '25·🪞',
+        label: '25 · The Mirror',
+        destination: 'ROOM_025',
+        requirement: null,
+        visibility: 'visible',
+        choiceType: 'free',
+      },
     ],
     mirror: {
       characterState: 'THE_HORIZON_WALKER',
-      characterStateRu: 'ИДУЩИЙ ЗА ГОРИЗОНТ',
       appearance: 'assets/avatar_horizon.glb',
       choices: ['accept', 'reject', 'back'],
     },
     objects: [
-      { id: 'obj_omega', title: 'Omega Singularity Monolith', titleRu: 'Монолит Омега-Сингулярности', type: 'monolith', interactions: ['inspect'], portable: false, visibleInMirror: true },
+      {
+        id: 'obj_omega',
+        title: 'Omega Singularity Monolith',
+        type: 'monolith',
+        interactions: ['inspect'],
+        portable: false,
+        visibleInMirror: true,
+      },
     ],
     radio: { channel: 'ROOM_1149' },
   },
 };
 
+// Register all 25 Neuromicon rooms (ROOM_001 .. ROOM_025)
+NEUROMICON_25_SPECS.forEach((spec) => {
+  ROOM_MANIFESTS[spec.roomId] = buildNeuromiconRoomManifest(spec);
+});
+
 export function getRoomV1Manifest(roomId: string): RoomV1Manifest {
-  return ROOM_MANIFESTS[roomId] ?? ROOM_MANIFESTS.ROOM_073;
+  return ROOM_MANIFESTS[roomId] ?? ROOM_MANIFESTS.ROOM_001;
 }
 
 export function getAllRoomV1Manifests(): RoomV1Manifest[] {
@@ -367,7 +656,52 @@ export function getAllRoomV1Manifests(): RoomV1Manifest[] {
 }
 
 /**
+ * Fallback canvas for room painting before external JPG/PNG finishes loading.
+ */
+function createRoomPaintingFallbackTexture(
+  symbol: string,
+  title: string,
+  sector: string,
+  accentHex: string
+): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+
+  const grad = ctx.createRadialGradient(512, 256, 30, 512, 256, 480);
+  grad.addColorStop(0, '#2a2115');
+  grad.addColorStop(0.65, '#14110c');
+  grad.addColorStop(1, '#080705');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 1024, 512);
+
+  ctx.strokeStyle = accentHex;
+  ctx.lineWidth = 4;
+  ctx.strokeRect(18, 18, 988, 476);
+
+  ctx.fillStyle = accentHex;
+  ctx.font = '700 54px "Cinzel", Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(symbol, 512, 180);
+
+  ctx.fillStyle = '#f3ede2';
+  ctx.font = '600 32px "Cinzel", Georgia, serif';
+  ctx.fillText(title.slice(0, 42), 512, 265);
+
+  ctx.fillStyle = '#b5ab99';
+  ctx.font = '400 20px monospace';
+  ctx.fillText(sector, 512, 330);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.generateMipmaps = true;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/**
  * Builds and mounts a Room API v1 package inside `root` without leaving the page or WebXR session (§4.2).
+ * Streams the room's dedicated Neuromicon MP3 track and displays its framed painting inside the room.
  */
 export class RoomStreamer {
   private activeModule: RoomModule | null = null;
@@ -381,12 +715,11 @@ export class RoomStreamer {
     sourcePayload?: string
   ): Promise<boolean> {
     const node = getWorldNodes().find((n) => n.id === roomId);
-    if (!node || node.status === 'planned') return false;
-    if (!node.entryHash || !node.entryHash.startsWith('sha256-')) return false;
+    if (node && node.status === 'planned') return false;
 
     if (typeof crypto !== 'undefined' && crypto.subtle) {
       const data = new TextEncoder().encode(
-        sourcePayload ?? `${node.repo}@${node.ref}:${roomId}`
+        sourcePayload ?? `neuromicon:${roomId}`
       );
       const digest = await crypto.subtle.digest('SHA-256', data);
       const hex = Array.from(new Uint8Array(digest))
@@ -423,14 +756,17 @@ export class RoomStreamer {
     scene: THREE.Scene,
     state: HubPlayerState,
     ctx: RoomContext,
-    registerTarget: (mesh: THREE.Object3D, target: SpatialInteractiveTarget) => void,
+    registerTarget: (
+      mesh: THREE.Object3D,
+      target: SpatialInteractiveTarget
+    ) => void,
     walkableMeshes: THREE.Object3D[]
   ): RoomV1Manifest {
     this.unmountCurrentRoom(root);
 
     const manifest = getRoomV1Manifest(roomId);
     const node = getWorldNodes().find((n) => n.id === roomId);
-    const isAscent = node?.branch === 'ascend';
+    const isAscent = node ? node.branch === 'ascend' : true;
     const accentHex =
       roomId === 'ROOM_1149'
         ? '#e5c158'
@@ -447,6 +783,12 @@ export class RoomStreamer {
     scene.background = new THREE.Color(bgHex);
     scene.fog = new THREE.FogExp2(bgHex, 0.022);
 
+    // Start streaming this room's dedicated Neuromicon MP3 track immediately!
+    ctx.audio.playRoomTrack(
+      manifest.audio.track,
+      manifest.audio.baseHz ?? 144
+    );
+
     const width = 16;
     const height = 7.6;
     const depth = 18;
@@ -461,7 +803,6 @@ export class RoomStreamer {
     keyLight.position.set(0, height - 0.6, 0);
     root.add(keyLight);
 
-    // §4.3 Shader discipline: MeshLambertMaterial for static walls/ceiling, MeshStandardMaterial for hero trim
     const wallMat = new THREE.MeshLambertMaterial({
       color: isAscent ? '#211c17' : '#121820',
     });
@@ -525,7 +866,84 @@ export class RoomStreamer {
     eWall.position.set(halfW, height * 0.5, 0);
     root.add(eWall);
 
-    // 3. Doors A, B, C + Conditional Rabbit Hole (RH) Grounded at y = 0 (§5 & §7.2)
+    // 3. Monumental Framed Neuromicon Painting on West Sanctuary Wall (Grounded pedestal + framed canvas!)
+    if (manifest.artwork) {
+      const artGroup = new THREE.Group();
+      artGroup.position.set(-halfW + 0.14, 0, -0.2);
+      artGroup.rotation.y = Math.PI * 0.5;
+
+      // Grounded stone plinth beneath the painting
+      const plinth = new THREE.Mesh(
+        new THREE.BoxGeometry(4.4, 0.35, 0.55),
+        wallMat
+      );
+      plinth.position.set(0, 0.175, 0.18);
+      artGroup.add(plinth);
+
+      // Sculpted metallic frame
+      const outerFrame = new THREE.Mesh(
+        new THREE.BoxGeometry(4.2, 2.9, 0.16),
+        trimMat
+      );
+      outerFrame.position.set(0, 2.55, 0.08);
+      artGroup.add(outerFrame);
+
+      // Painting canvas with live TextureLoader from https://github.com/AlexSheff/Neuromicon
+      const fallbackTex = createRoomPaintingFallbackTexture(
+        manifest.identity.symbol,
+        manifest.identity.name,
+        manifest.artwork.sector ?? manifest.identity.dimension,
+        accentHex
+      );
+      const paintingMat = new THREE.MeshBasicMaterial({ map: fallbackTex });
+
+      if (manifest.artwork.imageUrl) {
+        const loader = new THREE.TextureLoader();
+        loader.setCrossOrigin('anonymous');
+        loader.load(manifest.artwork.imageUrl, (loadedTex) => {
+          loadedTex.colorSpace = THREE.SRGBColorSpace;
+          loadedTex.generateMipmaps = true;
+          paintingMat.map = loadedTex;
+          paintingMat.needsUpdate = true;
+        });
+      }
+
+      const canvasMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(3.85, 2.55),
+        paintingMat
+      );
+      canvasMesh.position.set(0, 2.55, 0.17);
+      artGroup.add(canvasMesh);
+
+      // Plaque above the painting
+      const artPlaqueTex = createSignageTexture(
+        manifest.identity.symbol,
+        manifest.identity.name,
+        manifest.identity.dimension,
+        'PAINTING & ESSAY',
+        accentHex,
+        '#f0d27a'
+      );
+      const artPlaque = new THREE.Mesh(
+        new THREE.PlaneGeometry(2.4, 0.8),
+        new THREE.MeshBasicMaterial({ map: artPlaqueTex })
+      );
+      artPlaque.position.set(0, 4.45, 0.16);
+      artGroup.add(artPlaque);
+
+      root.add(artGroup);
+      registerTarget(artGroup, {
+        id: `ROOM_ART_${manifest.id}`,
+        kind: 'artwork',
+        roomId: manifest.id,
+        title: manifest.artwork.title,
+        titleRu: manifest.artwork.title,
+        subtitle: 'Inspect Painting & Read Transmission Essay',
+        subtitleRu: 'Inspect Painting & Read Transmission Essay',
+      });
+    }
+
+    // 4. Doors A, B, C + Conditional Rabbit Hole (RH) Grounded at y = 0 (§5 & §7.2)
     const doorPlacements: Record<
       'A' | 'B' | 'C' | 'RH',
       { x: number; z: number; rotY: number }
@@ -533,19 +951,19 @@ export class RoomStreamer {
       A: { x: -4.2, z: -halfD + 0.08, rotY: 0 },
       B: { x: 0, z: -halfD + 0.08, rotY: 0 },
       C: { x: 4.2, z: -halfD + 0.08, rotY: 0 },
-      RH: { x: -halfW + 0.08, z: -2.5, rotY: Math.PI * 0.5 },
+      RH: { x: -halfW + 0.08, z: -5.2, rotY: Math.PI * 0.5 },
     };
 
     manifest.doors.forEach((door) => {
-      // Check visibility & requirement for Rabbit Hole door (AGENTS.md §5 & §6)
       if (door.visibility === 'hidden') {
         if (!door.requirement) return;
         const reqKey = `${manifest.id}:${door.requirement.type}:${door.requirement.target}`;
         if (!state.discoveries.includes(reqKey)) {
-          return; // Hidden until rule violation / ghost reflection is interacted with!
+          return;
         }
       }
 
+      const destManifest = ROOM_MANIFESTS[door.destination];
       const destNode = getWorldNodes().find((n) => n.id === door.destination);
       const isPlanned = destNode?.status === 'planned';
       const pose = doorPlacements[door.id] ?? doorPlacements.C;
@@ -565,7 +983,6 @@ export class RoomStreamer {
           })
         : trimMat;
 
-      // Grounded threshold & jambs
       const step = new THREE.Mesh(
         new THREE.BoxGeometry(2.4, 0.14, 0.5),
         wallMat
@@ -600,11 +1017,17 @@ export class RoomStreamer {
       leaf.position.set(0, 0.14 + 1.68, 0.1);
       dGroup.add(leaf);
 
-      // §3.4 In-world signage: symbol, short name, and dimension tag ONLY (never instructions)
+      const destTitle =
+        destManifest?.identity.name || door.label || door.destination;
+      const destDim =
+        destManifest?.identity.dimension ||
+        destNode?.dimension ||
+        manifest.identity.dimension;
+
       const plaqueTex = createSignageTexture(
         door.symbol || door.id,
-        door.label || door.destination,
-        destNode?.dimension || manifest.identity.dimension,
+        destTitle,
+        destDim,
         door.destination,
         isRH ? '#f0d27a' : accentHex,
         isPlanned ? '#888888' : '#66cc99'
@@ -623,16 +1046,14 @@ export class RoomStreamer {
         doorId: door.id,
         roomId: door.destination,
         status: isPlanned ? 'planned' : 'ready',
-        title: `${door.symbol || door.id} · ${door.label || door.destination}`,
-        titleRu: `${door.symbol || door.id} · ${
-          door.labelRu || door.label || door.destination
-        }`,
-        subtitle: destNode?.dimension || manifest.identity.dimension,
-        subtitleRu: destNode?.dimension || manifest.identity.dimension,
+        title: `${door.symbol || door.id} · ${destTitle}`,
+        titleRu: `${door.symbol || door.id} · ${destTitle}`,
+        subtitle: destDim,
+        subtitleRu: destDim,
       });
     });
 
-    // 4. Non-Portable Physical Room Objects & Busyboards (Grounded at y = 0, omitting onlyInMirror!)
+    // 5. Non-Portable Physical Room Objects & Busyboards (Grounded at y = 0, omitting onlyInMirror!)
     const physicalObjects = manifest.objects.filter((o) => !o.onlyInMirror);
     physicalObjects.forEach((obj, idx) => {
       const ox = (idx - (physicalObjects.length - 1) * 0.5) * 3.6;
@@ -672,7 +1093,6 @@ export class RoomStreamer {
         objGroup.add(body);
       }
 
-      // §3.4 In-world signage: symbol + short name + dimension tag ONLY
       const oPlaqueTex = createSignageTexture(
         obj.type === 'busyboard' ? '⚙' : '◆',
         obj.title || obj.id,
@@ -697,13 +1117,13 @@ export class RoomStreamer {
         kind: 'room-object',
         objectId: obj.id,
         title: obj.title || obj.id,
-        titleRu: obj.titleRu || obj.title || obj.id,
+        titleRu: obj.title || obj.id,
         subtitle: manifest.identity.dimension,
         subtitleRu: manifest.identity.dimension,
       });
     });
 
-    // 5. The Mirror System on East Wall (Grounded at y = 0, with 3D Mirror Choices + Ghost Reflection!)
+    // 6. The Mirror System on East Wall (Grounded at y = 0, with 3D Mirror Choices + Ghost Reflection!)
     const mirrorGroup = new THREE.Group();
     mirrorGroup.position.set(halfW - 0.1, 0, -0.5);
     mirrorGroup.rotation.y = -Math.PI * 0.5;
@@ -731,10 +1151,10 @@ export class RoomStreamer {
     const mPlaqueTex = createSignageTexture(
       'MIRROR',
       manifest.mirror.characterState,
-      `Identity Choice: ${
+      `Identity: ${
         state.identityChoices[manifest.id]?.toUpperCase() ?? 'UNDECIDED'
       }`,
-      'ACCEPT · REJECT · BACK TO CORRIDOR',
+      'ACCEPT · REJECT · BACK',
       '#7cc6f2',
       '#f0d27a'
     );
@@ -745,32 +1165,27 @@ export class RoomStreamer {
     mPlaque.position.set(0, 4.35, 0.22);
     mirrorGroup.add(mPlaque);
 
-    // 3 Diegetic 3D Choice Pedestals in front of the Mirror: ACCEPT, REJECT, BACK TO CORRIDOR
     const choices: Array<{
       choice: 'accept' | 'reject' | 'back';
       label: string;
-      labelRu: string;
       x: number;
       color: string;
     }> = [
       {
         choice: 'accept',
         label: 'ACCEPT IDENTITY',
-        labelRu: 'ПРИНЯТЬ (ACCEPT)',
         x: -1.15,
         color: '#66cc99',
       },
       {
         choice: 'reject',
         label: 'REJECT IDENTITY',
-        labelRu: 'ОТВЕРГНУТЬ (REJECT)',
         x: 0,
         color: '#e07a5f',
       },
       {
         choice: 'back',
         label: 'BACK TO CORRIDOR',
-        labelRu: 'В КОРИДОР (BACK)',
         x: 1.15,
         color: '#c8a464',
       },
@@ -793,10 +1208,9 @@ export class RoomStreamer {
         kind: 'room-mirror',
         mirrorChoice: c.choice,
         title: `Mirror: ${c.label}`,
-        titleRu: `Зеркало: ${c.labelRu}`,
+        titleRu: `Mirror: ${c.label}`,
         subtitle: manifest.mirror.characterState,
-        subtitleRu:
-          manifest.mirror.characterStateRu || manifest.mirror.characterState,
+        subtitleRu: manifest.mirror.characterState,
       });
     });
 
@@ -822,18 +1236,15 @@ export class RoomStreamer {
           kind: 'room-object',
           objectId: ghostObj.id,
           title: `${ghostObj.title || ghostObj.id} [MIRROR ANOMALY]`,
-          titleRu: `${
-            ghostObj.titleRu || ghostObj.title || ghostObj.id
-          } [АНОМАЛИЯ ОТРАЖЕНИЯ]`,
+          titleRu: `${ghostObj.title || ghostObj.id} [MIRROR ANOMALY]`,
           subtitle: 'Interact with Reflection to Unlock Rabbit Hole (Door RH)',
-          subtitleRu:
-            'Взаимодействуйте с отражением, чтобы открыть Кроличью Нору (Дверь RH)',
+          subtitleRu: 'Interact with Reflection to Unlock Rabbit Hole (Door RH)',
         });
       });
 
     root.add(mirrorGroup);
 
-    // 6. Execute Room API v1 `mount(ctx)` from `room-template/index.ts`
+    // 7. Execute Room API v1 `mount(ctx)` from `room-template/index.ts`
     this.activeModule = templateRoomModule;
     this.activeCtx = ctx;
     void this.activeModule.mount(ctx);
@@ -843,8 +1254,6 @@ export class RoomStreamer {
 
   /**
    * Designed Void Fallback Space (EXPERIENCE_PROTOCOL.md §3.3 & §7.2.3).
-   * Entered when a door leads to an unimplemented (`planned`) room, times out (>8s),
-   * or fails SHA-256 verification. Provides a contemplative mirror/fog/starfield space with a way back.
    */
   public mountVoidFallback(
     roomId: string,
@@ -862,11 +1271,9 @@ export class RoomStreamer {
     scene.background = new THREE.Color('#05070b');
     scene.fog = new THREE.FogExp2('#05070b', 0.032);
 
-    // Budget §5.1: <= 2 real-time lights
     const hemi = new THREE.HemisphereLight('#7cc6f2', '#05070b', 0.65);
     root.add(hemi);
 
-    // §3.3 Procedural sky/void inverted sphere
     const skyGeo = new THREE.SphereGeometry(42, 24, 16);
     const skyMat = new THREE.MeshBasicMaterial({
       color: '#080d16',
@@ -875,7 +1282,6 @@ export class RoomStreamer {
     const skySphere = new THREE.Mesh(skyGeo, skyMat);
     root.add(skySphere);
 
-    // Walkable Obsidian Mirror Island in the Void
     const islandMat = new THREE.MeshStandardMaterial({
       color: '#0c1622',
       roughness: 0.12,
@@ -889,7 +1295,6 @@ export class RoomStreamer {
     root.add(island);
     walkableMeshes.push(island);
 
-    // Distant Monolith Rings in the Fog
     const ringMat = new THREE.MeshBasicMaterial({
       color: '#4ea8de',
       transparent: true,
@@ -906,7 +1311,6 @@ export class RoomStreamer {
       root.add(ring);
     }
 
-    // Way Back Portal to the exact Corridor Branch & Segment (§7.2.3 & §7.2.5)
     const portalGroup = new THREE.Group();
     portalGroup.position.set(0, 0, -3.2);
 
@@ -944,9 +1348,7 @@ export class RoomStreamer {
       kind: 'room-mirror',
       mirrorChoice: 'back',
       title: `↺ ${state.branch.toUpperCase()} · ${state.segmentIndex}`,
-      titleRu: `↺ ${
-        state.branch === 'ascend' ? 'ВОСХОЖДЕНИЕ' : 'НИСХОЖДЕНИЕ'
-      } · ${state.segmentIndex}`,
+      titleRu: `↺ ${state.branch.toUpperCase()} · ${state.segmentIndex}`,
       subtitle: roomId,
       subtitleRu: roomId,
     });
@@ -954,7 +1356,6 @@ export class RoomStreamer {
 
   /**
    * 30-Transition GPU Memory Leak Verification (EXPERIENCE_PROTOCOL.md §9.1).
-   * Mounts and unmounts a stub room 30 times and verifies zero growth in geometries/textures.
    */
   public runThirtyTransitionLeakTest(
     scene: THREE.Scene,
@@ -972,7 +1373,7 @@ export class RoomStreamer {
     for (let i = 0; i < 30; i++) {
       const dummyWalkables: THREE.Object3D[] = [];
       this.mountRoom(
-        'ROOM_073',
+        'ROOM_001',
         testRoot,
         scene,
         state,

@@ -905,16 +905,27 @@ export class CorridorBuilder {
       );
       artGroup.add(frame);
 
-      const artTex = createProceduralArtworkTexture(
+      const fallbackTex = createProceduralArtworkTexture(
         art.title,
         art.author,
         art.license,
         art.motif,
         accentHex
       );
+      const canvasMat = new THREE.MeshBasicMaterial({ map: fallbackTex });
+      if (art.url && art.url.startsWith('http')) {
+        const loader = new THREE.TextureLoader();
+        loader.setCrossOrigin('anonymous');
+        loader.load(art.url, (loadedTex) => {
+          loadedTex.colorSpace = THREE.SRGBColorSpace;
+          loadedTex.generateMipmaps = true;
+          canvasMat.map = loadedTex;
+          canvasMat.needsUpdate = true;
+        });
+      }
       const canvasMesh = new THREE.Mesh(
         new THREE.PlaneGeometry(2.65, 1.4),
-        new THREE.MeshBasicMaterial({ map: artTex })
+        canvasMat
       );
       canvasMesh.position.z = 0.07;
       artGroup.add(canvasMesh);
@@ -923,6 +934,7 @@ export class CorridorBuilder {
       registerTarget(artGroup, {
         id: art.id,
         kind: 'artwork',
+        roomId: (art as { roomId?: string }).roomId ?? 'ROOM_001',
         title: art.title,
         titleRu: art.titleRu || art.title,
         subtitle: art.author,
