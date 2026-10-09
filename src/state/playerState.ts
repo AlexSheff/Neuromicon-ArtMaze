@@ -1,6 +1,7 @@
+import { eventBus, OnboardingStepId } from '../events/eventBus';
 import { ComfortMode, CorridorBranch } from '../room-sdk';
 
-export type HubLocation = 'threshold' | 'corridor' | 'room';
+export type HubLocation = 'threshold' | 'corridor' | 'room' | 'void';
 
 export interface RadioMessage {
   author: string;
@@ -8,63 +9,103 @@ export interface RadioMessage {
   timestamp: string;
 }
 
+/**
+ * Authoritative PlayerState schema from EXPERIENCE_PROTOCOL.md §7.3
+ * plus runtime compatibility fields for hub systems.
+ */
 export interface HubPlayerState {
-  /** Diegetic choice made in the Threshold Hall: 'ascend' (grow/embody) or 'descend' (search/explore) */
+  version: number;
   path: CorridorBranch | null;
-  /** Current spatial context inside the single-page WebXR session */
-  location: HubLocation;
-  /** Active branch in the Main Corridor */
-  branch: CorridorBranch;
-  /** Active chunked segment index (1 or 2) in the Main Corridor */
-  segment: 1 | 2;
-  /** Currently mounted Room ID when location === 'room' */
-  currentRoomId: string | null;
-  /** Rooms visited by the player (shown on signage and visited map) */
-  visitedRooms: string[];
-  /** Rooms where the quest objective has been completed */
-  completedRooms: string[];
-  /** Persistent identity choices per room from the Mirror system */
-  identityChoices: Record<string, 'accept' | 'reject'>;
-  /** Unlocked rule-violation / reflection discoveries */
+  segment: { branch: CorridorBranch; index: 1 | 2 } | null;
+  visited: Record<string, { at: number; completed: boolean }>;
+  identity: Record<string, 'accept' | 'reject'>;
+  onboarding: {
+    version: number;
+    completedSteps: OnboardingStepId[];
+    currentStep: OnboardingStepId;
+    skipped: boolean;
+  };
+  comfort: {
+    locomotion: 'teleport' | 'smooth';
+    seated: boolean;
+    snap: 30 | 45;
+    vignette: number;
+    reducedMotion: boolean;
+    captions: boolean;
+    qualityTier: 'auto' | 'quest' | 'desktop-low' | 'desktop-high';
+  };
   discoveries: string[];
-  /** VR & Desktop comfort mode (§4A.3) */
+  revealedControls: string[];
+  teleportCount: number;
+  hintLog: Array<{ step: string; rung: number; at: number }>;
+
+  // Convenience derived/runtime fields for corridor & room streamer
+  location: HubLocation;
+  branch: CorridorBranch;
+  segmentIndex: 1 | 2;
+  currentRoomId: string | null;
+  visitedRooms: string[];
+  completedRooms: string[];
+  identityChoices: Record<string, 'accept' | 'reject'>;
   comfortMode: ComfortMode;
-  /** Snap turn angle in degrees (eliminates continuous rotational vection) */
   snapTurnDegrees: 30 | 45;
-  /** Peripheral comfort vignette during movement */
   vignetteEnabled: boolean;
-  /** Radio / comment log per channel (Key T) */
   radioChannels: Record<string, RadioMessage[]>;
 }
 
-const HUB_STORAGE_KEY = 'neuromicon_artmaze_hub_v1';
+const STORAGE_KEY = 'neuromicon_artmaze_protocol_state_v2';
+const LEGACY_KEY = 'neuromicon_artmaze_hub_v1';
+const CURRENT_SCHEMA_VERSION = 2;
 
-function createDefaultHubState(): HubPlayerState {
+function createDefaultState(): HubPlayerState {
   return {
+    version: CURRENT_SCHEMA_VERSION,
     path: null,
+    segment: null,
+    visited: {},
+    identity: {},
+    onboarding: {
+      version: 1,
+      completedSteps: [],
+      currentStep: 'BOOT',
+      skipped: false,
+    },
+    comfort: {
+      locomotion: 'teleport',
+      seated: false,
+      snap: 30,
+      vignette: 0.85,
+      reducedMotion: false,
+      captions: false,
+      qualityTier: 'auto',
+    },
+    discoveries: [],
+    revealedControls: [],
+    teleportCount: 0,
+    hintLog: [],
+
     location: 'threshold',
     branch: 'ascend',
-    segment: 1,
+    segmentIndex: 1,
     currentRoomId: null,
     visitedRooms: [],
     completedRooms: [],
     identityChoices: {},
-    discoveries: [],
     comfortMode: 'teleport',
     snapTurnDegrees: 30,
     vignetteEnabled: true,
     radioChannels: {
       THRESHOLD: [
         {
-          author: 'ARCHITECT',
-          text: 'Above: Ascent (Embody / Grow). Below: Descent (Search / Explore). Choose physically.',
+          author: 'SIGNAL',
+          text: 'Look up toward the light; look down toward the deep.',
           timestamp: '00:00',
         },
       ],
       ROOM_073: [
         {
           author: 'ARCHIVIST',
-          text: 'Count the monoliths in the room, then count them inside the mirror glass.',
+          text: 'What is absent in stone remains inside the glass.',
           timestamp: '01:14',
         },
       ],
@@ -72,8 +113,99 @@ function createDefaultHubState(): HubPlayerState {
   };
 }
 
+/**
+ * Schema migration table keyed by version (EXPERIENCE_PROTOCOL.md §7.3).
+ */
+function migrateState(raw: Record<string, unknown>): {
+  state: HubPlayerState;
+  readOnly: boolean;
+} {
+  const ver = typeof raw.version === 'number' ? raw.version : 1;
+
+  // Unknown future version: load read-only without crashing (§7.3)
+  if (ver > CURRENT_SCHEMA_VERSION) {
+    const def = createDefaultState();
+    return {
+      state: syncDerivedFields({
+        ...def,
+        ...(raw as Partial<HubPlayerState>),
+      }),
+      readOnly: true,
+    };
+  }
+
+  if (ver === 1) {
+    // Migrate from v1 shape to v2
+    const def = createDefaultState();
+    const path =
+      raw.path === 'ascend' || raw.path === 'descend' ? raw.path : null;
+    const visitedArr = Array.isArray(raw.visitedRooms)
+      ? (raw.visitedRooms as string[])
+      : [];
+    const completedArr = Array.isArray(raw.completedRooms)
+      ? (raw.completedRooms as string[])
+      : [];
+    const visitedMap: Record<string, { at: number; completed: boolean }> = {};
+    visitedArr.forEach((id) => {
+      visitedMap[id] = {
+        at: Date.now(),
+        completed: completedArr.includes(id),
+      };
+    });
+
+    const migrated: HubPlayerState = syncDerivedFields({
+      ...def,
+      version: CURRENT_SCHEMA_VERSION,
+      path,
+      segment: path ? { branch: path, index: 1 } : null,
+      visited: visitedMap,
+      identity:
+        (raw.identityChoices as Record<string, 'accept' | 'reject'>) ?? {},
+      discoveries: Array.isArray(raw.discoveries)
+        ? (raw.discoveries as string[])
+        : [],
+    });
+    return { state: migrated, readOnly: false };
+  }
+
+  const def = createDefaultState();
+  return {
+    state: syncDerivedFields({
+      ...def,
+      ...(raw as Partial<HubPlayerState>),
+    }),
+    readOnly: false,
+  };
+}
+
+function syncDerivedFields(state: HubPlayerState): HubPlayerState {
+  const visitedRooms = Object.keys(state.visited);
+  const completedRooms = Object.entries(state.visited)
+    .filter(([, v]) => v.completed)
+    .map(([k]) => k);
+  const branch = state.segment?.branch ?? state.path ?? state.branch ?? 'ascend';
+  const segmentIndex = (state.segment?.index ?? state.segmentIndex ?? 1) as 1 | 2;
+  const comfortMode: ComfortMode = state.comfort.seated
+    ? 'seated'
+    : state.comfort.locomotion;
+
+  return {
+    ...state,
+    branch,
+    segmentIndex,
+    visitedRooms,
+    completedRooms,
+    identityChoices: { ...state.identity },
+    comfortMode,
+    snapTurnDegrees: state.comfort.snap,
+    vignetteEnabled: state.comfort.vignette > 0,
+  };
+}
+
 class HubPlayerStateStore {
   private state: HubPlayerState;
+  private isReadOnly = false;
+  private saveTimer: number | null = null;
   private listeners: Set<(state: HubPlayerState) => void> = new Set();
 
   constructor() {
@@ -82,34 +214,59 @@ class HubPlayerStateStore {
 
   private load(): HubPlayerState {
     try {
-      const raw = window.localStorage.getItem(HUB_STORAGE_KEY);
-      if (!raw) return createDefaultHubState();
-      const parsed = JSON.parse(raw) as Partial<HubPlayerState>;
-      return {
-        ...createDefaultHubState(),
-        ...parsed,
-      };
+      const rawStr =
+        window.localStorage.getItem(STORAGE_KEY) ??
+        window.localStorage.getItem(LEGACY_KEY);
+      if (!rawStr) return createDefaultState();
+      const parsed = JSON.parse(rawStr) as Record<string, unknown>;
+      const { state, readOnly } = migrateState(parsed);
+      this.isReadOnly = readOnly;
+
+      // Returning player check (§2.3): if COMMITTED was already reached, start directly in last segment
+      if (state.onboarding.completedSteps.includes('COMMITTED')) {
+        state.onboarding.currentStep = 'COMMITTED';
+        if (state.location === 'threshold' && state.path) {
+          state.location = 'corridor';
+        }
+      }
+      return syncDerivedFields(state);
     } catch {
-      return createDefaultHubState();
+      return createDefaultState();
     }
   }
 
-  private save(): void {
-    try {
-      window.localStorage.setItem(HUB_STORAGE_KEY, JSON.stringify(this.state));
-    } catch {
-      // Ignore storage quota errors
-    }
+  private notifyAndDebounceSave(): void {
+    this.state = syncDerivedFields(this.state);
     const snap = this.getState();
     this.listeners.forEach((cb) => cb(snap));
+
+    if (this.isReadOnly) return;
+    if (this.saveTimer !== null) {
+      window.clearTimeout(this.saveTimer);
+    }
+    this.saveTimer = window.setTimeout(() => {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+      } catch {
+        // Private browsing / quota fallback (§7.3)
+      }
+    }, 120);
   }
 
   public getState(): HubPlayerState {
     return {
       ...this.state,
+      visited: { ...this.state.visited },
+      identity: { ...this.state.identity },
+      onboarding: {
+        ...this.state.onboarding,
+        completedSteps: [...this.state.onboarding.completedSteps],
+      },
+      comfort: { ...this.state.comfort },
+      discoveries: [...this.state.discoveries],
+      revealedControls: [...this.state.revealedControls],
       visitedRooms: [...this.state.visitedRooms],
       completedRooms: [...this.state.completedRooms],
-      discoveries: [...this.state.discoveries],
       identityChoices: { ...this.state.identityChoices },
       radioChannels: { ...this.state.radioChannels },
     };
@@ -122,23 +279,67 @@ class HubPlayerStateStore {
     };
   }
 
-  /**
-   * Diegetic choice in the Threshold Hall: sets player.path ('ascend' | 'descend')
-   * and enters Segment 1 of that branch.
-   */
+  public setOnboardingStep(step: OnboardingStepId): void {
+    const prev = this.state.onboarding.currentStep;
+    this.state.onboarding.currentStep = step;
+    if (!this.state.onboarding.completedSteps.includes(step)) {
+      this.state.onboarding.completedSteps.push(step);
+    }
+    this.notifyAndDebounceSave();
+    if (prev !== step) {
+      eventBus.emit('onboarding:step', { from: prev, to: step });
+    }
+  }
+
+  public replayOnboarding(): void {
+    this.state.onboarding.currentStep = 'AWAKEN';
+    this.state.onboarding.completedSteps = ['BOOT', 'ENTRY'];
+    this.state.location = 'threshold';
+    this.state.currentRoomId = null;
+    this.notifyAndDebounceSave();
+  }
+
+  public recordHintRung(step: OnboardingStepId, rung: 1 | 2 | 3 | 4): void {
+    this.state.hintLog.push({ step, rung, at: Date.now() });
+    this.notifyAndDebounceSave();
+    eventBus.emit('onboarding:hint', { step, rung });
+  }
+
+  public revealControl(controlId: string): void {
+    if (!this.state.revealedControls.includes(controlId)) {
+      this.state.revealedControls.push(controlId);
+      this.notifyAndDebounceSave();
+    }
+  }
+
+  public incrementTeleportCount(): number {
+    this.state.teleportCount += 1;
+    if (this.state.teleportCount >= 5) {
+      this.unlockDiscovery('codex.entry.smooth_unlocked');
+    }
+    this.notifyAndDebounceSave();
+    return this.state.teleportCount;
+  }
+
   public chooseBranchFromThreshold(branch: CorridorBranch): void {
     this.state.path = branch;
     this.state.branch = branch;
-    this.state.segment = 1;
+    this.state.segmentIndex = 1;
+    this.state.segment = { branch, index: 1 };
     this.state.location = 'corridor';
     this.state.currentRoomId = null;
-    this.save();
+    if (!this.state.onboarding.completedSteps.includes('COMMITTED')) {
+      this.state.onboarding.completedSteps.push('COMMITTED');
+    }
+    this.state.onboarding.currentStep = 'COMMITTED';
+    this.unlockDiscovery('codex.entry.threshold');
+    this.notifyAndDebounceSave();
   }
 
   public returnToThreshold(): void {
     this.state.location = 'threshold';
     this.state.currentRoomId = null;
-    this.save();
+    this.notifyAndDebounceSave();
   }
 
   public setCorridorSegment(branch: CorridorBranch, segment: 1 | 2): void {
@@ -146,10 +347,11 @@ class HubPlayerStateStore {
       this.state.path = branch;
     }
     this.state.branch = branch;
-    this.state.segment = segment;
+    this.state.segmentIndex = segment;
+    this.state.segment = { branch, index: segment };
     this.state.location = 'corridor';
     this.state.currentRoomId = null;
-    this.save();
+    this.notifyAndDebounceSave();
   }
 
   public enterRoom(
@@ -157,60 +359,109 @@ class HubPlayerStateStore {
     fromBranch?: CorridorBranch,
     fromSegment?: 1 | 2
   ): void {
-    if (fromBranch) this.state.branch = fromBranch;
-    if (fromSegment) this.state.segment = fromSegment;
+    if (fromBranch && fromSegment) {
+      this.state.branch = fromBranch;
+      this.state.segmentIndex = fromSegment;
+      this.state.segment = { branch: fromBranch, index: fromSegment };
+    }
     this.state.location = 'room';
     this.state.currentRoomId = roomId;
-    if (!this.state.visitedRooms.includes(roomId)) {
-      this.state.visitedRooms.push(roomId);
-    }
-    this.save();
+    const prev = this.state.visited[roomId];
+    this.state.visited[roomId] = {
+      at: Date.now(),
+      completed: prev?.completed ?? false,
+    };
+    this.revealControl('radio');
+    this.notifyAndDebounceSave();
   }
 
-  /**
-   * Returns from a room back to the exact Main Corridor branch & segment where the player left (§4A.9).
-   */
+  public enterVoidFallback(roomId: string): void {
+    this.state.location = 'void';
+    this.state.currentRoomId = roomId;
+    this.unlockDiscovery('codex.entry.void_fallback');
+    this.notifyAndDebounceSave();
+  }
+
   public returnToCorridor(): void {
     this.state.location = 'corridor';
     this.state.currentRoomId = null;
-    this.save();
+    this.notifyAndDebounceSave();
   }
 
   public markQuestCompleted(roomId: string): void {
-    if (!this.state.completedRooms.includes(roomId)) {
-      this.state.completedRooms.push(roomId);
-      this.save();
-    }
+    const prev = this.state.visited[roomId];
+    this.state.visited[roomId] = {
+      at: prev?.at ?? Date.now(),
+      completed: true,
+    };
+    this.notifyAndDebounceSave();
   }
 
   public recordMirrorChoice(
     roomId: string,
     choice: 'accept' | 'reject'
   ): void {
-    this.state.identityChoices[roomId] = choice;
-    this.save();
+    this.state.identity[roomId] = choice;
+    this.notifyAndDebounceSave();
   }
 
   public unlockDiscovery(key: string): void {
     if (!this.state.discoveries.includes(key)) {
       this.state.discoveries.push(key);
-      this.save();
+      this.revealControl('codex');
+      this.notifyAndDebounceSave();
+      eventBus.emit('codex:unlocked', { entryId: key });
     }
   }
 
+  public setSeatedPosture(seated: boolean): void {
+    this.state.comfort.seated = seated;
+    this.unlockDiscovery(
+      seated ? 'codex.entry.comfort_seated' : 'codex.entry.comfort_standing'
+    );
+    this.notifyAndDebounceSave();
+  }
+
   public setComfortMode(mode: ComfortMode): void {
-    this.state.comfortMode = mode;
-    this.save();
+    if (mode === 'seated') {
+      this.state.comfort.seated = true;
+    } else {
+      this.state.comfort.seated = false;
+      this.state.comfort.locomotion = mode;
+    }
+    this.notifyAndDebounceSave();
   }
 
   public setSnapTurnDegrees(deg: 30 | 45): void {
-    this.state.snapTurnDegrees = deg;
-    this.save();
+    this.state.comfort.snap = deg;
+    this.notifyAndDebounceSave();
   }
 
   public toggleVignette(): void {
-    this.state.vignetteEnabled = !this.state.vignetteEnabled;
-    this.save();
+    this.state.comfort.vignette = this.state.comfort.vignette > 0 ? 0 : 0.85;
+    this.notifyAndDebounceSave();
+  }
+
+  public setVignetteStrength(val: number): void {
+    this.state.comfort.vignette = Math.max(0, Math.min(1, val));
+    this.notifyAndDebounceSave();
+  }
+
+  public toggleReducedMotion(): void {
+    this.state.comfort.reducedMotion = !this.state.comfort.reducedMotion;
+    this.notifyAndDebounceSave();
+  }
+
+  public toggleCaptions(): void {
+    this.state.comfort.captions = !this.state.comfort.captions;
+    this.notifyAndDebounceSave();
+  }
+
+  public setQualityTier(
+    tier: 'auto' | 'quest' | 'desktop-low' | 'desktop-high'
+  ): void {
+    this.state.comfort.qualityTier = tier;
+    this.notifyAndDebounceSave();
   }
 
   public postRadioMessage(
@@ -227,12 +478,36 @@ class HubPlayerStateStore {
       ...existing,
       { author, text, timestamp },
     ];
-    this.save();
+    this.notifyAndDebounceSave();
+  }
+
+  public exportStateJson(): string {
+    return JSON.stringify(this.state, null, 2);
+  }
+
+  public importStateJson(jsonStr: string): boolean {
+    try {
+      const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+      const { state, readOnly } = migrateState(parsed);
+      this.state = state;
+      this.isReadOnly = readOnly;
+      this.notifyAndDebounceSave();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   public resetProgress(): void {
-    this.state = createDefaultHubState();
-    this.save();
+    this.state = createDefaultState();
+    this.isReadOnly = false;
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+      window.localStorage.removeItem(LEGACY_KEY);
+    } catch {
+      // ignore
+    }
+    this.notifyAndDebounceSave();
   }
 }
 

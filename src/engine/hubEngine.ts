@@ -3,6 +3,8 @@ import {
   CorridorBuilder,
   SpatialInteractiveTarget,
 } from '../corridor/corridorBuilder';
+import { onboardingFSM } from '../onboarding/onboardingFSM';
+import { OnboardingVisualState } from '../onboarding/types';
 import {
   disposeThreeHierarchy,
   MirrorChoice,
@@ -17,10 +19,13 @@ import { XRControllerInput } from './xr/webxrManager';
 
 export interface HubRenderTelemetry {
   fps: number;
+  frameTimeMs: number;
   drawCalls: number;
   triangles: number;
   geometries: number;
   textures: number;
+  textureMemoryMB: number;
+  resolutionScale: number;
 }
 
 export interface HubHoveredResult {
@@ -30,9 +35,10 @@ export interface HubHoveredResult {
 }
 
 /**
- * Universal WebXR + Desktop 3D Engine for Neuromicon Artmaze (AGENTS.md §2, §3, §4, §4A).
- * Enforces strict VR comfort (blink-fade teleport, snap-turn, peripheral vignette, zero camera acceleration)
- * and renders the Threshold Hall, Ascent/Descent Segments, and Room API v1 packages in a single WebXR session.
+ * Universal WebXR + Desktop 3D Engine for Neuromicon Artmaze (EXPERIENCE_PROTOCOL.md §2–§7).
+ * - Zero per-frame allocations (pre-allocated scratch vectors).
+ * - Fixed foveated rendering (0.85) + Dynamic Resolution Scaler targeting 13.9 ms (72 Hz Quest 2).
+ * - Onboarding FSM beat sheet & contextual control discovery triggers.
  */
 export class HubEngine {
   public readonly renderer: THREE.WebGLRenderer;
@@ -47,6 +53,10 @@ export class HubEngine {
   private reticleMesh: THREE.Mesh;
   private vrControllers: THREE.Group[] = [];
 
+  // Pre-allocated scratch vectors to guarantee ZERO per-frame GC allocations (§6)
+  private readonly _scratchOrigin = new THREE.Vector3();
+  private readonly _scratchDir = new THREE.Vector3();
+
   private interactiveEntries: Array<{
     mesh: THREE.Object3D;
     target: SpatialInteractiveTarget;
@@ -56,7 +66,7 @@ export class HubEngine {
   private pose = {
     x: 0,
     y: 0,
-    z: 5.5,
+    z: 5.2,
     yaw: 0,
     pitch: 0,
   };
@@ -65,7 +75,18 @@ export class HubEngine {
   private teleportStickCooldown = 0;
   private builtSceneKey = '';
   private fovZoom = false;
+
+  // Dynamic Resolution Scaler & Frame Budget Tracking (72 Hz = 13.9 ms budget, §6)
   private smoothedFps = 72;
+  private rollingFrameMs = 11.2;
+  private resolutionScale = 1.0;
+  private scalerCheckTimer = 0;
+
+  // Contextual Discovery Timers (§2.5)
+  private distantGazeTimer = 0;
+  private segmentDwellTimer = 0;
+  private recentSnapTurns = 0;
+  private snapBurstWindow = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({
@@ -77,8 +98,16 @@ export class HubEngine {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
 
+    // Configure Quest 2 Fixed Foveated Rendering & Initial Framebuffer Scale (§6)
+    if (typeof this.renderer.xr.setFoveation === 'function') {
+      this.renderer.xr.setFoveation(0.85);
+    }
+    if (typeof this.renderer.xr.setFramebufferScaleFactor === 'function') {
+      this.renderer.xr.setFramebufferScaleFactor(1.0);
+    }
+
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color('#0c0b0a');
+    this.scene.background = new THREE.Color('#080706');
 
     this.camera = new THREE.PerspectiveCamera(65, 16 / 9, 0.1, 110);
     this.camera.rotation.order = 'YXZ';
@@ -99,7 +128,6 @@ export class HubEngine {
     this.raycaster.near = 0.15;
     this.raycaster.far = 22.0;
 
-    // 3D Reticle Ring
     this.reticleMesh = new THREE.Mesh(
       new THREE.RingGeometry(0.025, 0.045, 28),
       new THREE.MeshBasicMaterial({
@@ -115,8 +143,12 @@ export class HubEngine {
 
     this.setupVRControllers();
 
-    // Clean transform handoff when entering/exiting Meta Quest 2 WebXR
+    // Pixel ratio cap at 1.0 in XR; <= 2.0 on desktop (§6)
     this.renderer.xr.addEventListener('sessionstart', () => {
+      this.renderer.setPixelRatio(1.0);
+      if (typeof this.renderer.xr.setFoveation === 'function') {
+        this.renderer.xr.setFoveation(0.85);
+      }
       this.camera.position.set(0, 0, 0);
       this.camera.rotation.set(0, 0, 0);
       this.camera.quaternion.identity();
@@ -126,6 +158,7 @@ export class HubEngine {
     });
 
     this.renderer.xr.addEventListener('sessionend', () => {
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       this.camera.position.set(0, 1.7, 0);
       this.camera.rotation.set(this.pose.pitch, 0, 0, 'YXZ');
       this.vrControllers.forEach((c) => {
@@ -196,13 +229,27 @@ export class HubEngine {
   }
 
   public teleportTo(x: number, z: number, yaw?: number): void {
+    const st = hubPlayerState.getState();
+    const speed = st.comfort.reducedMotion ? 25.0 : 9.0;
     this.comfort.triggerFadeTransition(() => {
       this.pose.x = x;
       this.pose.z = z;
       if (yaw !== undefined) {
         this.pose.yaw = yaw;
       }
-    });
+      hubPlayerState.incrementTeleportCount();
+    }, speed);
+  }
+
+  public runLeakCheck(): {
+    iterations: number;
+    passed: boolean;
+    geometriesDelta: number;
+    materialLeaks: number;
+  } {
+    const st = hubPlayerState.getState();
+    const ctx = this.buildRoomContext('ROOM_073', st);
+    return roomStreamer.runThirtyTransitionLeakTest(this.scene, st, ctx);
   }
 
   public dispose(): void {
@@ -295,15 +342,14 @@ export class HubEngine {
         setVignetteIntensity: (v) => this.comfort.setTargetVignette(v),
         getMode: () => state.comfortMode,
       },
-      log: () => {
-        // Silent in production UI per guidelines
-      },
+      log: () => {},
     };
   }
 
   private rebuildActiveWorld(state: HubPlayerState): void {
     this.interactiveEntries = [];
     this.walkableMeshes = [];
+    this.segmentDwellTimer = 0;
     roomStreamer.unmountCurrentRoom(this.roomApiRoot);
     disposeThreeHierarchy(this.worldRoot);
 
@@ -323,10 +369,7 @@ export class HubEngine {
         this.walkableMeshes
       );
       this.pose = { x: 0, y: 0, z: 5.2, yaw: 0, pitch: 0 };
-      spatialAudioSystem.setCorridorVerticalCrossfade(
-        0.5,
-        'THRESHOLD · Vertical Atrium Ambience'
-      );
+      spatialAudioSystem.setCorridorVerticalCrossfade(0.5);
       return;
     }
 
@@ -335,16 +378,29 @@ export class HubEngine {
         this.worldRoot,
         this.scene,
         state.branch,
-        state.segment,
+        state.segmentIndex,
         state,
         registerTarget,
         this.walkableMeshes
       );
       this.pose = { x: 0, y: 0, z: 6.8, yaw: 0, pitch: 0 };
       spatialAudioSystem.setCorridorVerticalCrossfade(
-        state.branch === 'ascend' ? 1.0 : 0.0,
-        `${state.branch.toUpperCase()} · Segment ${state.segment} Ambience`
+        state.branch === 'ascend' ? 1.0 : 0.0
       );
+      return;
+    }
+
+    if (state.location === 'void') {
+      roomStreamer.mountVoidFallback(
+        state.currentRoomId || 'ROOM_412',
+        this.worldRoot,
+        this.scene,
+        state,
+        registerTarget,
+        this.walkableMeshes
+      );
+      this.pose = { x: 0, y: 0, z: 4.2, yaw: 0, pitch: 0 };
+      spatialAudioSystem.playRoomSoundtrack('audio/void_fallback.ogg', 82);
       return;
     }
 
@@ -367,22 +423,49 @@ export class HubEngine {
     dt: number,
     desktopInput: InputState,
     xrInput: XRControllerInput,
-    state: HubPlayerState
+    state: HubPlayerState,
+    timeSec: number
   ): {
     hovered: HubHoveredResult;
     telemetry: HubRenderTelemetry;
+    onboardingVisual: OnboardingVisualState | null;
   } {
-    this.smoothedFps = this.smoothedFps * 0.9 + (1 / Math.max(0.001, dt)) * 0.1;
+    const frameMs = dt * 1000;
+    this.rollingFrameMs = this.rollingFrameMs * 0.92 + frameMs * 0.08;
+    this.smoothedFps =
+      this.smoothedFps * 0.92 + (1 / Math.max(0.001, dt)) * 0.08;
 
-    // Check if world topology state changed
+    // Dynamic Resolution Scaler (§6: 13.9 ms Quest 2 72Hz target)
+    this.scalerCheckTimer += dt;
+    if (this.scalerCheckTimer >= 1.0) {
+      this.scalerCheckTimer = 0;
+      if (this.rollingFrameMs > 13.9 && this.resolutionScale > 0.75) {
+        this.resolutionScale = Math.max(0.75, this.resolutionScale - 0.08);
+        if (!this.renderer.xr.isPresenting) {
+          this.renderer.setPixelRatio(
+            Math.min(window.devicePixelRatio || 1, 2) * this.resolutionScale
+          );
+        }
+      } else if (this.rollingFrameMs < 11.5 && this.resolutionScale < 1.0) {
+        this.resolutionScale = Math.min(1.0, this.resolutionScale + 0.05);
+        if (!this.renderer.xr.isPresenting) {
+          this.renderer.setPixelRatio(
+            Math.min(window.devicePixelRatio || 1, 2) * this.resolutionScale
+          );
+        }
+      }
+    }
+
+    // Rebuild world chunk only on topology or state change
     const sceneKey = [
       state.location,
       state.branch,
-      state.segment,
+      state.segmentIndex,
       state.currentRoomId || 'NONE',
       state.visitedRooms.join(','),
       state.completedRooms.join(','),
       state.discoveries.join(','),
+      state.teleportCount >= 5 ? 'SMOOTH_SWITCH' : 'NO_SWITCH',
       Object.entries(state.identityChoices)
         .map(([k, v]) => `${k}:${v}`)
         .join(','),
@@ -395,9 +478,13 @@ export class HubEngine {
 
     const isXR = this.renderer.xr.isPresenting;
 
-    // 1. ROTATION: Snap Turn for VR / Keyboard Q&R, Mouse Drag for Desktop
+    // 1. ROTATION: Discrete Snap Turn (Q / E or VR Stick)
     if (this.snapCooldown > 0) {
       this.snapCooldown = Math.max(0, this.snapCooldown - dt);
+    }
+    if (this.snapBurstWindow > 0) {
+      this.snapBurstWindow = Math.max(0, this.snapBurstWindow - dt);
+      if (this.snapBurstWindow <= 0) this.recentSnapTurns = 0;
     }
 
     const snapRad = THREE.MathUtils.degToRad(state.snapTurnDegrees);
@@ -407,9 +494,11 @@ export class HubEngine {
       if (stickTurn > 0.55 || desktopInput.turnRight) {
         this.snapCooldown = 0.3;
         this.pose.yaw -= snapRad;
+        this.recordSnapTurnForComfortReveal();
       } else if (stickTurn < -0.55 || desktopInput.turnLeft) {
         this.snapCooldown = 0.3;
         this.pose.yaw += snapRad;
+        this.recordSnapTurnForComfortReveal();
       }
     }
 
@@ -418,7 +507,7 @@ export class HubEngine {
       this.pose.pitch = desktopInput.pitchDelta;
     }
 
-    // 2. LOCOMOTION: Constant-Velocity Smooth (with Vignette) OR Blink-Teleport
+    // 2. LOCOMOTION
     let forward = -xrInput.moveZ;
     let strafe = xrInput.moveX;
     if (desktopInput.forward) forward += 1;
@@ -432,8 +521,7 @@ export class HubEngine {
       this.teleportStickCooldown = Math.max(0, this.teleportStickCooldown - dt);
     }
 
-    // In 'teleport' mode inside VR, pushing thumbstick forward blinks 2.4m forward with fade (ZERO swimming!)
-    if (isXR && state.comfortMode === 'teleport') {
+    if (isXR && state.comfort.locomotion === 'teleport') {
       this.comfort.setTargetVignette(0);
       if (forward > 0.65 && this.teleportStickCooldown <= 0) {
         this.teleportStickCooldown = 0.45;
@@ -444,7 +532,6 @@ export class HubEngine {
         this.clampAndApplyPosition(nx, nz, state);
       }
     } else if (isMovingStick) {
-      // Smooth constant-velocity locomotion (zero acceleration, peripheral vignette active)
       const len = Math.min(1, Math.hypot(forward, strafe));
       const normF = forward / Math.max(1, Math.hypot(forward, strafe));
       const normS = strafe / Math.max(1, Math.hypot(forward, strafe));
@@ -460,27 +547,35 @@ export class HubEngine {
       const nz = this.pose.z + (fz * normF + rz * normS) * speed * dt;
       this.clampPositionDirect(nx, nz, state);
 
-      // Activate peripheral comfort vignette while moving smoothly
-      this.comfort.setTargetVignette(len * 0.88);
+      this.comfort.setTargetVignette(len * state.comfort.vignette);
     } else {
       this.comfort.setTargetVignette(0);
     }
 
-    // Diegetic Physical Platform Trigger in Threshold Hall (§4A.2)
+    // 3. ONBOARDING FSM & THRESHOLD VISUALS (§2.2 & §2.3)
+    let onboardingVisual: OnboardingVisualState | null = null;
     if (state.location === 'threshold') {
-      if (this.pose.x < -2.4 && this.pose.z < -4.5) {
-        this.comfort.triggerFadeTransition(() => {
-          hubPlayerState.chooseBranchFromThreshold('ascend');
-        });
-      } else if (this.pose.x > 2.4 && this.pose.z < -4.5) {
-        this.comfort.triggerFadeTransition(() => {
-          hubPlayerState.chooseBranchFromThreshold('descend');
-        });
-      }
+      const headPitch = isXR ? this.getActiveHeadPitch() : this.pose.pitch;
+      onboardingVisual = onboardingFSM.update(
+        dt,
+        this.pose.x,
+        this.pose.z,
+        headPitch,
+        (committedBranch) => {
+          this.comfort.triggerFadeTransition(() => {
+            hubPlayerState.chooseBranchFromThreshold(committedBranch);
+          });
+        }
+      );
+      CorridorBuilder.updateThresholdOnboardingVisuals(
+        this.worldRoot,
+        onboardingVisual,
+        timeSec
+      );
     }
 
-    // 3. STRICT MATRIX SYNCHRONIZATION BEFORE RAYCAST & RENDER (Eliminates 1-frame XR lag!)
-    const seatedOffset = state.comfortMode === 'seated' ? 0.45 : 0;
+    // 4. STRICT MATRIX SYNCHRONIZATION BEFORE RAYCAST & RENDER
+    const seatedOffset = state.comfort.seated ? 0.45 : 0;
     this.playerRig.position.set(this.pose.x, seatedOffset, this.pose.z);
     this.playerRig.rotation.set(0, this.pose.yaw, 0);
 
@@ -489,39 +584,83 @@ export class HubEngine {
       this.camera.rotation.set(this.pose.pitch, 0, 0, 'YXZ');
     }
 
-    // Force immediate world matrix update so controllers & camera rays match current frame 1:1
     this.playerRig.updateMatrixWorld(true);
 
-    // Update Room API v1 module & Comfort System
     roomStreamer.updateCurrentRoom(dt);
     this.comfort.update(dt, state.vignetteEnabled);
 
-    // 4. Raycast against Interactive Targets & Walkable Floor
+    // 5. RAYCAST & CONTEXTUAL CONTROL DISCOVERY (§2.5)
     const hovered = this.performRaycast();
 
-    // Render scene
+    // Contextual reveal of Zoom (C) after gazing >3s at a distant plaque or artwork (§2.5)
+    if (
+      hovered.target &&
+      (hovered.target.kind === 'artwork' ||
+        hovered.target.kind === 'corridor-door' ||
+        hovered.target.kind === 'room-door') &&
+      hovered.distance > 3.2
+    ) {
+      this.distantGazeTimer += dt;
+      if (this.distantGazeTimer >= 3.0) {
+        hubPlayerState.revealControl('zoom');
+      }
+    } else {
+      this.distantGazeTimer = 0;
+    }
+
+    // Contextual reveal of Audio (Z) after 2 minutes in a segment (§2.5)
+    if (state.location === 'corridor') {
+      this.segmentDwellTimer += dt;
+      if (this.segmentDwellTimer >= 120) {
+        hubPlayerState.revealControl('audio');
+      }
+    }
+
     this.renderer.render(this.scene, this.camera);
 
     const info = this.renderer.info;
+    // Estimate GPU texture memory (512x256 + 512x512 + 1024x512 mipmapped ~ 0.85 MB per texture on average)
+    const estTexMB = Number((info.memory.textures * 0.85).toFixed(1));
+
     return {
       hovered,
       telemetry: {
         fps: Math.round(this.smoothedFps),
+        frameTimeMs: Number(this.rollingFrameMs.toFixed(1)),
         drawCalls: info.render.calls,
         triangles: info.render.triangles,
         geometries: info.memory.geometries,
         textures: info.memory.textures,
+        textureMemoryMB: estTexMB,
+        resolutionScale: Number(this.resolutionScale.toFixed(2)),
       },
+      onboardingVisual,
     };
+  }
+
+  private recordSnapTurnForComfortReveal(): void {
+    this.snapBurstWindow = 4.0;
+    this.recentSnapTurns += 1;
+    if (this.recentSnapTurns >= 3) {
+      hubPlayerState.revealControl('comfort');
+    }
   }
 
   private getActiveHeadingYaw(): number {
     if (!this.renderer.xr.isPresenting) return this.pose.yaw;
     const xrCam = this.renderer.xr.getCamera();
-    const dir = new THREE.Vector3();
-    xrCam.getWorldDirection(dir);
-    if (Math.hypot(dir.x, dir.z) < 0.001) return this.pose.yaw;
-    return Math.atan2(-dir.x, -dir.z);
+    xrCam.getWorldDirection(this._scratchDir);
+    if (Math.hypot(this._scratchDir.x, this._scratchDir.z) < 0.001) {
+      return this.pose.yaw;
+    }
+    return Math.atan2(-this._scratchDir.x, -this._scratchDir.z);
+  }
+
+  private getActiveHeadPitch(): number {
+    if (!this.renderer.xr.isPresenting) return this.pose.pitch;
+    const xrCam = this.renderer.xr.getCamera();
+    xrCam.getWorldDirection(this._scratchDir);
+    return Math.asin(Math.max(-1, Math.min(1, this._scratchDir.y)));
   }
 
   private clampPositionDirect(
@@ -550,27 +689,25 @@ export class HubEngine {
     nz: number,
     state: HubPlayerState
   ): void {
+    const speed = state.comfort.reducedMotion ? 25.0 : 11.0;
     this.comfort.triggerFadeTransition(() => {
       this.clampPositionDirect(nx, nz, state);
-    }, 11.0);
+      hubPlayerState.incrementTeleportCount();
+    }, speed);
   }
 
   private performRaycast(): HubHoveredResult {
-    const origin = new THREE.Vector3();
-    const direction = new THREE.Vector3(0, 0, -1);
-
     const targetMeshes = this.interactiveEntries.map((e) => e.mesh);
     let interactiveHits: THREE.Intersection<THREE.Object3D>[] = [];
     let rayUsed = false;
 
-    // 1. Check VR controllers first when in WebXR
     if (this.renderer.xr.isPresenting) {
       for (const ctrl of this.vrControllers) {
         if (!ctrl.visible) continue;
-        ctrl.getWorldPosition(origin);
-        ctrl.getWorldDirection(direction);
-        direction.negate();
-        this.raycaster.set(origin, direction);
+        ctrl.getWorldPosition(this._scratchOrigin);
+        ctrl.getWorldDirection(this._scratchDir);
+        this._scratchDir.negate();
+        this.raycaster.set(this._scratchOrigin, this._scratchDir);
         rayUsed = true;
         const hits = this.raycaster.intersectObjects(targetMeshes, true);
         if (hits.length > 0) {
@@ -580,14 +717,13 @@ export class HubEngine {
       }
     }
 
-    // 2. Fallback to camera center gaze
     if (interactiveHits.length === 0) {
       const cam = this.renderer.xr.isPresenting
         ? this.renderer.xr.getCamera()
         : this.camera;
-      cam.getWorldPosition(origin);
-      cam.getWorldDirection(direction);
-      this.raycaster.set(origin, direction);
+      cam.getWorldPosition(this._scratchOrigin);
+      cam.getWorldDirection(this._scratchDir);
+      this.raycaster.set(this._scratchOrigin, this._scratchDir);
       rayUsed = true;
       interactiveHits = this.raycaster.intersectObjects(targetMeshes, true);
     }
@@ -597,8 +733,8 @@ export class HubEngine {
       this.reticleMesh.visible = true;
       this.reticleMesh.position
         .copy(hit.point)
-        .addScaledVector(direction, -0.04);
-      this.reticleMesh.lookAt(origin);
+        .addScaledVector(this._scratchDir, -0.04);
+      this.reticleMesh.lookAt(this._scratchOrigin);
       this.comfort.teleportRing.visible = false;
 
       let matched: SpatialInteractiveTarget | null = null;
@@ -618,7 +754,6 @@ export class HubEngine {
 
     this.reticleMesh.visible = false;
 
-    // 3. Check Walkable Floor for Blink-Teleport Ring
     if (rayUsed && this.walkableMeshes.length > 0) {
       const floorHits = this.raycaster.intersectObjects(
         this.walkableMeshes,

@@ -12,6 +12,7 @@ export interface XRControllerInput {
   moveZ: number;
   turnX: number;
   triggerJustPressed: boolean;
+  squeezeJustPressed?: boolean;
 }
 
 class WebXRManager {
@@ -19,7 +20,9 @@ class WebXRManager {
   private currentSession: XRSession | null = null;
   private supported = false;
   private wasTriggerPressed = false;
+  private wasSqueezePressed = false;
   private selectQueued = false;
+  private squeezeQueued = false;
   private snapTurnCooldown = 0;
   private statusListeners: Set<(active: boolean) => void> = new Set();
 
@@ -154,7 +157,7 @@ class WebXRManager {
   /**
    * Reads Oculus Touch controller thumbsticks and triggers from the active WebXR session.
    */
-  public pollControllerInput(dt: number): XRControllerInput {
+  public pollControllerInput(dt = 0.016): XRControllerInput {
     const session = this.renderer?.xr.getSession();
     if (!session) {
       return {
@@ -162,6 +165,7 @@ class WebXRManager {
         moveZ: 0,
         turnX: 0,
         triggerJustPressed: false,
+        squeezeJustPressed: false,
       };
     }
 
@@ -173,6 +177,7 @@ class WebXRManager {
     let moveZ = 0;
     let turnX = 0;
     let triggerPressedNow = false;
+    let squeezePressedNow = false;
 
     for (const source of session.inputSources) {
       const gp = source.gamepad;
@@ -193,7 +198,7 @@ class WebXRManager {
         if (Math.abs(axX) > 0.22) turnX += axX;
       }
 
-      // Button 0 = Index Trigger, Button 1 = Grip, Button 4 = A/X, Button 5 = B/Y
+      // Button 0 = Index Trigger, Button 1 = Grip/Squeeze, Button 4 = A/X, Button 5 = B/Y
       if (
         gp.buttons[0]?.pressed ||
         gp.buttons[4]?.pressed ||
@@ -201,19 +206,29 @@ class WebXRManager {
       ) {
         triggerPressedNow = true;
       }
+      if (gp.buttons[1]?.pressed) {
+        squeezePressedNow = true;
+      }
     }
 
     const buttonEdge = triggerPressedNow && !this.wasTriggerPressed;
     this.wasTriggerPressed = triggerPressedNow;
 
+    const squeezeEdge = squeezePressedNow && !this.wasSqueezePressed;
+    this.wasSqueezePressed = squeezePressedNow;
+
     const triggerJustPressed = buttonEdge || this.selectQueued;
     this.selectQueued = false;
+
+    const squeezeJustPressed = squeezeEdge || this.squeezeQueued;
+    this.squeezeQueued = false;
 
     return {
       moveX: Math.max(-1, Math.min(1, moveX)),
       moveZ: Math.max(-1, Math.min(1, moveZ)),
       turnX: Math.max(-1, Math.min(1, turnX)),
       triggerJustPressed,
+      squeezeJustPressed,
     };
   }
 }

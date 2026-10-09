@@ -13,6 +13,12 @@ export interface InputState {
   interactPressed: boolean;
 }
 
+/**
+ * Unified Action Input Layer (EXPERIENCE_PROTOCOL.md §7.4).
+ * Maps desktop keyboard/mouse and XR controllers to high-level actions (move, turn, interact).
+ * Resolves the README `R` key collision: Snap Turn uses `Q` / `E` (or ArrowLeft / ArrowRight),
+ * while `Space` / Click / VR Trigger triggers `interact` and `R` is reserved for the Codex journal.
+ */
 export class InputController {
   private keys: Set<string> = new Set();
   private yawDelta = 0;
@@ -30,7 +36,7 @@ export class InputController {
 
     const code = e.code;
     this.keys.add(code);
-    if (code === 'KeyE' || code === 'Enter' || code === 'Space') {
+    if (code === 'Enter' || code === 'Space' || code === 'KeyF') {
       this.interactQueued = true;
     }
   };
@@ -111,8 +117,9 @@ export class InputController {
       backward: this.keys.has('KeyS') || this.keys.has('ArrowDown'),
       left: this.keys.has('KeyA'),
       right: this.keys.has('KeyD'),
+      // Snap turn assigned to Q / E and ArrowLeft / ArrowRight (no collision with R Codex!)
       turnLeft: this.keys.has('ArrowLeft') || this.keys.has('KeyQ'),
-      turnRight: this.keys.has('ArrowRight') || this.keys.has('KeyR'),
+      turnRight: this.keys.has('ArrowRight') || this.keys.has('KeyE'),
       yawDelta: this.yawDelta,
       pitchDelta: this.pitchAngle,
       interactPressed: this.interactQueued,

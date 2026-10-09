@@ -7,8 +7,8 @@
     "name": "Archive of Missing Things",
     "nameRu": "Архив Исчезнувших Вещей",
     "symbol": "XX",
-    "description": "A vaulted basalt sanctuary where an unseen monolith exists only inside the mirror reflection.",
-    "descriptionRu": "Базальтовое святилище, где незримый монолит существует только в отражении зеркала.",
+    "description": "Three stone pedestals stand in the basalt sanctuary, yet only two bear physical artifacts.",
+    "descriptionRu": "Три каменных постамента стоят в базальтовом святилище, но лишь на двух покоятся видимые сосуды.",
     "dimension": "D3"
   },
   "audio": {
@@ -17,10 +17,10 @@
     "baseHz": 108
   },
   "quest": {
-    "question": "What remains when the physical form is absent, yet its reflection endures?",
-    "questionRu": "Что остаётся, когда физическая форма отсутствует, но её отражение продолжает существовать?",
-    "objective": "Find the object that does not exist (inspect its reflection in the mirror)",
-    "objectiveRu": "Найдите объект, которого не существует в зале (исследуйте его призрачное отражение в зеркале)",
+    "question": "What remains when the physical form is absent, yet the space still remembers its weight?",
+    "questionRu": "Что остаётся, когда физическая форма исчезла, но пространство всё ещё помнит её тяжесть?",
+    "objective": "Align the Three-Ring Astrolabe or discover where the third pedestal still holds its vessel",
+    "objectiveRu": "Совместите кольца Астролябии в центре зала или отыщите, где третий постамент всё ещё хранит свой сосуд",
     "completion": {
       "type": "interactReflection",
       "target": "obj_ghost"
@@ -59,7 +59,7 @@
     },
     {
       "id": "RH",
-      "symbol": "?",
+      "symbol": "Ω",
       "label": "The Horizon beyond 1149",
       "labelRu": "Горизонт за Пределами 1149",
       "destination": "ROOM_1149",
@@ -73,15 +73,15 @@
   ],
   "mirror": {
     "characterState": "THE_ARCHIVIST",
-    "characterStateRu": "АРХИВАРИУС ИСЧЕЗНУВШЕГО",
+    "characterStateRu": "АРХИВАРИУС НЕЗРИМОГО",
     "appearance": "assets/avatar_archivist.glb",
     "choices": ["accept", "reject", "back"]
   },
   "objects": [
     {
       "id": "obj_01",
-      "title": "Basalt Reliquary Key",
-      "titleRu": "Базальтовый Ключ-Реликварий",
+      "title": "Basalt Reliquary Seal",
+      "titleRu": "Базальтовая Печать-Реликварий",
       "type": "item",
       "model": "assets/key.glb",
       "interactions": ["inspect", "rotate"],
@@ -90,8 +90,8 @@
     },
     {
       "id": "puzzle_01",
-      "title": "Harmonic Astrolabe Busyboard",
-      "titleRu": "Гармоническая Астролябия",
+      "title": "Three-Ring Harmonic Astrolabe",
+      "titleRu": "Трёхкольцевая Гармоническая Астролябия",
       "type": "busyboard",
       "interactions": ["rotate", "align"],
       "portable": false,
@@ -100,8 +100,8 @@
     },
     {
       "id": "obj_ghost",
-      "title": "Ghost Monolith (Exists Only in Mirror)",
-      "titleRu": "Призрачный Монолит (Только в Отражении)",
+      "title": "The Vessel of Absence",
+      "titleRu": "Сосуд Отсутствия",
       "type": "anomaly",
       "interactions": ["interactReflection"],
       "portable": false,

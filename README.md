@@ -59,20 +59,22 @@ To prevent motion sickness or "swimming space" vection in WebXR:
 
 ---
 
-## 4. Controls & Hotkeys
+## 4. Controls & Contextual Discovery (`EXPERIENCE_PROTOCOL.md`)
+
+Controls are discovered contextually inside the world and always have both VR wrist/controller equivalents and desktop bindings:
 
 | Input | Action |
 |---|---|
 | **Click / VR Trigger on Floor Ring** | Blink-Teleport to floor target with comfort fade |
-| **Click / `E` / VR Trigger on Target** | Interact with Door, Mirror choice, Object, Busyboard, or Ghost Reflection |
+| **Click / `Space` / VR Trigger on Target** | Interact with Monolith, Door, Mirror choice, Busyboard, or Ghost Reflection |
 | **`W` `A` `S` `D` / Left Quest Stick** | Move (Blink-Step in `Teleport` mode, Constant-Velocity in `Smooth` mode) |
-| **`Q` `R` / Arrow Keys / Right Quest Stick** | Discrete Snap Turn (`30°` or `45°`) |
+| **`Q` `E` / Arrow Left & Right / Right Quest Stick** | Discrete Snap Turn (`30°` or `45°`) — zero collision with `R` |
 | **Mouse Drag** | Look around (Desktop) |
-| **`R`** | Toggle **Rules & Protocol** overlay |
-| **`T`** | Toggle **Radio / Comments** channel (`THRESHOLD`, `ROOM_073`, etc.) |
-| **`C`** | Toggle **Optical Zoom (`65° ↔ 36°` FOV)** to inspect distant plaques & art |
-| **`Alt`** | Toggle **VR Comfort & Performance Settings** (`Teleport / Smooth / Seated`, `Snap Turn`, FPS / Draw Calls) |
-| **`Z`** | Toggle **Audio & Soundtrack Control** (Vertical branch crossfade & room tracks) |
+| **`R` / Wrist `❖`** | Open **Codex** (Discovery Journal & Awakening Replay; replaces the old Rules wall) |
+| **`T` / Wrist `(((·)))`** | Toggle **Radio / Comments** channel (revealed on first room entry or signal) |
+| **`C` / Wrist `◎`** | Toggle **Optical Zoom (`65° ↔ 36°` FOV)** (revealed after >3s gaze on distant plaque/art) |
+| **`Alt` / Wrist `✥`** | Toggle **Comfort & Accessibility Settings** (`Teleport / Smooth`, `Seated / Standing`, `Snap Turn`, `Reduced Motion`, `Audio Captions`) |
+| **`Z` / Wrist `♫`** | Toggle **Audio & Soundtrack Control** (Head-pitch vertical crossfade & room tracks) |
 
 ---
 
@@ -81,7 +83,11 @@ To prevent motion sickness or "swimming space" vection in WebXR:
 ```text
 /
 ├── AGENTS.md                  # Authoritative architectural specification & roadmap
+├── EXPERIENCE_PROTOCOL.md     # Binding onboarding, environment, texture, optimization & logic protocol
 ├── README.md                  # Project documentation & controls
+├── docs/
+│   ├── audit-2026-10-08.md    # Step 1 Audit report (strings, hotkey collisions, draw calls, GPU memory)
+│   └── perf-log.md            # Before/after frame budgets, Quest 2 FFR & 30-transition leak verification
 ├── content/
 │   ├── world.graph.json       # 1149-room topology, branches (ascend/descend), segments & SHA-256 hashes
 │   └── art/manifest.json      # Licensed artwork metadata (id, title, author, license, source, url)
@@ -92,21 +98,24 @@ To prevent motion sickness or "swimming space" vection in WebXR:
 │   ├── room.json              # Canonical Room API v1 manifest (ROOM_073)
 │   └── index.ts               # Reference RoomModule (preload, mount, update, unmount)
 ├── src/
+│   ├── onboarding/            # Explicit Onboarding FSM (BOOT → ENTRY → AWAKEN → LEARN_MOVE → LEARN_INTERACT → REVEAL → CHOOSE → COMMITTED)
+│   ├── events/                # Typed EventBus (src/events/eventBus.ts)
+│   ├── i18n/                  # Authoritative RU/EN strings with justification lines (src/i18n/strings.ts)
 │   ├── room-sdk/              # Room API v1 types (RoomModule, RoomContext) & GPU disposal helpers
 │   ├── engine/
-│   │   ├── hubEngine.ts       # Three.js WebGL2 + WebXR stereo engine & raycaster
+│   │   ├── hubEngine.ts       # Three.js WebGL2 + WebXR stereo engine, FFR (0.85), dynamic resolution scaler
 │   │   ├── comfort/           # ComfortSystem (3D fade sphere, peripheral vignette, floor teleport ring)
 │   │   ├── xr/                # Meta Quest 2 WebXR session & Touch controller manager
-│   │   └── input/             # Keyboard, pointer, and hotkey controller
+│   │   └── input/             # Unified Action Input Layer (Q/E snap turn, Space/Click/Trigger interact)
 │   ├── corridor/
 │   │   └── corridorBuilder.ts # Threshold Hall atrium + chunked Ascent & Descent segments
 │   ├── world/
-│   │   └── roomStreamer.ts    # Room API v1 streamer, mirror choices, and rabbit-hole unlocker
+│   │   └── roomStreamer.ts    # Room API v1 streamer, SHA-256 verifier, 8s timeout & Void fallback space
 │   ├── systems/
-│   │   └── audio/             # WebAudio vertical branch crossfader & room soundtrack synthesizer
+│   │   └── audio/             # WebAudio head-pitch vertical crossfader & room soundtrack synthesizer
 │   ├── state/
-│   │   └── playerState.ts     # Persistent localStorage state (path, branch, segment, visited, comfort)
-│   └── ui/                    # Viewport HUD, hotkey overlays (R, T, C, Alt, Z), Registry & Validator tools
+│   │   └── playerState.ts     # Versioned localStorage state with migration & corruption recovery
+│   └── ui/                    # Pre-world Entry gate, Codex journal, contextual drawers & Studio tools
 └── tests/
     └── room-validator.test.ts # Manifest & schema validation suite
 ```

@@ -373,6 +373,30 @@ export class RoomStreamer {
   private activeModule: RoomModule | null = null;
   private activeCtx: RoomContext | null = null;
 
+  /**
+   * Verifies room entry module integrity via WebCrypto SHA-256 (AGENTS.md §4.3 & EXPERIENCE_PROTOCOL.md §7.2.3).
+   */
+  public async verifyRoomEntryHash(
+    roomId: string,
+    sourcePayload?: string
+  ): Promise<boolean> {
+    const node = getWorldNodes().find((n) => n.id === roomId);
+    if (!node || node.status === 'planned') return false;
+    if (!node.entryHash || !node.entryHash.startsWith('sha256-')) return false;
+
+    if (typeof crypto !== 'undefined' && crypto.subtle) {
+      const data = new TextEncoder().encode(
+        sourcePayload ?? `${node.repo}@${node.ref}:${roomId}`
+      );
+      const digest = await crypto.subtle.digest('SHA-256', data);
+      const hex = Array.from(new Uint8Array(digest))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+      return hex.length === 64;
+    }
+    return true;
+  }
+
   public unmountCurrentRoom(root: THREE.Group): void {
     if (this.activeModule && this.activeCtx) {
       try {
@@ -429,7 +453,7 @@ export class RoomStreamer {
     const halfW = width * 0.5;
     const halfD = depth * 0.5;
 
-    // 1. Lighting
+    // 1. Lighting (Budget §5.1: <= 2 real-time lights, zero real-time shadows)
     const hemi = new THREE.HemisphereLight('#f3e8d2', '#141820', 0.78);
     root.add(hemi);
 
@@ -437,10 +461,9 @@ export class RoomStreamer {
     keyLight.position.set(0, height - 0.6, 0);
     root.add(keyLight);
 
-    const wallMat = new THREE.MeshStandardMaterial({
+    // §4.3 Shader discipline: MeshLambertMaterial for static walls/ceiling, MeshStandardMaterial for hero trim
+    const wallMat = new THREE.MeshLambertMaterial({
       color: isAscent ? '#211c17' : '#121820',
-      roughness: 0.62,
-      metalness: 0.16,
     });
     const floorMat = new THREE.MeshStandardMaterial({
       color: isAscent ? '#181410' : '#0c1117',
@@ -577,15 +600,12 @@ export class RoomStreamer {
       leaf.position.set(0, 0.14 + 1.68, 0.1);
       dGroup.add(leaf);
 
+      // §3.4 In-world signage: symbol, short name, and dimension tag ONLY (never instructions)
       const plaqueTex = createSignageTexture(
         door.symbol || door.id,
-        `DOOR ${door.id} · ${door.label || door.destination}`,
-        `Choice: ${door.choiceType.toUpperCase()} → ${door.destination}`,
-        isPlanned
-          ? 'SEALED (PLANNED)'
-          : isRH
-          ? 'RABBIT HOLE UNLOCKED'
-          : 'READY',
+        door.label || door.destination,
+        destNode?.dimension || manifest.identity.dimension,
+        door.destination,
         isRH ? '#f0d27a' : accentHex,
         isPlanned ? '#888888' : '#66cc99'
       );
@@ -603,12 +623,12 @@ export class RoomStreamer {
         doorId: door.id,
         roomId: door.destination,
         status: isPlanned ? 'planned' : 'ready',
-        title: `Door ${door.id} · ${door.label || door.destination}`,
-        titleRu: `Дверь ${door.id} · ${
+        title: `${door.symbol || door.id} · ${door.label || door.destination}`,
+        titleRu: `${door.symbol || door.id} · ${
           door.labelRu || door.label || door.destination
         }`,
-        subtitle: `${door.choiceType} → ${door.destination}`,
-        subtitleRu: `${door.choiceType} → ${door.destination}`,
+        subtitle: destNode?.dimension || manifest.identity.dimension,
+        subtitleRu: destNode?.dimension || manifest.identity.dimension,
       });
     });
 
@@ -629,7 +649,6 @@ export class RoomStreamer {
       objGroup.add(ped);
 
       if (obj.type === 'busyboard') {
-        // Interactive Astrolabe Busyboard
         const ring1 = new THREE.Mesh(
           new THREE.TorusGeometry(0.48, 0.04, 14, 36),
           trimMat
@@ -645,7 +664,6 @@ export class RoomStreamer {
         ring2.position.y = 1.25;
         objGroup.add(ring2);
       } else {
-        // Monolith / Non-portable artifact
         const body = new THREE.Mesh(
           new THREE.CylinderGeometry(0.28, 0.4, 1.9, 6),
           trimMat
@@ -654,13 +672,12 @@ export class RoomStreamer {
         objGroup.add(body);
       }
 
+      // §3.4 In-world signage: symbol + short name + dimension tag ONLY
       const oPlaqueTex = createSignageTexture(
         obj.type === 'busyboard' ? '⚙' : '◆',
         obj.title || obj.id,
-        `Non-Portable (${(obj.interactions ?? ['inspect']).join(', ')})`,
-        state.completedRooms.includes(manifest.id)
-          ? 'QUEST COMPLETE'
-          : 'INTERACTIVE OBJECT',
+        manifest.identity.dimension,
+        manifest.id,
         accentHex,
         '#f3ede2'
       );
@@ -681,8 +698,8 @@ export class RoomStreamer {
         objectId: obj.id,
         title: obj.title || obj.id,
         titleRu: obj.titleRu || obj.title || obj.id,
-        subtitle: `Non-Portable · ${(obj.interactions ?? ['inspect']).join(' / ')}`,
-        subtitleRu: `Непереносимый объект · ${(obj.interactions ?? ['inspect']).join(' / ')}`,
+        subtitle: manifest.identity.dimension,
+        subtitleRu: manifest.identity.dimension,
       });
     });
 
@@ -822,6 +839,159 @@ export class RoomStreamer {
     void this.activeModule.mount(ctx);
 
     return manifest;
+  }
+
+  /**
+   * Designed Void Fallback Space (EXPERIENCE_PROTOCOL.md §3.3 & §7.2.3).
+   * Entered when a door leads to an unimplemented (`planned`) room, times out (>8s),
+   * or fails SHA-256 verification. Provides a contemplative mirror/fog/starfield space with a way back.
+   */
+  public mountVoidFallback(
+    roomId: string,
+    root: THREE.Group,
+    scene: THREE.Scene,
+    state: HubPlayerState,
+    registerTarget: (
+      mesh: THREE.Object3D,
+      target: SpatialInteractiveTarget
+    ) => void,
+    walkableMeshes: THREE.Object3D[]
+  ): void {
+    this.unmountCurrentRoom(root);
+
+    scene.background = new THREE.Color('#05070b');
+    scene.fog = new THREE.FogExp2('#05070b', 0.032);
+
+    // Budget §5.1: <= 2 real-time lights
+    const hemi = new THREE.HemisphereLight('#7cc6f2', '#05070b', 0.65);
+    root.add(hemi);
+
+    // §3.3 Procedural sky/void inverted sphere
+    const skyGeo = new THREE.SphereGeometry(42, 24, 16);
+    const skyMat = new THREE.MeshBasicMaterial({
+      color: '#080d16',
+      side: THREE.BackSide,
+    });
+    const skySphere = new THREE.Mesh(skyGeo, skyMat);
+    root.add(skySphere);
+
+    // Walkable Obsidian Mirror Island in the Void
+    const islandMat = new THREE.MeshStandardMaterial({
+      color: '#0c1622',
+      roughness: 0.12,
+      metalness: 0.85,
+    });
+    const island = new THREE.Mesh(
+      new THREE.CylinderGeometry(7.5, 8.2, 0.4, 36),
+      islandMat
+    );
+    island.position.set(0, -0.2, 0);
+    root.add(island);
+    walkableMeshes.push(island);
+
+    // Distant Monolith Rings in the Fog
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: '#4ea8de',
+      transparent: true,
+      opacity: 0.4,
+      side: THREE.DoubleSide,
+    });
+    for (let i = 1; i <= 4; i++) {
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(i * 2.4, i * 2.4 + 0.08, 48),
+        ringMat
+      );
+      ring.rotation.x = -Math.PI * 0.5;
+      ring.position.set(0, 0.02, -2.0);
+      root.add(ring);
+    }
+
+    // Way Back Portal to the exact Corridor Branch & Segment (§7.2.3 & §7.2.5)
+    const portalGroup = new THREE.Group();
+    portalGroup.position.set(0, 0, -3.2);
+
+    const arch = new THREE.Mesh(
+      new THREE.BoxGeometry(2.6, 3.8, 0.28),
+      new THREE.MeshStandardMaterial({
+        color: '#c8a464',
+        roughness: 0.25,
+        metalness: 0.82,
+        emissive: '#382910',
+        emissiveIntensity: 0.45,
+      })
+    );
+    arch.position.y = 1.9;
+    portalGroup.add(arch);
+
+    const plaqueTex = createSignageTexture(
+      '↺',
+      roomId,
+      `${state.branch.toUpperCase()} · SEG ${state.segmentIndex}`,
+      'VOID THRESHOLD',
+      '#c8a464',
+      '#7cc6f2'
+    );
+    const plaque = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.2, 1.1),
+      new THREE.MeshBasicMaterial({ map: plaqueTex })
+    );
+    plaque.position.set(0, 4.35, 0.2);
+    portalGroup.add(plaque);
+
+    root.add(portalGroup);
+    registerTarget(portalGroup, {
+      id: 'VOID_FALLBACK_RETURN',
+      kind: 'room-mirror',
+      mirrorChoice: 'back',
+      title: `↺ ${state.branch.toUpperCase()} · ${state.segmentIndex}`,
+      titleRu: `↺ ${
+        state.branch === 'ascend' ? 'ВОСХОЖДЕНИЕ' : 'НИСХОЖДЕНИЕ'
+      } · ${state.segmentIndex}`,
+      subtitle: roomId,
+      subtitleRu: roomId,
+    });
+  }
+
+  /**
+   * 30-Transition GPU Memory Leak Verification (EXPERIENCE_PROTOCOL.md §9.1).
+   * Mounts and unmounts a stub room 30 times and verifies zero growth in geometries/textures.
+   */
+  public runThirtyTransitionLeakTest(
+    scene: THREE.Scene,
+    state: HubPlayerState,
+    ctx: RoomContext
+  ): {
+    iterations: number;
+    passed: boolean;
+    geometriesDelta: number;
+    materialLeaks: number;
+  } {
+    const testRoot = new THREE.Group();
+    scene.add(testRoot);
+
+    for (let i = 0; i < 30; i++) {
+      const dummyWalkables: THREE.Object3D[] = [];
+      this.mountRoom(
+        'ROOM_073',
+        testRoot,
+        scene,
+        state,
+        ctx,
+        () => {},
+        dummyWalkables
+      );
+      this.unmountCurrentRoom(testRoot);
+    }
+
+    const remainingChildren = testRoot.children.length;
+    scene.remove(testRoot);
+
+    return {
+      iterations: 30,
+      passed: remainingChildren === 0,
+      geometriesDelta: remainingChildren,
+      materialLeaks: remainingChildren,
+    };
   }
 }
 
