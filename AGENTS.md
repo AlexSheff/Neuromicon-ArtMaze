@@ -46,3 +46,22 @@ The player begins at the **Threshold**, a vast vertical atrium. The space is spl
 |---|---|---|---|
 | **Up — Ascent** | Grow, embody (воплощать, расти) | `ASCENT` | `ascend` |
 | **Down — Descent** | Search, explore (искать, исследовать) | `DESCENT` | `descend` |
+
+## 4B. Room API v1 Contract & Additive Extensions (`src/room-sdk/index.ts`, `schema/room.schema.json`)
+
+Every room package exports a `RoomModule` and is mounted with a `RoomContext`. Per `TZ_NEBULA_LIGHTING_AUDIO_PAUSE.md` (§3.6, §3.7, §4.6, §5.5, §6.4), the following **additive** extensions are part of Room API v1:
+
+- **`RoomModule` lifecycle hooks:**
+  - `mount(ctx: RoomContext): Promise<void> | void`
+  - `update?(ctx: RoomContext, dt: number): void` — called with `gameDt` (`0` while paused; room modules may also skip work when `ctx.time.paused` is `true`).
+  - `onPause?(ctx: RoomContext): void` — optional notification when the player pauses (`P` / `Escape` / VR controller Menu / `visibilitychange`).
+  - `onResume?(ctx: RoomContext): void` — optional notification when the player resumes.
+  - `unmount(ctx: RoomContext): void`
+- **`RoomContext` additive fields:**
+  - `ctx.time`: `{ readonly now: number; readonly delta: number; readonly paused: boolean }` (pausable game clock).
+  - `ctx.sky`: `{ readonly current: NebulaEntry; set(nebulaId: string, opts?: { rotation?: [number, number, number]; intensity?: number; crossfadeSec?: number }): Promise<void> }`.
+  - `ctx.environment`: `{ readonly palette: [string, string, string]; applyRig(root: THREE.Object3D): void }`.
+  - `ctx.audio`: `{ playRoomTrack(url: string, baseHz?: number): void; triggerTone(freq: number, durationSec?: number): void; bus(name: 'music' | 'ambient' | 'sfx' | 'voice'): AudioNode | null }`.
+- **`room.json` schema (`schema/room.schema.json`):**
+  - Optional `"sky"` object: `{ "nebulaId": "NEB_XXXX", "rotation": [rx, ry, rz], "intensity": 0.2..1.5 }`. Validated against `content/space/nebulae.registry.json`.
+

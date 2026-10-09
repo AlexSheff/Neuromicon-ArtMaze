@@ -7,6 +7,11 @@ import {
   RoomManifest,
   VoidType,
 } from '../../src/types/artmaze';
+import nebulaeRegistryData from '../../content/space/nebulae.json';
+
+const VALID_NEBULA_IDS = new Set<string>(
+  nebulaeRegistryData.nebulae.map((n: { id: string }) => n.id)
+);
 
 export interface ValidationIssue {
   severity: 'error' | 'warning';
@@ -589,6 +594,54 @@ export function validateRoomManifest(input: string | unknown): ValidationResult 
             });
           }
         }
+      }
+    }
+  }
+
+  // TZ.md §3.6 Optional Sky Override Validation
+  if (parsed.sky !== undefined && parsed.sky !== null) {
+    if (typeof parsed.sky !== 'object') {
+      errors.push({
+        severity: 'error',
+        path: 'sky',
+        rule: 'TZ §3.6 Room Sky Schema',
+        message: '"sky" must be an object if provided.',
+      });
+    } else {
+      const sky = parsed.sky as Record<string, unknown>;
+      if (sky.nebulaId !== undefined) {
+        if (
+          typeof sky.nebulaId !== 'string' ||
+          !VALID_NEBULA_IDS.has(sky.nebulaId)
+        ) {
+          errors.push({
+            severity: 'error',
+            path: 'sky.nebulaId',
+            rule: 'TZ §3.6 Nebula Registry Reference',
+            message: `sky.nebulaId "${String(sky.nebulaId)}" does not exist in content/space/nebulae.registry.json.`,
+          });
+        }
+      }
+      if (sky.rotation !== undefined && !isVec3(sky.rotation)) {
+        errors.push({
+          severity: 'error',
+          path: 'sky.rotation',
+          rule: 'TZ §3.6 Sky Rotation',
+          message: 'sky.rotation must be a 3-number Euler array [rx, ry, rz].',
+        });
+      }
+      if (
+        sky.intensity !== undefined &&
+        (typeof sky.intensity !== 'number' ||
+          sky.intensity < 0.2 ||
+          sky.intensity > 1.5)
+      ) {
+        errors.push({
+          severity: 'error',
+          path: 'sky.intensity',
+          rule: 'TZ §3.6 Sky Intensity',
+          message: 'sky.intensity must be a number between 0.2 and 1.5.',
+        });
       }
     }
   }

@@ -49,6 +49,11 @@ const SAMPLE_NEW_ROOM_TEMPLATE = JSON.stringify(
       locomotion: 'standard',
       returnAllowed: true,
     },
+    sky: {
+      nebulaId: 'NEB_0012',
+      rotation: [0.15, -0.22, 0.05],
+      intensity: 1.0,
+    },
     paintings: [
       {
         id: 'painting_088_1',
@@ -203,6 +208,29 @@ export const RoomValidatorPanel: React.FC<RoomValidatorPanelProps> = ({
             </p>
           </div>
         ))}
+        <div className="p-4 bg-[#131210] border border-white/10 rounded">
+          <div className="flex items-center justify-between text-xs font-mono tabular-nums">
+            <span className="text-[#e5c158] font-semibold">NEBULA SKY & MIXER</span>
+            <span
+              className={
+                suiteSummary.nebulaReport.valid &&
+                suiteSummary.mixerCurvePassed &&
+                suiteSummary.migrationPassed
+                  ? 'text-emerald-400'
+                  : 'text-rose-400'
+              }
+            >
+              {suiteSummary.nebulaReport.valid &&
+              suiteSummary.mixerCurvePassed &&
+              suiteSummary.migrationPassed
+                ? 'VALID · PASS'
+                : 'ERROR'}
+            </span>
+          </div>
+          <p className="text-xs text-[#9c9488] mt-1">
+            {`${suiteSummary.nebulaReport.uniqueRoomMappings} Real Nebulae · ${suiteSummary.nebulaReport.totalCoveredRooms} Rooms · 4-Bus v²`}
+          </p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
