@@ -1,45 +1,49 @@
 import { VoidType } from '../../types/artmaze';
+import {
+  AudioBusName,
+  audioMixer,
+  AudioVolumeState,
+} from './mixer';
 
 /**
- * Spatial & Room Audio System for Neuromicon Artmaze.
+ * Spatial & Room Audio System for Neuromicon Artmaze (TZ.md §5 & §6).
  * Strictly enforces:
- * 1. One Room = One MP3 Track from https://github.com/AlexSheff/Neuromicon.
- * 2. Tracks play ONLY inside rooms (never in the Starting Cosmic Room, Corridor, or Void).
- * 3. Tracks NEVER overlap: entering a new room or leaving a room immediately halts and resets
+ * 1. All sources route through `audioMixer.bus('music' | 'ambient' | 'sfx')` -> `masterGain` -> `limiter`.
+ * 2. One Room = One MP3 Track from https://github.com/AlexSheff/Neuromicon.
+ * 3. Tracks play ONLY inside rooms (never in the Starting Cosmic Room, Sector Halls, or Void).
+ * 4. Tracks NEVER overlap: entering a new room or leaving a room immediately halts and resets
  *    any prior track before starting the next one.
+ * 5. Game Pause freezes MP3 playback at its exact `currentTime` and resumes seamlessly (± 50 ms).
  */
 export class SpatialAudioSystem {
-  private ctx: AudioContext | null = null;
-  private masterGain: GainNode | null = null;
-
   private mp3Audio: HTMLAudioElement | null = null;
+  private mediaElementSource: MediaElementAudioSourceNode | null = null;
   private currentRoomTrackUrl = '';
   private isMp3Streaming = false;
   private inRoom = false;
+  private pausedByGame = false;
+  private savedPauseTime = 0;
   private playbackToken = 0;
 
-  private active = true;
-  private volume = 0.8;
   private currentTrackLabel = 'Cosmic Nexus (Silent Outside Rooms)';
 
-  private ensureAudioContext(): void {
-    if (this.ctx) {
-      if (this.ctx.state === 'suspended') {
-        void this.ctx.resume();
-      }
-      return;
-    }
-    try {
-      const AudioCtx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext })
-          .webkitAudioContext;
-      this.ctx = new AudioCtx();
-      this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
-      this.masterGain.connect(this.ctx.destination);
-    } catch {
-      // WebAudio context unavailable
+  constructor() {
+    // Sync HTMLAudioElement fallback volume whenever mixer state changes
+    audioMixer.subscribe(() => {
+      this.syncElementVolume();
+    });
+  }
+
+  private syncElementVolume(): void {
+    if (!this.mp3Audio) return;
+    // If routed through WebAudio MediaElementAudioSourceNode, WebAudio GainNodes control volume
+    // and element.volume stays 1.0. If WebAudio graph isn't attached yet, apply perceptual gain directly.
+    if (this.mediaElementSource) {
+      this.mp3Audio.volume = 1.0;
+      this.mp3Audio.muted = audioMixer.getState().muted;
+    } else {
+      this.mp3Audio.volume = audioMixer.getEffectiveLinearGain('music');
+      this.mp3Audio.muted = audioMixer.getState().muted;
     }
   }
 
@@ -49,7 +53,6 @@ export class SpatialAudioSystem {
       audio.crossOrigin = 'anonymous';
       audio.loop = true;
       audio.preload = 'auto';
-      audio.volume = this.volume;
       audio.addEventListener('playing', () => {
         this.isMp3Streaming = true;
       });
@@ -64,7 +67,36 @@ export class SpatialAudioSystem {
       });
       this.mp3Audio = audio;
     }
+
+    // Wrap HTMLAudioElement into the mixer's `music` bus via createMediaElementSource (TZ.md §5.1)
+    if (!this.mediaElementSource && this.mp3Audio) {
+      const ctx = audioMixer.ensureContext();
+      const musicBus = audioMixer.bus('music');
+      if (ctx && musicBus && typeof ctx.createMediaElementSource === 'function') {
+        try {
+          this.mediaElementSource = ctx.createMediaElementSource(this.mp3Audio);
+          this.mediaElementSource.connect(musicBus);
+        } catch {
+          // Fallback if browser disallows MediaElementSource before gesture
+        }
+      }
+    }
+
+    this.syncElementVolume();
     return this.mp3Audio;
+  }
+
+  public getBus(busName: AudioBusName): GainNode | null {
+    return audioMixer.bus(busName);
+  }
+
+  public getVolumeState(): AudioVolumeState {
+    return audioMixer.getState();
+  }
+
+  public setVolumeState(partial: Partial<AudioVolumeState>): void {
+    audioMixer.setVolumeState(partial);
+    this.syncElementVolume();
   }
 
   /**
@@ -76,6 +108,7 @@ export class SpatialAudioSystem {
     this.inRoom = false;
     this.currentRoomTrackUrl = '';
     this.isMp3Streaming = false;
+    this.savedPauseTime = 0;
     this.currentTrackLabel = 'Cosmic Nexus (Tracks play only inside rooms)';
 
     if (this.mp3Audio) {
@@ -90,12 +123,74 @@ export class SpatialAudioSystem {
     }
   }
 
+  /**
+   * Freezes audio for Game Pause: ramps master to 0 over ~150ms, pauses streamed track keeping exact position,
+   * and suspends AudioContext (TZ.md §6.2).
+   */
+  public pauseGameAudio(): void {
+    if (this.pausedByGame) return;
+    this.pausedByGame = true;
+    audioMixer.pauseForGamePause(() => {
+      if (this.mp3Audio && this.inRoom) {
+        try {
+          this.savedPauseTime = this.mp3Audio.currentTime;
+          this.mp3Audio.pause();
+        } catch {
+          // ignore
+        }
+      }
+    });
+  }
+
+  /**
+   * Resumes audio after Game Pause: resumes AudioContext, restores streamed track from saved position,
+   * and ramps master gain up over ~150ms (TZ.md §6.2).
+   */
+  public resumeGameAudio(): void {
+    if (!this.pausedByGame) return;
+    this.pausedByGame = false;
+    audioMixer.resumeFromGamePause(() => {
+      if (
+        this.inRoom &&
+        this.currentRoomTrackUrl &&
+        this.mp3Audio &&
+        !audioMixer.getState().muted
+      ) {
+        const token = ++this.playbackToken;
+        try {
+          if (
+            this.savedPauseTime > 0 &&
+            Math.abs(this.mp3Audio.currentTime - this.savedPauseTime) > 0.04
+          ) {
+            this.mp3Audio.currentTime = this.savedPauseTime;
+          }
+          void this.mp3Audio
+            .play()
+            .then(() => {
+              if (
+                token !== this.playbackToken ||
+                !this.inRoom ||
+                this.pausedByGame
+              ) {
+                this.mp3Audio?.pause();
+              }
+            })
+            .catch(() => {
+              this.isMp3Streaming = false;
+            });
+        } catch {
+          // ignore
+        }
+      }
+    });
+  }
+
   public isPlaying(): boolean {
-    return this.active;
+    return !audioMixer.getState().muted;
   }
 
   public isStreamingMp3(): boolean {
-    return this.isMp3Streaming && this.inRoom;
+    return this.isMp3Streaming && this.inRoom && !this.pausedByGame;
   }
 
   public getCurrentMp3Url(): string {
@@ -103,7 +198,7 @@ export class SpatialAudioSystem {
   }
 
   public getVolume(): number {
-    return this.volume;
+    return audioMixer.getState().master;
   }
 
   public getCurrentTrackLabel(): string {
@@ -111,59 +206,46 @@ export class SpatialAudioSystem {
   }
 
   public setVolume(vol: number): void {
-    this.volume = Math.max(0, Math.min(1, vol));
-    if (this.ctx && this.masterGain) {
-      this.masterGain.gain.setTargetAtTime(
-        this.volume,
-        this.ctx.currentTime,
-        0.05
-      );
-    }
-    if (this.mp3Audio) {
-      this.mp3Audio.volume = this.volume;
-    }
+    audioMixer.setBusVolume('master', vol);
+    this.syncElementVolume();
   }
 
   public toggle(): boolean {
-    this.active = !this.active;
-    if (!this.active) {
-      if (this.mp3Audio) {
-        this.mp3Audio.pause();
-      }
-      this.isMp3Streaming = false;
-    } else {
-      this.ensureAudioContext();
-      // Resume room track ONLY if player is currently inside a room
-      if (this.inRoom && this.currentRoomTrackUrl && this.mp3Audio) {
-        const token = ++this.playbackToken;
-        void this.mp3Audio.play().then(() => {
-          if (token !== this.playbackToken || !this.inRoom) {
-            this.mp3Audio?.pause();
+    const muted = audioMixer.toggleMute();
+    this.syncElementVolume();
+    if (!muted && this.inRoom && this.currentRoomTrackUrl && !this.pausedByGame) {
+      const audio = this.ensureMp3Element();
+      const token = ++this.playbackToken;
+      void audio
+        .play()
+        .then(() => {
+          if (token !== this.playbackToken || !this.inRoom || this.pausedByGame) {
+            audio.pause();
           }
-        }).catch(() => {
+        })
+        .catch(() => {
           this.isMp3Streaming = false;
         });
-      }
     }
-    return this.active;
+    return !muted;
   }
 
   public start(): void {
-    this.active = true;
-    this.ensureAudioContext();
-    if (this.inRoom && this.currentRoomTrackUrl) {
+    audioMixer.ensureContext();
+    this.syncElementVolume();
+    if (this.inRoom && this.currentRoomTrackUrl && !this.pausedByGame) {
       this.playRoomSoundtrack(this.currentRoomTrackUrl, 144);
     }
   }
 
   public stop(): void {
-    this.active = false;
+    audioMixer.setVolumeState({ muted: true });
     this.stopRoomSoundtrack();
   }
 
   /**
-   * Called when the player is in the Starting Cosmic Room or Corridor.
-   * Per user requirement, MP3 tracks play ONLY inside rooms and never outside.
+   * Called when the player is in the Starting Cosmic Room or 3 Sector Rooms.
+   * MP3 tracks play ONLY inside the 25 rooms and never outside.
    */
   public setCorridorVerticalCrossfade(_blend01: number, label?: string): void {
     if (this.inRoom || this.currentRoomTrackUrl) {
@@ -175,14 +257,13 @@ export class SpatialAudioSystem {
   }
 
   /**
-   * Starts the unique MP3 track for the mounted room after strictly stopping any prior track.
+   * Starts the unique MP3 track for the mounted room routed through the `music` bus.
    */
   public playRoomSoundtrack(
     trackPath: string,
     _baseHz = 108,
     displayTitle?: string
   ): void {
-    // 1. Always stop any previous track first so two tracks never overlap
     const token = ++this.playbackToken;
     const audio = this.ensureMp3Element();
     try {
@@ -200,6 +281,7 @@ export class SpatialAudioSystem {
     }
 
     this.inRoom = true;
+    this.savedPauseTime = 0;
     this.currentRoomTrackUrl = trackPath;
     const fileName = decodeURIComponent(trackPath.split('/').pop() ?? trackPath);
     this.currentTrackLabel = displayTitle
@@ -207,18 +289,18 @@ export class SpatialAudioSystem {
       : `ROOM TRACK · ${fileName}`;
 
     audio.src = trackPath;
-    audio.volume = this.volume;
+    this.syncElementVolume();
     audio.load();
 
-    if (this.active) {
+    if (!this.pausedByGame && !audioMixer.getState().muted) {
       void audio
         .play()
         .then(() => {
-          // If another room transition or exit happened while loading, immediately pause!
           if (
             token !== this.playbackToken ||
             !this.inRoom ||
-            !this.active
+            this.pausedByGame ||
+            audioMixer.getState().muted
           ) {
             audio.pause();
             audio.currentTime = 0;
@@ -240,22 +322,27 @@ export class SpatialAudioSystem {
     }
   }
 
+  /**
+   * Synthesizes an interaction chime routed exclusively through the `sfx` bus (TZ.md §5.1).
+   */
   public triggerChime(freq = 440): void {
-    if (!this.active) return;
-    this.ensureAudioContext();
-    if (!this.ctx || !this.masterGain) return;
+    if (this.pausedByGame || audioMixer.getState().muted) return;
+    const ctx = audioMixer.ensureContext();
+    const sfxBus = audioMixer.bus('sfx');
+    if (!ctx || !sfxBus) return;
+
     try {
-      const now = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, now);
-      gain.gain.setValueAtTime(0.12, now);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+      gain.gain.setValueAtTime(0.14, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
       osc.connect(gain);
-      gain.connect(this.masterGain);
+      gain.connect(sfxBus);
       osc.start(now);
-      osc.stop(now + 0.48);
+      osc.stop(now + 0.45);
     } catch {
       // ignore
     }

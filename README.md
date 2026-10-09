@@ -9,72 +9,58 @@ Each room is an independent artwork living in its own repository (`room.json` + 
 
 ---
 
-## 1. Main Corridor — The Threshold (First Deliverable)
+## 1. Grand Cosmic Starting Room & 3 Sector Rooms (25 Neuromicon Artworks & MP3 Tracks)
 
-The player begins at the **Threshold**, a vast vertical atrium split in two vertically. The first act of the game is a physical, diegetic choice:
+The player begins in the **Grand Cosmic Starting Room (The Threshold)** beneath a 4-layer astronomical sky (**Carina Nebula Cosmic Cliffs `NEB_0001`** + NASA/SVS all-sky starfield) and rotating celestial astrolabe rings. Before the player stand **3 Grand Cosmic Doors** leading into the **3 Sector Rooms**:
 
-| Direction | Meaning | Branch ID | Registry `branch` | Visual & Acoustic Direction |
-|---|---|---|---|---|
-| **Up — Ascent** | Grow, embody (*воплощать, расти*) | `ASCENT` | `ascend` | Sunlit travertine vaults, golden colonnades, celestial harmonic layer |
-| **Down — Descent** | Search, explore (*искать, исследовать*) | `DESCENT` | `descend` | Subterranean basalt monoliths, cyan reflection pools, abyssal drone layer |
+| Sector Room | Branch | Nebula Sky & Palette | Doors Inside |
+|---|---|---|---|
+| **Room I · The Source Code** | `ascend` (Segment 1) | `NEB_0002` Pillars of Creation (Eagle Nebula M16, Warm Gold/Amber) | **11 Doors** → `ROOM_001` (`01 · Purpose`) through `ROOM_011` (`11 · Action`) |
+| **Room II · Operating System** | `descend` (Segment 2) | `NEB_0012` Veil Nebula Cygnus Loop (Cool Cyan/Cobalt) | **8 Doors** → `ROOM_012` (`12 · Solitude`) through `ROOM_019` (`19 · Algorithm`) |
+| **Room III · Upgrade & Mirror** | `ascend` (Segment 3) | `NEB_0024` Webb First Deep Field (`SMACS 0723`, Deep Astral Violet/Gold) | **6 Doors** → `ROOM_020` (`20 · Signal vs Noise`) through `ROOM_025` (`25 · The Mirror`) |
 
-- **Chunked Corridor Segments:** Each branch (`ascend` and `descend`) consists of colossal segmented halls (`Segment 1`, `Segment 2`). Only the active segment is mounted in GPU memory (`THREE.InstancedMesh` colonnades, ≤ 150 draw calls, 72 FPS target on Meta Quest 2).
-- **Door Signage & State Indicators:** Every corridor door displays its room symbol, title, dimension (`D1`–`D9`), and state (`UNVISITED`, `VISITED`, `COMPLETED`, or `SEALED / PLANNED`). Rabbit-hole doors are never indicated in the corridor.
-- **Persistent Path & Return:** Choosing Ascent or Descent writes `player.path = "ascend" | "descend"` to `localStorage`. Returning from any room via the Mirror (`BACK`) restores the exact corridor branch and segment where the player left.
-
----
-
-## 2. Core Room Loop & Room API v1
-
-Behind each corridor door is an independent room (`ROOM_001` .. `ROOM_1149`, including `ROOM_073` *"Archive of Missing Things"*):
-
-1. **Quest & Philosophical Question:** Each room poses a question and an objective completed by interacting with room artifacts or spatial anomalies.
-2. **Three Regular Doors (`A`, `B`, `C`):**
-   - `Door A` (`identity-accept`)
-   - `Door B` (`identity-reject`)
-   - `Door C` (`free`)
-3. **One Hidden Rabbit Hole (`Door RH`):** Hidden by default (`visibility: "hidden"`). Unlocked only by discovering a rule violation (e.g., interacting with a ghost monolith that exists **only inside the mirror reflection**, `onlyInMirror: true`).
-4. **The Identity Mirror:** Displays the room's archetype (`characterState`) and offers three choices: `ACCEPT`, `REJECT`, or `BACK` (return to the Main Corridor).
-5. **Non-Portable Objects (`portable: false`):** Interactive objects and busyboards can be inspected or rotated, but never leave the room—only knowledge and identity state travel across thresholds.
-
-```ts
-export interface RoomModule {
-  preload?(ctx: RoomContext): Promise<void>;   // optional asset preload
-  mount(ctx: RoomContext): Promise<void>;      // build scene under ctx.root
-  update?(dt: number, ctx: RoomContext): void; // per-frame update
-  unmount(ctx: RoomContext): void;             // dispose all geometries, materials, textures
-}
-```
+- **Strict Room-Only Audio Isolation:** Each of the 25 rooms streams its own unique MP3 track and framed artwork from [`AlexSheff/Neuromicon`](https://github.com/AlexSheff/Neuromicon). Tracks play **exclusively inside rooms** and **never overlap**—exiting to a Sector Room or the Grand Cosmic Starting Room immediately halts the room track.
 
 ---
 
-## 3. VR Comfort First (Meta Quest 2 & Desktop)
+## 2. Real Astronomical Nebula Skies & Palette-Driven Lighting (`TZ.md` §3 & §4)
 
-To prevent motion sickness or "swimming space" vection in WebXR:
+Every room (`ROOM_001`..`ROOM_025` and deterministic variants across all `1,149` rooms) features an open celestial oculus looking up into a **4-layer astronomical sky** (`src/systems/sky/nebulaSkySystem.ts`):
 
-- **Blink-Teleport with Comfort Fade (`teleport` mode, default):** Aim the Quest Touch controller ray (or desktop cursor) at any walkable floor/platform to reveal the golden **3D Teleport Ring**, then press Trigger / Click (or push the thumbstick forward) to blink-teleport with a smooth black micro-fade.
-- **Discrete Snap Turn (`30°` / `45°`):** Right thumbstick and `Q` / `R` keys rotate in crisp discrete steps rather than continuous rotational swimming.
-- **Smooth Locomotion with Peripheral Vignette (`smooth` mode):** Constant-velocity movement (zero camera acceleration) paired with an automatic 3D peripheral comfort vignette and stable horizon reference ticks.
-- **Seated Mode (`seated`):** Adds a calibrated `+0.45m` vertical rig offset for seated VR sessions.
+1. **L0 All-Sky Star Map:** Shared equirectangular starfield (`NASA/GSFC SVS 2020`, `PD-NASA`) rotated deterministically per room seed (`1` draw call).
+2. **L1 Curved Nebula Cap:** Curated NASA / ESA / Webb / Hubble deep-sky photography (`content/space/nebulae.json`, credited in `CREDITS.md`) rendered on a `74° × 54°` curved spherical cap with a radial alpha feather mask—never stretched 360° (`1` draw call).
+3. **L2 Cosmic Dust Parallax:** Additive 3D particle motes tinted by the room's 3-color OKLab nebula palette (`1` draw call).
+4. **Palette-Driven Lighting Rig (`<= 2` Lights, `0` Shadows):** Each room's `HemisphereLight`, `DirectionalLight` (aligned with the nebula cap), `FogExp2`, and `64×64` environment reflection cubemap (`scene.environment`) are driven by its nebula's 3-color palette.
 
 ---
 
-## 4. Controls & Contextual Discovery (`EXPERIENCE_PROTOCOL.md`)
+## 3. 4-Bus Perceptual Audio Mixer & Real Pause (`TZ.md` §5 & §6)
 
-Controls are discovered contextually inside the world and always have both VR wrist/controller equivalents and desktop bindings:
+- **4-Bus WebAudio Mixer (`src/systems/audio/mixer.ts`):** All audio routes through `[music bus]`, `[ambient bus]`, and `[sfx bus]` → `[master gain]` → `[brickwall limiter (DynamicsCompressorNode)]` → `AudioContext.destination`.
+- **Perceptual `v²` Volume Curve:** Sliders map `v ∈ [0, 1]` to `g = v²` via `setTargetAtTime(g, now, 0.04)` (zero clicks/pops) and persist in `PlayerState.audio` (`localStorage` schema `v4`).
+- **Real Pause (`P` / `Esc` / VR Controller `B`/`Y` Menu Button):**
+  - Freezes the game clock (`ctx.time.delta = 0`, `ctx.time.paused = true`), halts locomotion and room animations (`onPause` / `onResume`), and smoothly ramps master audio to `0` over `150 ms` before suspending `AudioContext` (preserving exact MP3 playback timestamp on resume).
+  - **Never freezes head tracking:** The WebXR stereo render loop continues at 72 FPS while displaying a **world-locked 3D VR Pause & Volume Mixer Panel** `1.68 m` in front of the player.
+  - Automatically pauses when the browser tab is hidden (`visibilitychange`) or when the Quest headset is removed (`visible-blurred`).
+
+---
+
+## 4. Controls (`EXPERIENCE_PROTOCOL.md` & `TZ.md`)
 
 | Input | Action |
 |---|---|
 | **Click / VR Trigger on Floor Ring** | Blink-Teleport to floor target with comfort fade |
-| **Click / `Space` / VR Trigger on Target** | Interact with Monolith, Door, Mirror choice, Busyboard, or Ghost Reflection |
+| **Click / `Space` / VR Trigger on Target** | Interact with Pedestal, Door, Painting Essay, Mirror, Anomaly, or 3D Pause Panel |
 | **`W` `A` `S` `D` / Left Quest Stick** | Move (Blink-Step in `Teleport` mode, Constant-Velocity in `Smooth` mode) |
 | **`Q` `E` / Arrow Left & Right / Right Quest Stick** | Discrete Snap Turn (`30°` or `45°`) — zero collision with `R` |
-| **Mouse Drag** | Look around (Desktop) |
-| **`R` / Wrist `❖`** | Open **Codex** (Discovery Journal & Awakening Replay; replaces the old Rules wall) |
-| **`T` / Wrist `(((·)))`** | Toggle **Radio / Comments** channel (revealed on first room entry or signal) |
-| **`C` / Wrist `◎`** | Toggle **Optical Zoom (`65° ↔ 36°` FOV)** (revealed after >3s gaze on distant plaque/art) |
-| **`Alt` / Wrist `✥`** | Toggle **Comfort & Accessibility Settings** (`Teleport / Smooth`, `Seated / Standing`, `Snap Turn`, `Reduced Motion`, `Audio Captions`) |
-| **`Z` / Wrist `♫`** | Toggle **Audio & Soundtrack Control** (Head-pitch vertical crossfade & room tracks) |
+| **`P` / `Esc` / VR `B`/`Y` Button / Top-Right `⏸`** | **Pause / Resume** (freezes game clock & audio, spawns 3D world-locked VR panel) |
+| **`M` / Top-Right `🔊`/`🔇`** | **Mute / Unmute** all audio buses (`40 ms` smooth ramp) |
+| **`[` / `]`** | **Master Volume Down / Up** (`-5%` / `+5%` step) |
+| **`Z` / Top-Right `♫`** | Toggle **4-Bus Audio Mixer** (`Master`, `Music`, `Ambient`, `Effects`) |
+| **`R` / Top-Right `❖`** | Toggle **Codex** (Discovery Journal, 3 Sector Rooms quick jump, Nebula credits & 30-transition GPU test) |
+| **`T` / Top-Right `(((·)))`** | Toggle **Radio / Comments** channel |
+| **`C` / Top-Right `◎`** | Toggle **Optical Zoom (`65° ↔ 36°` FOV)** |
+| **`Alt` / Top-Right `✥`** | Toggle **Comfort & Quality Tier** (`Teleport / Smooth`, `Seated / Standing`, `Snap Turn`, `Reduced Motion`, `Captions`, `Quality Tier: auto / quest / desktop-low / desktop-high`) |
 
 ---
 
@@ -84,45 +70,46 @@ Controls are discovered contextually inside the world and always have both VR wr
 /
 ├── AGENTS.md                  # Authoritative architectural specification & roadmap
 ├── EXPERIENCE_PROTOCOL.md     # Binding onboarding, environment, texture, optimization & logic protocol
+├── TZ.md                      # Technical specification: Real Nebula Skies, Palette Lighting, Mixer & Pause
+├── CREDITS.md                 # Full NASA / ESA / Webb / Hubble / SVS 2020 & Neuromicon attributions
 ├── README.md                  # Project documentation & controls
 ├── docs/
-│   ├── audit-2026-10-08.md    # Step 1 Audit report (strings, hotkey collisions, draw calls, GPU memory)
+│   ├── audit-2026-10-08.md    # R0 Re-Audit report (backdrop, lights, audio graph, pause, RoomContext, Quest 2 metrics)
 │   └── perf-log.md            # Before/after frame budgets, Quest 2 FFR & 30-transition leak verification
 ├── content/
-│   ├── world.graph.json       # 1149-room topology, branches (ascend/descend), segments & SHA-256 hashes
-│   └── art/manifest.json      # Licensed artwork metadata (id, title, author, license, source, url)
-├── schema/
-│   ├── room.schema.json       # JSON Schema (draft 2020-12) for Room API v1 manifests
-│   └── world.schema.json      # JSON Schema for world.graph.json
+│   ├── world.graph.json       # 1149-room topology, 3 Sector Rooms (25 Neuromicon rooms) & SHA-256 hashes
+│   ├── art/manifest.json      # Licensed artwork metadata
+│   └── space/                 # Curated 25 astronomical nebulae (nebulae.json), starfield.json & room-nebulae.json
+├── tools/
+│   ├── room-validator/        # Room API v1 JSON Schema validator
+│   └── space-assets/          # OKLab palette extractor, deterministic 1,149-room mapper & license validator
 ├── room-template/
-│   ├── room.json              # Canonical Room API v1 manifest (ROOM_073)
-│   └── index.ts               # Reference RoomModule (preload, mount, update, unmount)
+│   ├── room.json              # Canonical Room API v1 manifest (with sky config)
+│   └── index.ts               # Reference RoomModule (preload, mount, update, onPause, onResume, unmount)
 ├── src/
-│   ├── onboarding/            # Explicit Onboarding FSM (BOOT → ENTRY → AWAKEN → LEARN_MOVE → LEARN_INTERACT → REVEAL → CHOOSE → COMMITTED)
-│   ├── events/                # Typed EventBus (src/events/eventBus.ts)
-│   ├── i18n/                  # Authoritative RU/EN strings with justification lines (src/i18n/strings.ts)
-│   ├── room-sdk/              # Room API v1 types (RoomModule, RoomContext) & GPU disposal helpers
+│   ├── room-sdk/              # Room API v1 types (RoomModule, RoomContext with time, sky, environment, audio.bus)
 │   ├── engine/
-│   │   ├── hubEngine.ts       # Three.js WebGL2 + WebXR stereo engine, FFR (0.85), dynamic resolution scaler
+│   │   ├── hubEngine.ts       # Three.js WebGL2 + WebXR engine, Pausable Clock & 3D World-Locked Pause Panel
 │   │   ├── comfort/           # ComfortSystem (3D fade sphere, peripheral vignette, floor teleport ring)
-│   │   ├── xr/                # Meta Quest 2 WebXR session & Touch controller manager
+│   │   ├── xr/                # Meta Quest 2 WebXR session, B/Y pause button & visibilitychange blur handler
 │   │   └── input/             # Unified Action Input Layer (Q/E snap turn, Space/Click/Trigger interact)
 │   ├── corridor/
-│   │   └── corridorBuilder.ts # Threshold Hall atrium + chunked Ascent & Descent segments
+│   │   └── corridorBuilder.ts # Grand Cosmic Starting Room + 3 Sector Rooms (25 Doors)
 │   ├── world/
-│   │   └── roomStreamer.ts    # Room API v1 streamer, SHA-256 verifier, 8s timeout & Void fallback space
+│   │   └── roomStreamer.ts    # Room API v1 streamer, Celestial Oculus, Painting & MP3 carrier
 │   ├── systems/
-│   │   └── audio/             # WebAudio head-pitch vertical crossfader & room soundtrack synthesizer
+│   │   ├── sky/               # 4-Layer Real Astronomical Nebula Sky & Palette Lighting System
+│   │   └── audio/             # 4-Bus WebAudio Mixer & Limiter (mixer.ts) + Room MP3 Streamer (spatialAudioSystem.ts)
 │   ├── state/
-│   │   └── playerState.ts     # Versioned localStorage state with migration & corruption recovery
-│   └── ui/                    # Pre-world Entry gate, Codex journal, contextual drawers & Studio tools
+│   │   └── playerState.ts     # Versioned localStorage state (v4) with audio bus persistence & migration
+│   └── ui/                    # Pre-world Entry gate, Pause overlay, 4-Bus Mixer, Codex & Studio tools
 └── tests/
-    └── room-validator.test.ts # Manifest & schema validation suite
+    └── room-validator.test.ts # Manifest, Nebula Registry, Perceptual Mixer & Migration test suite
 ```
 
 ---
 
-## 6. Local Development & Deployment
+## 6. Local Development & Verification
 
 ```bash
 # Install dependencies

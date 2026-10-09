@@ -155,6 +155,19 @@
       "properties": {
         "channel": { "type": "string" }
       }
+    },
+    "sky": {
+      "type": "object",
+      "properties": {
+        "nebulaId": { "type": "string", "pattern": "^NEB_[0-9]{4}$" },
+        "rotation": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "type": "number" }
+        },
+        "intensity": { "type": "number", "minimum": 0, "maximum": 2 }
+      }
     }
   }
 }

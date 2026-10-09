@@ -3,6 +3,7 @@ import worldGraphData from '../../content/world.graph.json';
 import { t } from '../i18n/strings';
 import { OnboardingVisualState } from '../onboarding/types';
 import { CorridorBranch } from '../room-sdk';
+import { nebulaSkySystem } from '../systems/sky/nebulaSkySystem';
 import { HubPlayerState } from '../state/playerState';
 
 export interface WorldGraphNode {
@@ -19,6 +20,20 @@ export interface WorldGraphNode {
   entryHash: string;
 }
 
+export type PausePanelActionId =
+  | 'resume'
+  | 'mute'
+  | 'master-up'
+  | 'master-down'
+  | 'music-up'
+  | 'music-down'
+  | 'ambient-up'
+  | 'ambient-down'
+  | 'sfx-up'
+  | 'sfx-down'
+  | 'return-corridor'
+  | 'open-codex';
+
 export interface SpatialInteractiveTarget {
   id: string;
   kind:
@@ -32,7 +47,8 @@ export interface SpatialInteractiveTarget {
     | 'room-object'
     | 'room-mirror'
     | 'artwork'
-    | 'corridor-return';
+    | 'corridor-return'
+    | 'pause-action';
   title: string;
   titleRu: string;
   subtitle: string;
@@ -45,6 +61,7 @@ export interface SpatialInteractiveTarget {
   mirrorChoice?: 'accept' | 'reject' | 'back';
   seatedChoice?: boolean;
   status?: 'ready' | 'planned';
+  pauseAction?: PausePanelActionId;
 }
 
 export function getWorldNodes(): WorldGraphNode[] {
@@ -52,8 +69,8 @@ export function getWorldNodes(): WorldGraphNode[] {
 }
 
 /**
- * Power-of-Two (512x256) Mipmapped Plaque Texture (EXPERIENCE_PROTOCOL.md §3.4 & §4.1).
- * Uses symbols + short names only; never renders instructions on plaques.
+ * Power-of-Two (512x256) Mipmapped Plaque Texture (EXPERIENCE_PROTOCOL.md §3.4 & TZ.md §4.4).
+ * Door plaques pick up the active room/nebula palette for emissive symbol and border trim.
  */
 export function createSignageTexture(
   symbol: string,
@@ -126,7 +143,6 @@ function createCosmicFloorTexture(accentRgba: string): THREE.CanvasTexture {
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 512, 512);
 
-  // Astral grid + sacred circles
   ctx.strokeStyle = 'rgba(200, 164, 100, 0.22)';
   ctx.lineWidth = 1.5;
   for (let i = 0; i <= 512; i += 128) {
@@ -154,115 +170,17 @@ function createCosmicFloorTexture(accentRgba: string): THREE.CanvasTexture {
 }
 
 /**
- * Power-of-Two (1024x512) Deep Cosmic Nebula Sky Dome Texture.
+ * Vertical Gradient Alpha Texture for Cheap Additive Light Shafts (§3.3 & TZ.md §4.4).
  */
-function createCosmicNebulaDomeTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d')!;
-
-  const bg = ctx.createLinearGradient(0, 0, 0, 512);
-  bg.addColorStop(0, '#02040a');
-  bg.addColorStop(0.45, '#070d1e');
-  bg.addColorStop(0.75, '#0c1328');
-  bg.addColorStop(1, '#03050c');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, 1024, 512);
-
-  // Nebula clouds
-  const clouds = [
-    { x: 260, y: 190, r: 240, c: 'rgba(78, 168, 222, 0.18)' },
-    { x: 540, y: 150, r: 280, c: 'rgba(155, 105, 225, 0.16)' },
-    { x: 780, y: 230, r: 220, c: 'rgba(229, 193, 88, 0.15)' },
-    { x: 512, y: 310, r: 300, c: 'rgba(56, 189, 248, 0.12)' },
-  ];
-  clouds.forEach((cl) => {
-    const g = ctx.createRadialGradient(cl.x, cl.y, 10, cl.x, cl.y, cl.r);
-    g.addColorStop(0, cl.c);
-    g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 1024, 512);
-  });
-
-  // Embedded fine background stars
-  for (let i = 0; i < 600; i++) {
-    const sx = (i * 173) % 1024;
-    const sy = (i * 97) % 512;
-    const sr = (i % 3) * 0.65 + 0.5;
-    ctx.fillStyle =
-      i % 5 === 0 ? '#ffe6a3' : i % 3 === 0 ? '#9be2ff' : '#ffffff';
-    ctx.beginPath();
-    ctx.arc(sx, sy, sr, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.generateMipmaps = true;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
-/**
- * Builds a 3D Starfield Point Cloud surrounding the Grand Cosmic Starting Room.
- */
-function createStarfieldPoints(count = 1600, radius = 58): THREE.Points {
-  const positions = new Float32Array(count * 3);
-  const colors = new Float32Array(count * 3);
-  const palette = [
-    new THREE.Color('#ffffff'),
-    new THREE.Color('#ffe4a0'),
-    new THREE.Color('#8ce0ff'),
-    new THREE.Color('#c8a4ff'),
-    new THREE.Color('#f0d27a'),
-  ];
-
-  for (let i = 0; i < count; i++) {
-    const u = ((i * 613) % 1000) / 1000;
-    const v = ((i * 397) % 1000) / 1000;
-    const theta = u * Math.PI * 2;
-    const phi = Math.acos(2 * v - 1);
-    const r = radius * (0.65 + ((i * 131) % 35) / 100);
-
-    positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-    positions[i * 3 + 1] = r * Math.cos(phi);
-    positions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
-
-    const col = palette[i % palette.length];
-    colors[i * 3] = col.r;
-    colors[i * 3 + 1] = col.g;
-    colors[i * 3 + 2] = col.b;
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-  const mat = new THREE.PointsMaterial({
-    size: 0.34,
-    vertexColors: true,
-    transparent: true,
-    opacity: 0.92,
-    depthWrite: false,
-  });
-
-  const points = new THREE.Points(geo, mat);
-  points.name = 'cosmic_starfield_points';
-  return points;
-}
-
-/**
- * Vertical Gradient Alpha Texture for Cheap Additive Light Shafts (§3.3).
- */
-function createLightShaftAlphaTexture(): THREE.CanvasTexture {
+function createLightShaftAlphaTexture(accentHex = '#e5c158'): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 128;
   canvas.height = 256;
   const ctx = canvas.getContext('2d')!;
   const grad = ctx.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0, 'rgba(165, 220, 255, 0.42)');
-  grad.addColorStop(0.5, 'rgba(229, 193, 88, 0.18)');
-  grad.addColorStop(1, 'rgba(255, 224, 156, 0.0)');
+  grad.addColorStop(0, `${accentHex}66`);
+  grad.addColorStop(0.5, `${accentHex}28`);
+  grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 128, 256);
   const tex = new THREE.CanvasTexture(canvas);
@@ -280,6 +198,7 @@ const SECTOR_HALL_META: Record<
     accentHex: string;
     bgHex: string;
     branch: CorridorBranch;
+    sceneSkyKey: string;
   }
 > = {
   1: {
@@ -290,6 +209,7 @@ const SECTOR_HALL_META: Record<
     accentHex: '#e5c158',
     bgHex: '#070a14',
     branch: 'ascend',
+    sceneSkyKey: 'SECTOR_ROOM_1',
   },
   2: {
     title: 'ROOM II · OPERATING SYSTEM',
@@ -299,6 +219,7 @@ const SECTOR_HALL_META: Record<
     accentHex: '#4ea8de',
     bgHex: '#060c18',
     branch: 'descend',
+    sceneSkyKey: 'SECTOR_ROOM_2',
   },
   3: {
     title: 'ROOM III · UPGRADE & MIRROR',
@@ -308,12 +229,13 @@ const SECTOR_HALL_META: Record<
     accentHex: '#b388ff',
     bgHex: '#090718',
     branch: 'ascend',
+    sceneSkyKey: 'SECTOR_ROOM_3',
   },
 };
 
 /**
  * Builds the Grand Cosmic Starting Room (Threshold) and the 3 Sector Rooms (Halls I, II, III)
- * that house the doors to all 25 Neuromicon Artwork & Audio Rooms.
+ * driven by the 4-Layer Real Astronomical Nebula Sky & Palette Lighting System (TZ.md §3 & §4).
  */
 export class CorridorBuilder {
   public static buildThresholdHall(
@@ -326,54 +248,36 @@ export class CorridorBuilder {
     ) => void,
     walkableMeshes: THREE.Object3D[]
   ): void {
-    scene.background = new THREE.Color('#03050c');
-    scene.fog = new THREE.FogExp2('#03050c', 0.011);
-
-    // Budget §5.1: Strictly 2 real-time lights (1 HemisphereLight + 1 PointLight)
-    const hemi = new THREE.HemisphereLight('#c8e4ff', '#16122e', 0.92);
-    hemi.name = 'threshold_hemi_light';
-    root.add(hemi);
-
-    const centralKeyLight = new THREE.PointLight('#ffe094', 44, 58, 1.25);
-    centralKeyLight.name = 'threshold_key_light';
-    centralKeyLight.position.set(0, 10.5, -2.0);
-    root.add(centralKeyLight);
-
-    // 0. Grand Cosmic Sky Dome & 3D Starfield
-    const skyDomeTex = createCosmicNebulaDomeTexture();
-    const skyDome = new THREE.Mesh(
-      new THREE.SphereGeometry(68, 32, 20),
-      new THREE.MeshBasicMaterial({
-        map: skyDomeTex,
-        side: THREE.BackSide,
-        depthWrite: false,
-      })
+    // Mount 4-Layer Real Astronomical Nebula Sky (`NEB_0001` Carina Nebula Cosmic Cliffs) + Palette Lighting Rig (<= 2 lights)
+    const skyRig = nebulaSkySystem.mountRoomSkyAndLighting(
+      'THRESHOLD',
+      root,
+      scene,
+      {
+        qualityTier: state.comfort.qualityTier,
+        reducedMotion: state.comfort.reducedMotion,
+      }
     );
-    root.add(skyDome);
 
-    const starfield = createStarfieldPoints(1600, 58);
-    root.add(starfield);
-
-    // Shared Materials
-    const floorTex = createCosmicFloorTexture('rgba(124, 198, 242, 0.22)');
+    const floorTex = createCosmicFloorTexture('rgba(196, 106, 58, 0.24)');
     const cosmicFloorMat = new THREE.MeshStandardMaterial({
       color: '#0d1324',
       map: floorTex,
-      roughness: 0.2,
-      metalness: 0.65,
+      roughness: 0.18,
+      metalness: 0.68,
     });
     const obsidianMat = new THREE.MeshLambertMaterial({
       color: '#0b101d',
     });
     const goldHeroMat = new THREE.MeshStandardMaterial({
-      color: '#e5c158',
-      roughness: 0.22,
+      color: skyRig.palette[2] ?? '#e5c158',
+      roughness: 0.2,
       metalness: 0.88,
-      emissive: '#42300e',
-      emissiveIntensity: 0.45,
+      emissive: skyRig.palette[0] ?? '#42300e',
+      emissiveIntensity: 0.35,
     });
     const cyanHeroMat = new THREE.MeshStandardMaterial({
-      color: '#4ea8de',
+      color: skyRig.palette[1] ?? '#4ea8de',
       roughness: 0.18,
       metalness: 0.84,
       emissive: '#103452',
@@ -387,7 +291,7 @@ export class CorridorBuilder {
       emissiveIntensity: 0.5,
     });
 
-    const shaftTex = createLightShaftAlphaTexture();
+    const shaftTex = createLightShaftAlphaTexture(skyRig.palette[2] ?? '#e5c158');
     const shaftAdditiveMat = new THREE.MeshBasicMaterial({
       map: shaftTex,
       transparent: true,
@@ -405,15 +309,15 @@ export class CorridorBuilder {
     root.add(platformDisc);
     walkableMeshes.push(platformDisc);
 
-    // Concentric glowing astral rings on the cosmic floor
+    // Concentric glowing astral rings on the cosmic floor using the Nebula palette
     [4.5, 9.2, 13.8].forEach((r, idx) => {
       const floorRing = new THREE.Mesh(
         new THREE.RingGeometry(r, r + 0.12, 64),
         new THREE.MeshBasicMaterial({
-          color: idx === 0 ? '#e5c158' : idx === 1 ? '#4ea8de' : '#b388ff',
+          color: skyRig.palette[idx % skyRig.palette.length] ?? '#e5c158',
           side: THREE.DoubleSide,
           transparent: true,
-          opacity: 0.6,
+          opacity: 0.65,
         })
       );
       floorRing.rotation.x = -Math.PI * 0.5;
@@ -425,7 +329,7 @@ export class CorridorBuilder {
     const verticalLineMesh = new THREE.Mesh(
       new THREE.CylinderGeometry(0.14, 0.14, 76, 16),
       new THREE.MeshBasicMaterial({
-        color: '#9be2ff',
+        color: skyRig.palette[2] ?? '#9be2ff',
         transparent: true,
         opacity: 0.55,
       })
@@ -460,7 +364,6 @@ export class CorridorBuilder {
     ring3.rotation.z = Math.PI * 0.2;
     astrolabeGroup.add(ring3);
 
-    // Central Singularity Sun Core overhead
     const sunCore = new THREE.Mesh(
       new THREE.OctahedronGeometry(1.35, 2),
       goldHeroMat
@@ -537,8 +440,8 @@ export class CorridorBuilder {
       kind: 'onboarding-pedestal',
       title: '◈ COSMIC NEXUS CORE',
       titleRu: '◈ COSMIC NEXUS CORE',
-      subtitle: '25 Rooms · 3 Sector Chambers',
-      subtitleRu: '25 Rooms · 3 Sector Chambers',
+      subtitle: `${skyRig.nebulaName} · 3 Sector Rooms (25 Rooms)`,
+      subtitleRu: `${skyRig.nebulaName} · 3 Sector Rooms (25 Rooms)`,
     });
 
     // 6. Comfort Calibration Ritual Marks (Seated vs Standing)
@@ -638,7 +541,6 @@ export class CorridorBuilder {
       doorGroup.position.set(spec.x, 0, spec.z);
       doorGroup.rotation.y = spec.rotY;
 
-      // Grounded Cosmic Step Plinth
       const plinth = new THREE.Mesh(
         new THREE.BoxGeometry(3.6, 0.24, 0.9),
         obsidianMat
@@ -646,7 +548,6 @@ export class CorridorBuilder {
       plinth.position.set(0, 0.12, 0.2);
       doorGroup.add(plinth);
 
-      // Twin Cosmic Pillars
       [-1.45, 1.45].forEach((jx) => {
         const pillar = new THREE.Mesh(
           new THREE.BoxGeometry(0.36, 4.6, 0.48),
@@ -656,7 +557,6 @@ export class CorridorBuilder {
         doorGroup.add(pillar);
       });
 
-      // Upper Arch Lintel
       const lintel = new THREE.Mesh(
         new THREE.BoxGeometry(3.7, 0.52, 0.58),
         spec.mat
@@ -664,7 +564,6 @@ export class CorridorBuilder {
       lintel.position.set(0, 4.75, 0.22);
       doorGroup.add(lintel);
 
-      // Shimmering Starlight Portal Leaf
       const leaf = new THREE.Mesh(
         new THREE.BoxGeometry(2.55, 4.3, 0.16),
         new THREE.MeshStandardMaterial({
@@ -678,7 +577,6 @@ export class CorridorBuilder {
       leaf.position.set(0, 0.24 + 2.15, 0.12);
       doorGroup.add(leaf);
 
-      // Overhead Plaque
       const plaqueTex = createSignageTexture(
         meta.symbol,
         meta.title,
@@ -818,36 +716,34 @@ export class CorridorBuilder {
   }
 
   /**
-   * Animates the Grand Cosmic Starting Room's celestial astrolabe rings, starfield, and onboarding beacons
-   * with zero per-frame allocations.
+   * Animates the Grand Cosmic Starting Room's celestial astrolabe rings and onboarding beacons
+   * only when game clock is NOT paused (`dt > 0`).
    */
   public static updateThresholdOnboardingVisuals(
     root: THREE.Group,
     visual: OnboardingVisualState,
-    timeSec: number
+    timeSec: number,
+    reducedMotion = false
   ): void {
     const moveRing = root.getObjectByName('onboarding_move_ring');
     if (moveRing) {
       moveRing.visible = visual.showMoveRing;
-      const scale = 1 + Math.sin(timeSec * 3.2) * 0.08;
-      moveRing.scale.set(scale, 1, scale);
+      if (!reducedMotion) {
+        const scale = 1 + Math.sin(timeSec * 3.2) * 0.08;
+        moveRing.scale.set(scale, 1, scale);
+      }
     }
 
     const pedCrystal = root.getObjectByName('onboarding_pedestal_crystal');
-    if (pedCrystal) {
+    if (pedCrystal && !reducedMotion) {
       pedCrystal.rotation.y = timeSec * 0.85;
       pedCrystal.position.y = 1.45 + Math.sin(timeSec * 2.2) * 0.07;
     }
 
     const astrolabe = root.getObjectByName('cosmic_astrolabe_rings');
-    if (astrolabe) {
+    if (astrolabe && !reducedMotion) {
       astrolabe.rotation.y = timeSec * 0.14;
       astrolabe.rotation.z = Math.sin(timeSec * 0.25) * 0.12;
-    }
-
-    const stars = root.getObjectByName('cosmic_starfield_points');
-    if (stars) {
-      stars.rotation.y = timeSec * 0.018;
     }
 
     const postureMarks = root.getObjectByName('onboarding_posture_marks');
@@ -855,17 +751,9 @@ export class CorridorBuilder {
       postureMarks.visible = visual.showComfortCalibrationMarks;
     }
 
-    // Keep the Grand Cosmic Doors and Architecture ALWAYS visible and majestic!
     const atriumGroup = root.getObjectByName('threshold_atrium_reveal_group');
     if (atriumGroup) {
       atriumGroup.visible = true;
-    }
-
-    const keyLight = root.getObjectByName(
-      'threshold_key_light'
-    ) as THREE.PointLight | null;
-    if (keyLight) {
-      keyLight.intensity = 38 + Math.sin(timeSec * 1.4) * 4;
     }
 
     const rung3Plaque = root.getObjectByName('onboarding_rung3_plaque');
@@ -875,11 +763,10 @@ export class CorridorBuilder {
   }
 
   /**
-   * Builds one of the 3 Grand Sector Rooms (`segment = 1 | 2 | 3`):
-   * - Room I (Sector A): 11 Doors to Rooms 01–11
-   * - Room II (Sector B): 8 Doors to Rooms 12–19
-   * - Room III (Sector C & D): 6 Doors to Rooms 20–25
-   * Each door inside these 3 rooms leads directly into a dedicated room with its own Painting, Essay, and MP3 audio track!
+   * Builds one of the 3 Grand Sector Rooms (`segment = 1 | 2 | 3`) with its dedicated astronomical nebula sky:
+   * - Room I (Sector A — Warm Ascent set `NEB_0002` Pillars of Creation): 11 Doors to Rooms 01–11
+   * - Room II (Sector B — Cool Descent set `NEB_0012` Veil Nebula): 8 Doors to Rooms 12–19
+   * - Room III (Sector C & D — Deep Field set `NEB_0024` SMACS 0723): 6 Doors to Rooms 20–25
    */
   public static buildCorridorSegment(
     root: THREE.Group,
@@ -894,23 +781,18 @@ export class CorridorBuilder {
     walkableMeshes: THREE.Object3D[]
   ): void {
     const meta = SECTOR_HALL_META[segment] ?? SECTOR_HALL_META[1];
-    const accentHex = meta.accentHex;
-    const bgHex = meta.bgHex;
+    const skyRig = nebulaSkySystem.mountRoomSkyAndLighting(
+      meta.sceneSkyKey,
+      root,
+      scene,
+      {
+        qualityTier: state.comfort.qualityTier,
+        reducedMotion: state.comfort.reducedMotion,
+      }
+    );
 
-    scene.background = new THREE.Color(bgHex);
-    scene.fog = new THREE.FogExp2(bgHex, 0.015);
-
-    // Strictly 2 real-time lights (§5.1)
-    const hemi = new THREE.HemisphereLight('#d8ecff', '#0b1020', 0.85);
-    root.add(hemi);
-
-    const centerLight = new THREE.PointLight(accentHex, 42, 48, 1.3);
-    centerLight.position.set(0, 9.2, 0);
-    root.add(centerLight);
-
-    // Cosmic Starfield dome visible above the open celestial gallery colonnade
-    const starfield = createStarfieldPoints(1100, 56);
-    root.add(starfield);
+    const accentHex = skyRig.palette[0] ?? meta.accentHex;
+    const rimHex = skyRig.palette[2] ?? meta.accentHex;
 
     const width = 20;
     const height = 9.6;
@@ -920,9 +802,9 @@ export class CorridorBuilder {
 
     const floorTex = createCosmicFloorTexture(
       segment === 1
-        ? 'rgba(229, 193, 88, 0.2)'
+        ? 'rgba(212, 148, 72, 0.22)'
         : segment === 2
-        ? 'rgba(78, 168, 222, 0.22)'
+        ? 'rgba(50, 136, 200, 0.24)'
         : 'rgba(179, 136, 255, 0.22)'
     );
     const wallLambertMat = new THREE.MeshLambertMaterial({
@@ -931,15 +813,15 @@ export class CorridorBuilder {
     });
     const floorMat = new THREE.MeshStandardMaterial({
       map: floorTex,
-      roughness: 0.18,
-      metalness: 0.5,
+      roughness: segment === 2 ? 0.12 : 0.2,
+      metalness: 0.55,
     });
     const heroTrimMat = new THREE.MeshStandardMaterial({
       color: accentHex,
       roughness: 0.24,
       metalness: 0.84,
-      emissive: accentHex,
-      emissiveIntensity: 0.18,
+      emissive: rimHex,
+      emissiveIntensity: 0.2,
     });
 
     // 1. Walkable Sector Room Floor (y = 0)
@@ -951,7 +833,40 @@ export class CorridorBuilder {
     root.add(floor);
     walkableMeshes.push(floor);
 
-    // 2. Side & End Walls (with open celestial skylight above)
+    // Branch Visual Polish (TZ.md §4.3 & §4.4):
+    // Warm Ascent -> Additive Light Shafts; Cool Descent -> Reflective Caustic Pool in center
+    if (skyRig.tone === 'warm') {
+      const shaftTex = createLightShaftAlphaTexture(rimHex);
+      const shaftMesh = new THREE.Mesh(
+        new THREE.ConeGeometry(4.2, height * 1.3, 24, 1, true),
+        new THREE.MeshBasicMaterial({
+          map: shaftTex,
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        })
+      );
+      shaftMesh.position.set(0, height * 0.65, -2.5);
+      root.add(shaftMesh);
+    } else {
+      const poolMesh = new THREE.Mesh(
+        new THREE.RingGeometry(1.4, 3.2, 48),
+        new THREE.MeshStandardMaterial({
+          color: skyRig.palette[1] ?? '#4ea8de',
+          roughness: 0.06,
+          metalness: 0.92,
+          emissive: skyRig.palette[0] ?? '#143852',
+          emissiveIntensity: 0.35,
+          side: THREE.DoubleSide,
+        })
+      );
+      poolMesh.rotation.x = -Math.PI * 0.5;
+      poolMesh.position.set(0, 0.015, -2.0);
+      root.add(poolMesh);
+    }
+
+    // 2. Side & End Walls (Open Celestial Skylight above so the Real Nebula Cap shines down!)
     [-halfW, halfW].forEach((wx) => {
       const sideWall = new THREE.Mesh(
         new THREE.PlaneGeometry(depth, height),
@@ -991,10 +906,9 @@ export class CorridorBuilder {
     colInst.instanceMatrix.needsUpdate = true;
     root.add(colInst);
 
-    // 4. Doors to every Artwork & Audio Room in this Sector (Zero overlapping slots!)
+    // 4. Doors to every Artwork & Audio Room in this Sector (11 slots, zero overlap)
     const segmentNodes = getWorldNodes().filter((n) => n.segment === segment);
 
-    // 11 distinct architectural door bays (6 on West wall, 5 on East wall)
     const doorSlots: Array<{ x: number; z: number; rotY: number }> = [
       { x: -halfW + 0.1, z: -12.5, rotY: Math.PI * 0.5 },
       { x: halfW - 0.1, z: -12.5, rotY: -Math.PI * 0.5 },
@@ -1029,7 +943,7 @@ export class CorridorBuilder {
         ? '#66cc99'
         : isVisited
         ? '#6fa8dc'
-        : accentHex;
+        : rimHex;
 
       const dGroup = new THREE.Group();
       dGroup.position.set(slot.x, 0, slot.z);
@@ -1102,8 +1016,8 @@ export class CorridorBuilder {
         status: node.status,
         title: `${node.symbol} · ${node.title}`,
         titleRu: `${node.symbol} · ${node.title}`,
-        subtitle: `${node.dimension} · Enter Room with Painting & MP3`,
-        subtitleRu: `${node.dimension} · Enter Room with Painting & MP3`,
+        subtitle: `${node.dimension} · Enter Room with Nebula, Painting & MP3`,
+        subtitleRu: `${node.dimension} · Enter Room with Nebula, Painting & MP3`,
       });
     });
 

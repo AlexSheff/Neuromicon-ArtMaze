@@ -16,6 +16,11 @@
     "loop": true,
     "baseHz": 108
   },
+  "sky": {
+    "nebulaId": "NEB_0012",
+    "rotation": [0.22, -0.35, 0.08],
+    "intensity": 1.0
+  },
   "quest": {
     "question": "What remains when the physical form is absent, yet the space still remembers its weight?",
     "questionRu": "Что остаётся, когда физическая форма исчезла, но пространство всё ещё помнит её тяжесть?",

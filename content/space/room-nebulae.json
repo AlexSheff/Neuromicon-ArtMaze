@@ -1,0 +1,41 @@
+{
+  "version": "1.0.0",
+  "totalTargetRooms": 1149,
+  "curatedUniquePoolSize": 25,
+  "specialSceneMappings": {
+    "THRESHOLD": "NEB_0001",
+    "SECTOR_ROOM_1": "NEB_0002",
+    "SECTOR_ROOM_2": "NEB_0012",
+    "SECTOR_ROOM_3": "NEB_0024",
+    "VOID_FALLBACK": "NEB_0024"
+  },
+  "mappings": {
+    "ROOM_001": { "nebulaId": "NEB_0001", "rotation": [0.18, 0.0, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_002": { "nebulaId": "NEB_0002", "rotation": [0.22, 0.45, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_003": { "nebulaId": "NEB_0003", "rotation": [0.15, -0.35, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_004": { "nebulaId": "NEB_0004", "rotation": [0.24, 0.25, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_005": { "nebulaId": "NEB_0005", "rotation": [0.2, -0.5, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_006": { "nebulaId": "NEB_0006", "rotation": [0.18, 0.6, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_007": { "nebulaId": "NEB_0007", "rotation": [0.25, -0.2, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_008": { "nebulaId": "NEB_0008", "rotation": [0.16, 0.3, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_009": { "nebulaId": "NEB_0009", "rotation": [0.22, -0.4, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_010": { "nebulaId": "NEB_0010", "rotation": [0.28, 0.15, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_011": { "nebulaId": "NEB_0011", "rotation": [0.19, -0.55, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_012": { "nebulaId": "NEB_0012", "rotation": [0.21, 0.4, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_013": { "nebulaId": "NEB_0013", "rotation": [0.26, -0.3, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_014": { "nebulaId": "NEB_0014", "rotation": [0.17, 0.5, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_015": { "nebulaId": "NEB_0015", "rotation": [0.23, -0.25, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_016": { "nebulaId": "NEB_0016", "rotation": [0.2, 0.35, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_017": { "nebulaId": "NEB_0017", "rotation": [0.18, -0.45, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_018": { "nebulaId": "NEB_0018", "rotation": [0.24, 0.2, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_019": { "nebulaId": "NEB_0019", "rotation": [0.22, -0.6, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_020": { "nebulaId": "NEB_0020", "rotation": [0.19, 0.1, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_021": { "nebulaId": "NEB_0021", "rotation": [0.25, -0.35, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_022": { "nebulaId": "NEB_0022", "rotation": [0.17, 0.45, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_023": { "nebulaId": "NEB_0023", "rotation": [0.21, -0.15, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_024": { "nebulaId": "NEB_0024", "rotation": [0.27, 0.3, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_025": { "nebulaId": "NEB_0025", "rotation": [0.2, 0.0, 0.0], "intensity": 1.0, "variant": "unique" },
+    "ROOM_073": { "nebulaId": "NEB_0012", "rotation": [0.3, 1.2, 0.15], "intensity": 0.9, "variant": "deterministic-variant" },
+    "ROOM_1149": { "nebulaId": "NEB_0024", "rotation": [0.35, -1.1, 0.2], "intensity": 1.15, "variant": "deterministic-variant" }
+  }
+}

@@ -12,7 +12,9 @@ import {
   RoomModule,
   RoomV1Manifest,
 } from '../room-sdk';
+import { nebulaSkySystem } from '../systems/sky/nebulaSkySystem';
 import { HubPlayerState } from '../state/playerState';
+import { resolveRoomNebulaMapping } from '../../tools/space-assets/pipeline';
 
 const NEUROMICON_RAW_BASE =
   'https://raw.githubusercontent.com/AlexSheff/Neuromicon/main';
@@ -507,6 +509,8 @@ function buildNeuromiconRoomManifest(spec: NeuromiconNodeSpec): RoomV1Manifest {
     });
   }
 
+  const resolvedNebula = resolveRoomNebulaMapping(spec.roomId);
+
   return {
     apiVersion: 1,
     entry: 'index.js',
@@ -522,6 +526,11 @@ function buildNeuromiconRoomManifest(spec: NeuromiconNodeSpec): RoomV1Manifest {
       track: mp3Url,
       loop: true,
       baseHz: 108 + parseInt(spec.num, 10) * 6,
+    },
+    sky: {
+      nebulaId: resolvedNebula.mapping.nebulaId,
+      rotation: resolvedNebula.mapping.rotation,
+      intensity: resolvedNebula.mapping.intensity,
     },
     artwork: {
       title: `${spec.title} — ${spec.question}`,
@@ -730,7 +739,8 @@ export class RoomStreamer {
     return true;
   }
 
-  public unmountCurrentRoom(root: THREE.Group): void {
+  public unmountCurrentRoom(root: THREE.Group, scene?: THREE.Scene): void {
+    nebulaSkySystem.unmountSky(root, scene);
     if (this.activeModule && this.activeCtx) {
       try {
         this.activeModule.unmount(this.activeCtx);
@@ -744,7 +754,17 @@ export class RoomStreamer {
     this.activeCtx = null;
   }
 
+  public notifyPause(paused: boolean): void {
+    if (!this.activeModule || !this.activeCtx) return;
+    if (paused) {
+      this.activeModule.onPause?.(this.activeCtx);
+    } else {
+      this.activeModule.onResume?.(this.activeCtx);
+    }
+  }
+
   public updateCurrentRoom(dt: number): void {
+    if (dt <= 0) return;
     if (this.activeModule?.update && this.activeCtx) {
       this.activeModule.update(dt, this.activeCtx);
     }
@@ -762,26 +782,34 @@ export class RoomStreamer {
     ) => void,
     walkableMeshes: THREE.Object3D[]
   ): RoomV1Manifest {
-    this.unmountCurrentRoom(root);
+    this.unmountCurrentRoom(root, scene);
 
     const manifest = getRoomV1Manifest(roomId);
     const node = getWorldNodes().find((n) => n.id === roomId);
     const isAscent = node ? node.branch === 'ascend' : true;
+
+    // 1. Mount 4-Layer Real Astronomical Nebula Sky + Palette-Driven Lighting Rig (<= 2 real-time lights, 0 shadows, TZ.md §3 & §4)
+    const skyRig = nebulaSkySystem.mountRoomSkyAndLighting(
+      roomId,
+      root,
+      scene,
+      {
+        nebulaId: manifest.sky?.nebulaId,
+        rotation: manifest.sky?.rotation,
+        intensity: manifest.sky?.intensity,
+        qualityTier: state.comfort.qualityTier,
+        reducedMotion: state.comfort.reducedMotion,
+      }
+    );
+
     const accentHex =
-      roomId === 'ROOM_1149'
+      skyRig.palette[0] ??
+      (roomId === 'ROOM_1149'
         ? '#e5c158'
         : isAscent
         ? '#c8a464'
-        : '#4ea8de';
-    const bgHex =
-      roomId === 'ROOM_1149'
-        ? '#14101c'
-        : isAscent
-        ? '#14110e'
-        : '#090e14';
-
-    scene.background = new THREE.Color(bgHex);
-    scene.fog = new THREE.FogExp2(bgHex, 0.022);
+        : '#4ea8de');
+    const rimHex = skyRig.palette[2] ?? accentHex;
 
     // Start streaming this room's dedicated Neuromicon MP3 track immediately!
     ctx.audio.playRoomTrack(
@@ -795,26 +823,20 @@ export class RoomStreamer {
     const halfW = width * 0.5;
     const halfD = depth * 0.5;
 
-    // 1. Lighting (Budget §5.1: <= 2 real-time lights, zero real-time shadows)
-    const hemi = new THREE.HemisphereLight('#f3e8d2', '#141820', 0.78);
-    root.add(hemi);
-
-    const keyLight = new THREE.PointLight(accentHex, 34, 30, 1.35);
-    keyLight.position.set(0, height - 0.6, 0);
-    root.add(keyLight);
-
     const wallMat = new THREE.MeshLambertMaterial({
-      color: isAscent ? '#211c17' : '#121820',
+      color: skyRig.tone === 'warm' ? '#1c1816' : '#111722',
     });
     const floorMat = new THREE.MeshStandardMaterial({
-      color: isAscent ? '#181410' : '#0c1117',
-      roughness: 0.25,
-      metalness: 0.22,
+      color: skyRig.tone === 'warm' ? '#15120f' : '#0b1018',
+      roughness: skyRig.tone === 'cool' ? 0.14 : 0.24,
+      metalness: 0.48,
     });
     const trimMat = new THREE.MeshStandardMaterial({
       color: accentHex,
-      roughness: 0.28,
-      metalness: 0.82,
+      roughness: 0.24,
+      metalness: 0.85,
+      emissive: rimHex,
+      emissiveIntensity: 0.22,
     });
 
     // 2. Walkable Room Floor (y = 0)
@@ -826,13 +848,46 @@ export class RoomStreamer {
     root.add(floor);
     walkableMeshes.push(floor);
 
-    const ceiling = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, depth),
-      wallMat
+    // Open Celestial Oculus Cornice at y = height so the Room's Real Astronomical Nebula Cap & Starfield shine overhead!
+    const oculusCornice = new THREE.Mesh(
+      new THREE.TorusGeometry(6.8, 0.28, 12, 48),
+      trimMat
     );
-    ceiling.rotation.x = Math.PI * 0.5;
-    ceiling.position.y = height;
-    root.add(ceiling);
+    oculusCornice.rotation.x = Math.PI * 0.5;
+    oculusCornice.position.set(0, height, 0);
+    root.add(oculusCornice);
+
+    // Branch Polish (TZ.md §4.3): Warm Nebula -> Additive Light Shaft; Cool Nebula -> Reflective Caustic Ring Pool
+    if (skyRig.tone === 'warm') {
+      const shaftCone = new THREE.Mesh(
+        new THREE.ConeGeometry(3.4, height, 24, 1, true),
+        new THREE.MeshBasicMaterial({
+          color: rimHex,
+          transparent: true,
+          opacity: 0.14,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        })
+      );
+      shaftCone.position.set(0, height * 0.5, -1.5);
+      root.add(shaftCone);
+    } else {
+      const causticRing = new THREE.Mesh(
+        new THREE.RingGeometry(1.1, 2.3, 40),
+        new THREE.MeshStandardMaterial({
+          color: skyRig.palette[1] ?? '#4ea8de',
+          roughness: 0.08,
+          metalness: 0.92,
+          emissive: accentHex,
+          emissiveIntensity: 0.35,
+          side: THREE.DoubleSide,
+        })
+      );
+      causticRing.rotation.x = -Math.PI * 0.5;
+      causticRing.position.set(0, 0.015, -1.5);
+      root.add(causticRing);
+    }
 
     // 4 Outer Walls
     const nWall = new THREE.Mesh(
@@ -1304,21 +1359,14 @@ export class RoomStreamer {
     ) => void,
     walkableMeshes: THREE.Object3D[]
   ): void {
-    this.unmountCurrentRoom(root);
+    this.unmountCurrentRoom(root, scene);
 
-    scene.background = new THREE.Color('#05070b');
-    scene.fog = new THREE.FogExp2('#05070b', 0.032);
-
-    const hemi = new THREE.HemisphereLight('#7cc6f2', '#05070b', 0.65);
-    root.add(hemi);
-
-    const skyGeo = new THREE.SphereGeometry(42, 24, 16);
-    const skyMat = new THREE.MeshBasicMaterial({
-      color: '#080d16',
-      side: THREE.BackSide,
+    nebulaSkySystem.mountRoomSkyAndLighting('VOID_FALLBACK', root, scene, {
+      intensity: 0.5,
+      qualityTier: state.comfort.qualityTier,
+      reducedMotion: state.comfort.reducedMotion,
+      fogScale: 1.5,
     });
-    const skySphere = new THREE.Mesh(skyGeo, skyMat);
-    root.add(skySphere);
 
     const islandMat = new THREE.MeshStandardMaterial({
       color: '#0c1622',
@@ -1412,6 +1460,7 @@ export class RoomStreamer {
       audio: {
         playRoomTrack: () => {},
         triggerTone: () => {},
+        bus: () => null,
       },
     };
 
@@ -1426,7 +1475,8 @@ export class RoomStreamer {
         () => {},
         dummyWalkables
       );
-      this.unmountCurrentRoom(testRoot);
+      this.unmountCurrentRoom(testRoot, scene);
+      disposeThreeHierarchy(testRoot);
     }
 
     const remainingChildren = testRoot.children.length;

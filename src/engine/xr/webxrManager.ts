@@ -13,6 +13,7 @@ export interface XRControllerInput {
   turnX: number;
   triggerJustPressed: boolean;
   squeezeJustPressed?: boolean;
+  pauseJustPressed?: boolean;
 }
 
 class WebXRManager {
@@ -21,10 +22,12 @@ class WebXRManager {
   private supported = false;
   private wasTriggerPressed = false;
   private wasSqueezePressed = false;
+  private wasPausePressed = false;
   private selectQueued = false;
   private squeezeQueued = false;
   private snapTurnCooldown = 0;
   private statusListeners: Set<(active: boolean) => void> = new Set();
+  private visibilityPauseListeners: Set<() => void> = new Set();
 
   public attachRenderer(renderer: THREE.WebGLRenderer): void {
     this.renderer = renderer;
@@ -37,6 +40,13 @@ class WebXRManager {
     this.statusListeners.add(listener);
     return () => {
       this.statusListeners.delete(listener);
+    };
+  }
+
+  public onVisibilityBlurred(listener: () => void): () => void {
+    this.visibilityPauseListeners.add(listener);
+    return () => {
+      this.visibilityPauseListeners.delete(listener);
     };
   }
 
@@ -122,10 +132,17 @@ class WebXRManager {
       const onSelectStart = () => {
         this.selectQueued = true;
       };
+      const onVisibilityChange = () => {
+        if (session.visibilityState !== 'visible') {
+          this.visibilityPauseListeners.forEach((cb) => cb());
+        }
+      };
       session.addEventListener('selectstart', onSelectStart);
+      session.addEventListener('visibilitychange', onVisibilityChange);
 
       session.addEventListener('end', () => {
         session.removeEventListener('selectstart', onSelectStart);
+        session.removeEventListener('visibilitychange', onVisibilityChange);
         this.currentSession = null;
         this.notifySessionChange(false);
       });
@@ -166,6 +183,7 @@ class WebXRManager {
         turnX: 0,
         triggerJustPressed: false,
         squeezeJustPressed: false,
+        pauseJustPressed: false,
       };
     }
 
@@ -178,6 +196,7 @@ class WebXRManager {
     let turnX = 0;
     let triggerPressedNow = false;
     let squeezePressedNow = false;
+    let pausePressedNow = false;
 
     for (const source of session.inputSources) {
       const gp = source.gamepad;
@@ -198,16 +217,15 @@ class WebXRManager {
         if (Math.abs(axX) > 0.22) turnX += axX;
       }
 
-      // Button 0 = Index Trigger, Button 1 = Grip/Squeeze, Button 4 = A/X, Button 5 = B/Y
-      if (
-        gp.buttons[0]?.pressed ||
-        gp.buttons[4]?.pressed ||
-        gp.buttons[5]?.pressed
-      ) {
+      // Button 0 = Index Trigger, Button 1 = Grip/Squeeze, Button 4 = A/X (Interact), Button 5 = B/Y (Pause, TZ.md §6.1)
+      if (gp.buttons[0]?.pressed || gp.buttons[4]?.pressed) {
         triggerPressedNow = true;
       }
       if (gp.buttons[1]?.pressed) {
         squeezePressedNow = true;
+      }
+      if (gp.buttons[5]?.pressed) {
+        pausePressedNow = true;
       }
     }
 
@@ -216,6 +234,9 @@ class WebXRManager {
 
     const squeezeEdge = squeezePressedNow && !this.wasSqueezePressed;
     this.wasSqueezePressed = squeezePressedNow;
+
+    const pauseEdge = pausePressedNow && !this.wasPausePressed;
+    this.wasPausePressed = pausePressedNow;
 
     const triggerJustPressed = buttonEdge || this.selectQueued;
     this.selectQueued = false;
@@ -229,6 +250,7 @@ class WebXRManager {
       turnX: Math.max(-1, Math.min(1, turnX)),
       triggerJustPressed,
       squeezeJustPressed,
+      pauseJustPressed: pauseEdge,
     };
   }
 }

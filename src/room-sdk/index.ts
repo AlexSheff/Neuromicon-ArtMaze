@@ -3,6 +3,7 @@ import * as THREE from 'three';
 export type CorridorBranch = 'ascend' | 'descend';
 export type ComfortMode = 'teleport' | 'smooth' | 'seated';
 export type MirrorChoice = 'accept' | 'reject' | 'back';
+export type RoomAudioBus = 'music' | 'ambient' | 'sfx';
 
 export interface RoomV1DoorRequirement {
   type: 'interactReflection' | 'questComplete' | 'identity' | 'observeShadow';
@@ -33,6 +34,12 @@ export interface RoomV1Object {
   config?: Record<string, unknown>;
 }
 
+export interface RoomV1SkyConfig {
+  nebulaId?: string;
+  rotation?: [number, number, number];
+  intensity?: number;
+}
+
 export interface RoomV1Manifest {
   apiVersion: 1;
   entry: string;
@@ -51,6 +58,7 @@ export interface RoomV1Manifest {
     loop: boolean;
     baseHz?: number;
   };
+  sky?: RoomV1SkyConfig;
   artwork?: {
     title: string;
     imageUrl: string;
@@ -84,6 +92,23 @@ export interface RoomContext {
   readonly THREE: typeof THREE;
   readonly root: THREE.Group;
   readonly manifest: RoomV1Manifest;
+  readonly time: {
+    now: number;
+    delta: number;
+    paused: boolean;
+  };
+  readonly sky: {
+    current: () => { nebulaId: string; palette: string[] };
+    set: (opts: {
+      nebulaId?: string;
+      rotation?: [number, number, number];
+      intensity?: number;
+    }) => Promise<void>;
+  };
+  readonly environment: {
+    palette: string[];
+    applyRig: (opts?: { ambient?: number; rim?: number; fog?: number }) => void;
+  };
   readonly xr: {
     isPresenting: boolean;
     controllers: THREE.Group[];
@@ -91,6 +116,7 @@ export interface RoomContext {
   readonly audio: {
     playRoomTrack: (trackUrl: string, baseHz?: number) => void;
     triggerTone: (freqHz: number) => void;
+    bus: (busName: RoomAudioBus) => GainNode | null;
   };
   readonly state: {
     getPath: () => CorridorBranch | null;
@@ -126,6 +152,8 @@ export interface RoomModule {
   preload?(ctx: RoomContext): Promise<void>;
   mount(ctx: RoomContext): Promise<void>;
   update?(dt: number, ctx: RoomContext): void;
+  onPause?(ctx: RoomContext): void;
+  onResume?(ctx: RoomContext): void;
   unmount(ctx: RoomContext): void;
 }
 

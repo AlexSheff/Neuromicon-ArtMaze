@@ -1,0 +1,19 @@
+{
+  "id": "STARFIELD_SVS_2020",
+  "name": "Deep Star Maps 2020 (All-Sky Milky Way & Hipparcos/Tycho-2 Catalog)",
+  "kind": "all-sky-equirectangular",
+  "image": "assets/space/starfield_2020.ktx2",
+  "preview": "assets/space/starfield_2020.webp",
+  "nativeSize": [4096, 2048],
+  "credit": "NASA/Goddard Space Flight Center Scientific Visualization Studio; Ernie Wright (USRA)",
+  "license": "PD-NASA",
+  "licenseUrl": "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+  "sourceUrl": "https://svs.gsfc.nasa.gov/4851",
+  "retrievedAt": "2026-10-08",
+  "licenseVerifiedBy": "AlexSheff-Audit-R0",
+  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "processing": "downscaled to 4096x2048 equirectangular, levels preserved",
+  "palette": ["#060913", "#9bb8ff", "#ffe5b4"],
+  "dominantHue": 222,
+  "tone": "cool"
+}

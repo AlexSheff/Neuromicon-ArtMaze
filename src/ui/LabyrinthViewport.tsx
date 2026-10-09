@@ -55,7 +55,17 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
     textures: 6,
     textureMemoryMB: 4.8,
     resolutionScale: 1.0,
+    nebulaId: 'NEB_0001',
+    nebulaName: 'Carina Nebula Cosmic Cliffs (NGC 3372)',
+    nebulaCredit: 'NASA, ESA, CSA, and STScI',
+    nebulaLicense: 'PD-NASA',
+    nebulaPalette: ['#c46a3a', '#2b5f8c', '#e8d9b5'],
+    skyDrawCalls: 3,
+    skyTextureMemoryMB: 5.4,
+    isPaused: false,
+    gameTimeSec: 0,
   });
+  const [isPaused, setIsPaused] = useState<boolean>(false);
   const [activeDrawer, setActiveDrawer] =
     useState<ActiveContextualDrawer>('none');
   const [inspectedArtRoomId, setInspectedArtRoomId] =
@@ -64,9 +74,6 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
   const [zoomActive, setZoomActive] = useState<boolean>(false);
   const [xrActive, setXrActive] = useState<boolean>(() =>
     webxrManager.isSessionActive()
-  );
-  const [audioActive, setAudioActive] = useState<boolean>(() =>
-    spatialAudioSystem.isPlaying()
   );
   const [whisperText, setWhisperText] = useState<string | null>(null);
   const [captionText, setCaptionText] = useState<string | null>(null);
@@ -88,9 +95,25 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
   }, []);
 
   useEffect(() => {
-    return webxrManager.onSessionChange((active) => {
+    const offSession = webxrManager.onSessionChange((active) => {
       setXrActive(active);
     });
+    // Auto-pause when XR headset is removed or Quest system menu blurs session (TZ.md §6.3)
+    const offBlur = webxrManager.onVisibilityBlurred(() => {
+      engineRef.current?.setPaused(true);
+    });
+    // Auto-pause when browser tab becomes hidden (TZ.md §6.3)
+    const onDocVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        engineRef.current?.setPaused(true);
+      }
+    };
+    document.addEventListener('visibilitychange', onDocVisibility);
+    return () => {
+      offSession();
+      offBlur();
+      document.removeEventListener('visibilitychange', onDocVisibility);
+    };
   }, []);
 
   // Subscribe to EventBus for mythic commitment whisper & accessibility captions (§2.7, §2.8)
@@ -115,14 +138,37 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
     };
   }, []);
 
-  // Desktop Hotkeys: R (Codex), T (Radio), C (Zoom), Alt (Comfort), Z (Audio)
-  // Q / E are Snap Turn in InputController, so R has zero collision (§7.4)
+  // Desktop Hotkeys: P / Esc (Pause), M (Mute), [ / ] (Master Vol -/+ 5%), R (Codex), T (Radio), C (Zoom), Alt (Comfort), Z (Audio Mixer)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-      if (e.code === 'KeyR') {
+      if (e.code === 'KeyP' || e.code === 'Escape') {
+        e.preventDefault();
+        engineRef.current?.togglePause();
+      } else if (e.code === 'KeyM') {
+        e.preventDefault();
+        hubPlayerState.revealControl('audio');
+        hubPlayerState.toggleAudioMuted();
+        if (engineRef.current?.isPaused()) {
+          engineRef.current.mountWorldLockedPausePanel();
+        }
+      } else if (e.code === 'BracketLeft') {
+        e.preventDefault();
+        hubPlayerState.revealControl('audio');
+        hubPlayerState.adjustMasterVolumeDelta(-0.05);
+        if (engineRef.current?.isPaused()) {
+          engineRef.current.mountWorldLockedPausePanel();
+        }
+      } else if (e.code === 'BracketRight') {
+        e.preventDefault();
+        hubPlayerState.revealControl('audio');
+        hubPlayerState.adjustMasterVolumeDelta(0.05);
+        if (engineRef.current?.isPaused()) {
+          engineRef.current.mountWorldLockedPausePanel();
+        }
+      } else if (e.code === 'KeyR') {
         e.preventDefault();
         hubPlayerState.revealControl('codex');
         setActiveDrawer((prev) => (prev === 'codex' ? 'none' : 'codex'));
@@ -146,8 +192,6 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
       } else if (e.code === 'KeyZ') {
         e.preventDefault();
         hubPlayerState.revealControl('audio');
-        const nextAudio = spatialAudioSystem.toggle();
-        setAudioActive(nextAudio);
         setActiveDrawer((prev) => (prev === 'audio' ? 'none' : 'audio'));
       }
     };
@@ -159,6 +203,52 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
   const executeSpatialAction = (target: SpatialInteractiveTarget) => {
     const eng = engineRef.current;
     const st = hubPlayerState.getState();
+
+    // 0. World-Locked 3D VR Pause & Volume Mixer Panel Actions (TZ.md §5.2 & §6.1)
+    if (target.kind === 'pause-action' && target.pauseAction) {
+      const act = target.pauseAction;
+      if (act === 'resume') {
+        eng?.setPaused(false);
+      } else if (act === 'mute') {
+        hubPlayerState.toggleAudioMuted();
+        eng?.mountWorldLockedPausePanel();
+      } else if (act === 'master-up') {
+        hubPlayerState.adjustMasterVolumeDelta(0.1);
+        eng?.mountWorldLockedPausePanel();
+      } else if (act === 'master-down') {
+        hubPlayerState.adjustMasterVolumeDelta(-0.1);
+        eng?.mountWorldLockedPausePanel();
+      } else if (act === 'music-up') {
+        hubPlayerState.setAudioVolume('music', st.audio.music + 0.1);
+        eng?.mountWorldLockedPausePanel();
+      } else if (act === 'music-down') {
+        hubPlayerState.setAudioVolume('music', st.audio.music - 0.1);
+        eng?.mountWorldLockedPausePanel();
+      } else if (act === 'ambient-up') {
+        hubPlayerState.setAudioVolume('ambient', st.audio.ambient + 0.1);
+        eng?.mountWorldLockedPausePanel();
+      } else if (act === 'ambient-down') {
+        hubPlayerState.setAudioVolume('ambient', st.audio.ambient - 0.1);
+        eng?.mountWorldLockedPausePanel();
+      } else if (act === 'sfx-up') {
+        hubPlayerState.setAudioVolume('sfx', st.audio.sfx + 0.1);
+        eng?.mountWorldLockedPausePanel();
+      } else if (act === 'sfx-down') {
+        hubPlayerState.setAudioVolume('sfx', st.audio.sfx - 0.1);
+        eng?.mountWorldLockedPausePanel();
+      } else if (act === 'return-corridor') {
+        eng?.setPaused(false);
+        eng?.comfort.triggerFadeTransition(() => {
+          hubPlayerState.returnToCorridor();
+        });
+      } else if (act === 'open-codex') {
+        eng?.setPaused(false);
+        setActiveDrawer('codex');
+      }
+      return;
+    }
+
+    if (eng?.isPaused()) return;
 
     // 1. Onboarding Central Pedestal (§2.2 Beat 25–45 s)
     if (target.kind === 'onboarding-pedestal') {
@@ -349,6 +439,9 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
     const engine = new HubEngine(canvas);
     engineRef.current = engine;
     webxrManager.attachRenderer(engine.renderer);
+    const offPause = engine.onPauseChange((p) => {
+      setIsPaused(p);
+    });
 
     const input = inputRef.current;
     input.attach(canvas);
@@ -374,6 +467,10 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
       const xrInput = webxrManager.pollControllerInput(dt);
       const curState = hubPlayerState.getState();
 
+      if (xrInput.pauseJustPressed) {
+        engine.togglePause();
+      }
+
       const { hovered, telemetry: frameTelemetry, onboardingVisual: obVis } =
         engine.stepAndRender(dt, desktopInput, xrInput, curState, now / 1000);
 
@@ -385,12 +482,12 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
       if (desktopInput.interactPressed || xrInput.triggerJustPressed) {
         if (hovered.target) {
           executeSpatialAction(hovered.target);
-        } else if (hovered.floorHitPoint) {
+        } else if (!engine.isPaused() && hovered.floorHitPoint) {
           engine.teleportTo(hovered.floorHitPoint.x, hovered.floorHitPoint.z);
         }
       }
 
-      if (xrInput.squeezeJustPressed) {
+      if (!engine.isPaused() && xrInput.squeezeJustPressed) {
         if (curState.location === 'room' || curState.location === 'void') {
           engine.comfort.triggerFadeTransition(() => {
             hubPlayerState.returnToCorridor();
@@ -415,6 +512,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
     });
 
     return () => {
+      offPause();
       window.removeEventListener('resize', handleResize);
       input.detach();
       engine.dispose();
@@ -424,14 +522,15 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
 
   const handleCanvasClick = () => {
     if (!inputRef.current.wasClickNotDrag()) return;
-    if (!spatialAudioSystem.isPlaying()) {
-      spatialAudioSystem.start();
-      setAudioActive(true);
-    }
+    spatialAudioSystem.start();
 
     if (hoveredRef.current) {
       executeSpatialAction(hoveredRef.current);
-    } else if (floorHitRef.current && engineRef.current) {
+    } else if (
+      floorHitRef.current &&
+      engineRef.current &&
+      !engineRef.current.isPaused()
+    ) {
       engineRef.current.teleportTo(
         floorHitRef.current.x,
         floorHitRef.current.z
@@ -561,7 +660,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
         </div>
       )}
 
-      {/* Contextual Discovery & VR Wrist / Palm Non-Keyboard Controls (§2.5) */}
+      {/* Contextual Discovery & VR Wrist / Palm Non-Keyboard Controls (§2.5 & TZ.md §5.2, §6.1) */}
       <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
         {isControlRevealed('zoom') && (
           <button
@@ -600,21 +699,36 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
           </button>
         )}
 
-        {isControlRevealed('audio') && (
-          <button
-            onClick={() =>
-              setActiveDrawer((prev) => (prev === 'audio' ? 'none' : 'audio'))
+        <button
+          onClick={() => {
+            hubPlayerState.toggleAudioMuted();
+            if (engineRef.current?.isPaused()) {
+              engineRef.current.mountWorldLockedPausePanel();
             }
-            title="Resonance (Z)"
-            className={`px-3 py-1.5 rounded text-xs font-mono border transition-colors ${
-              activeDrawer === 'audio'
-                ? 'bg-[#c8a464] text-[#0b0a09] border-[#c8a464] font-semibold'
-                : 'bg-[#12100e]/85 text-[#d8cfc0] border-white/15 hover:border-[#c8a464]/60'
-            }`}
-          >
-            ♫ {!xrActive && 'Z'}
-          </button>
-        )}
+          }}
+          title="Mute / Unmute Audio (M)"
+          className={`px-3 py-1.5 rounded text-xs font-mono border transition-colors ${
+            hubState.audio.muted
+              ? 'bg-[#ff6b6b]/20 text-[#ff6b6b] border-[#ff6b6b]/50 font-semibold'
+              : 'bg-[#12100e]/85 text-[#d8cfc0] border-white/15 hover:border-[#c8a464]/60'
+          }`}
+        >
+          {hubState.audio.muted ? '🔇' : '🔊'} {!xrActive && 'M'}
+        </button>
+
+        <button
+          onClick={() =>
+            setActiveDrawer((prev) => (prev === 'audio' ? 'none' : 'audio'))
+          }
+          title="4-Bus Audio Mixer (Z)"
+          className={`px-3 py-1.5 rounded text-xs font-mono border transition-colors ${
+            activeDrawer === 'audio'
+              ? 'bg-[#c8a464] text-[#0b0a09] border-[#c8a464] font-semibold'
+              : 'bg-[#12100e]/85 text-[#d8cfc0] border-white/15 hover:border-[#c8a464]/60'
+          }`}
+        >
+          ♫ {!xrActive && 'Z'}
+        </button>
 
         {isControlRevealed('comfort') && (
           <button
@@ -623,7 +737,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
                 prev === 'comfort' ? 'none' : 'comfort'
               )
             }
-            title="Comfort & Posture (Alt)"
+            title="Comfort & Quality Tier (Alt)"
             className={`px-3 py-1.5 rounded text-xs font-mono border transition-colors ${
               activeDrawer === 'comfort'
                 ? 'bg-[#c8a464] text-[#0b0a09] border-[#c8a464] font-semibold'
@@ -633,6 +747,20 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
             ✥ {!xrActive && 'Alt'}
           </button>
         )}
+
+        <button
+          onClick={() => {
+            engineRef.current?.togglePause();
+          }}
+          title="Pause / Resume Game Clock & Audio (P / Esc)"
+          className={`px-3 py-1.5 rounded text-xs font-mono border transition-colors ${
+            isPaused
+              ? 'bg-[#e5c158] text-[#0b0a09] border-[#e5c158] font-semibold'
+              : 'bg-[#12100e]/85 text-[#d8cfc0] border-white/15 hover:border-[#c8a464]/60'
+          }`}
+        >
+          {isPaused ? '▶' : '⏸'} {!xrActive && 'P'}
+        </button>
 
         {/* Codex Journal button (replaces Rules overlay; always available via wrist/top-right or Key R, §2.5) */}
         <button
@@ -649,6 +777,129 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
           ❖ {!xrActive && 'R'}
         </button>
       </div>
+
+      {/* Desktop & Non-Blocking Pause Overlay (Mirrors the 3D World-Locked VR Pause Panel, TZ.md §6.1–§6.3) */}
+      {isPaused && (
+        <div className="absolute top-16 left-4 w-[390px] max-w-[calc(100vw-2rem)] bg-[#080b14]/95 border border-[#e5c158]/50 rounded p-5 text-xs text-[#e8e2d5] backdrop-blur-md shadow-2xl z-20 space-y-3.5">
+          <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+            <div>
+              <span className="font-display text-sm font-semibold text-[#e5c158] tracking-wider block">
+                ⏸ PAUSED · WORLD CLOCK FROZEN
+              </span>
+              <span className="font-mono text-[10px] text-[#a89f91]">
+                {`Game Time ${telemetry.gameTimeSec.toFixed(
+                  1
+                )}s · Head tracking & 3D VR panel live`}
+              </span>
+            </div>
+            <button
+              onClick={() => engineRef.current?.setPaused(false)}
+              className="px-3 py-1.5 rounded bg-[#66cc99] text-[#080b14] font-mono font-semibold text-xs hover:bg-[#7ee0b0]"
+            >
+              ▶ Resume (P)
+            </button>
+          </div>
+
+          {/* Active Astronomical Nebula Attribution */}
+          <div className="p-2.5 rounded bg-white/5 border border-white/10 font-mono text-[11px] space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[#e5c158] font-semibold truncate">
+                {`${telemetry.nebulaId} · ${telemetry.nebulaName}`}
+              </span>
+              <div className="flex items-center gap-1 ml-2">
+                {telemetry.nebulaPalette.map((hex, i) => (
+                  <span
+                    key={`${hex}-${i}`}
+                    className="w-3 h-3 rounded-full border border-white/25 inline-block"
+                    style={{ backgroundColor: hex }}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="text-[10px] text-[#a89f91] truncate">
+              {`Credit: ${telemetry.nebulaCredit} (${telemetry.nebulaLicense})`}
+            </div>
+          </div>
+
+          {/* 4-Bus Volume Mixer inside Pause Menu (TZ.md §5.2 & §6.1) */}
+          <div className="space-y-2 border-t border-white/10 pt-2.5">
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[11px] text-[#d8cfc0]">
+                Master / Bus Mixer (`[` `]` / `M`):
+              </span>
+              <button
+                onClick={() => {
+                  hubPlayerState.toggleAudioMuted();
+                  engineRef.current?.mountWorldLockedPausePanel();
+                }}
+                className={`px-2.5 py-1 rounded font-mono text-[10px] ${
+                  hubState.audio.muted
+                    ? 'bg-[#ff6b6b]/20 text-[#ff6b6b] border border-[#ff6b6b]/40'
+                    : 'bg-[#66cc99]/20 text-[#66cc99] border border-[#66cc99]/40'
+                }`}
+              >
+                {hubState.audio.muted ? '🔇 MUTED (M)' : '🔊 ACTIVE (M)'}
+              </button>
+            </div>
+
+            {(
+              [
+                { key: 'master', label: 'Master Volume ([ / ])' },
+                { key: 'music', label: 'Music (Room MP3 Track)' },
+                { key: 'ambient', label: 'Ambient (Atrium Drone)' },
+                { key: 'sfx', label: 'Effects (Chimes & UI)' },
+              ] as const
+            ).map((bus) => (
+              <div key={bus.key}>
+                <div className="flex justify-between text-[10px] font-mono text-[#a89f91]">
+                  <span>{bus.label}</span>
+                  <span>{Math.round(hubState.audio[bus.key] * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.02}
+                  value={hubState.audio[bus.key]}
+                  onChange={(e) => {
+                    hubPlayerState.setAudioVolume(
+                      bus.key,
+                      parseFloat(e.target.value)
+                    );
+                    engineRef.current?.mountWorldLockedPausePanel();
+                  }}
+                  className="w-full accent-[#c8a464] h-1.5"
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Quick Actions in Pause Menu */}
+          <div className="border-t border-white/10 pt-2.5 flex gap-2">
+            {hubState.location === 'room' && (
+              <button
+                onClick={() => {
+                  engineRef.current?.setPaused(false);
+                  engineRef.current?.comfort.triggerFadeTransition(() => {
+                    hubPlayerState.returnToCorridor();
+                  });
+                }}
+                className="flex-1 py-1.5 px-2.5 rounded bg-white/10 hover:bg-white/15 text-[#f3ede2] font-mono text-[11px]"
+              >
+                ↺ Return to Sector Room
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setActiveDrawer('codex');
+              }}
+              className="flex-1 py-1.5 px-2.5 rounded bg-white/10 hover:bg-white/15 text-[#e5c158] font-mono text-[11px]"
+            >
+              ❖ Open Codex (R)
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Contextual Drawer: CODEX (Replaces the old Rules wall, §2.5) */}
       {activeDrawer === 'codex' && (
@@ -703,6 +954,19 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
               <span className="text-[#f3ede2]">
                 {hubState.visitedRooms.length} / 25
               </span>
+            </div>
+            <div className="p-2 rounded bg-white/5 border border-white/10 space-y-1">
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-[#e5c158] font-semibold truncate">
+                  {`Sky: ${telemetry.nebulaId} · ${telemetry.nebulaName}`}
+                </span>
+                <span className="text-[#66cc99] ml-2">
+                  {telemetry.nebulaLicense}
+                </span>
+              </div>
+              <div className="text-[10px] text-[#a89f91] truncate">
+                {`Credit: ${telemetry.nebulaCredit} (See CREDITS.md)`}
+              </div>
             </div>
             <div className="pt-1 grid grid-cols-3 gap-1.5">
               {([1, 2, 3] as const).map((seg) => (
@@ -957,15 +1221,38 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
               {hubState.comfort.captions ? 'ON' : 'OFF'}
             </button>
           </div>
+
+          <div>
+            <div className="text-[11px] font-mono text-[#a89f91] mb-1.5">
+              Sky & Lighting Quality Tier (TZ.md §4.5):
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {(
+                ['auto', 'quest', 'desktop-low', 'desktop-high'] as const
+              ).map((tier) => (
+                <button
+                  key={tier}
+                  onClick={() => hubPlayerState.setQualityTier(tier)}
+                  className={`py-1.5 rounded font-mono text-[10px] uppercase border ${
+                    hubState.comfort.qualityTier === tier
+                      ? 'bg-[#c8a464] text-[#0b0a09] border-[#c8a464] font-semibold'
+                      : 'bg-white/5 text-[#d8cfc0] border-white/10'
+                  }`}
+                >
+                  {tier}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Contextual Drawer: AUDIO (`Z`, §2.5) */}
+      {/* Contextual Drawer: 4-BUS AUDIO MIXER (`Z`, TZ.md §5.1–§5.4) */}
       {activeDrawer === 'audio' && (
-        <div className="absolute top-16 right-4 w-[370px] max-w-[calc(100vw-2rem)] bg-[#0e0c0a]/95 border border-[#c8a464]/40 rounded p-5 text-xs text-[#e8e2d5] backdrop-blur-md shadow-2xl z-20 space-y-3">
+        <div className="absolute top-16 right-4 w-[390px] max-w-[calc(100vw-2rem)] bg-[#0e0c0a]/95 border border-[#c8a464]/40 rounded p-5 text-xs text-[#e8e2d5] backdrop-blur-md shadow-2xl z-20 space-y-3">
           <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
             <span className="font-display text-sm font-semibold text-[#e5c158]">
-              ♫ NEUROMICON AUDIO CARRIER
+              ♫ 4-BUS AUDIO MIXER & LIMITER
             </span>
             <button
               onClick={() => setActiveDrawer('none')}
@@ -986,38 +1273,57 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
           </div>
 
           <div className="flex items-center justify-between">
-            <span>Room Audio Carrier:</span>
+            <span>Master Mute (`M`):</span>
             <button
               onClick={() => {
-                const next = spatialAudioSystem.toggle();
-                setAudioActive(next);
+                hubPlayerState.toggleAudioMuted();
+                if (engineRef.current?.isPaused()) {
+                  engineRef.current.mountWorldLockedPausePanel();
+                }
               }}
               className={`px-3 py-1 rounded font-mono text-xs ${
-                audioActive
+                !hubState.audio.muted
                   ? 'bg-[#66cc99]/20 text-[#66cc99] border border-[#66cc99]/40'
-                  : 'bg-white/10 text-[#a89f91]'
+                  : 'bg-[#ff6b6b]/20 text-[#ff6b6b] border border-[#ff6b6b]/40'
               }`}
             >
-              {audioActive ? 'ENABLED (IN ROOMS ONLY)' : 'MUTED'}
+              {hubState.audio.muted ? '🔇 MUTED' : '🔊 ENABLED (IN ROOMS ONLY)'}
             </button>
           </div>
 
-          <div>
-            <div className="flex justify-between text-[11px] font-mono text-[#a89f91] mb-1">
-              <span>Volume</span>
-              <span>{Math.round(spatialAudioSystem.getVolume() * 100)}%</span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              defaultValue={spatialAudioSystem.getVolume()}
-              onChange={(e) => {
-                spatialAudioSystem.setVolume(parseFloat(e.target.value));
-              }}
-              className="w-full accent-[#c8a464]"
-            />
+          <div className="space-y-2.5 pt-1">
+            {(
+              [
+                { key: 'master', label: 'Master Volume ([ / ])' },
+                { key: 'music', label: 'Music Bus (Room MP3 Track)' },
+                { key: 'ambient', label: 'Ambient Bus (Atrium Drone)' },
+                { key: 'sfx', label: 'Effects Bus (Chimes & UI)' },
+              ] as const
+            ).map((bus) => (
+              <div key={bus.key}>
+                <div className="flex justify-between text-[11px] font-mono text-[#a89f91] mb-0.5">
+                  <span>{bus.label}</span>
+                  <span>{Math.round(hubState.audio[bus.key] * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.02}
+                  value={hubState.audio[bus.key]}
+                  onChange={(e) => {
+                    hubPlayerState.setAudioVolume(
+                      bus.key,
+                      parseFloat(e.target.value)
+                    );
+                    if (engineRef.current?.isPaused()) {
+                      engineRef.current.mountWorldLockedPausePanel();
+                    }
+                  }}
+                  className="w-full accent-[#c8a464]"
+                />
+              </div>
+            ))}
           </div>
         </div>
       )}

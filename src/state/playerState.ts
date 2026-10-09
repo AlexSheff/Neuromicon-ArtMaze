@@ -1,5 +1,11 @@
 import { eventBus, OnboardingStepId } from '../events/eventBus';
 import { ComfortMode, CorridorBranch } from '../room-sdk';
+import {
+  AudioBusName,
+  audioMixer,
+  AudioVolumeState,
+  DEFAULT_AUDIO_VOLUME_STATE,
+} from '../systems/audio/mixer';
 
 export type HubLocation = 'threshold' | 'corridor' | 'room' | 'void';
 
@@ -10,7 +16,7 @@ export interface RadioMessage {
 }
 
 /**
- * Authoritative PlayerState schema from EXPERIENCE_PROTOCOL.md §7.3
+ * Authoritative PlayerState schema from EXPERIENCE_PROTOCOL.md §7.3 & TZ.md §5.3 / §7
  * plus runtime compatibility fields for hub systems.
  */
 export interface HubPlayerState {
@@ -34,6 +40,7 @@ export interface HubPlayerState {
     captions: boolean;
     qualityTier: 'auto' | 'quest' | 'desktop-low' | 'desktop-high';
   };
+  audio: AudioVolumeState;
   discoveries: string[];
   revealedControls: string[];
   teleportCount: number;
@@ -53,9 +60,13 @@ export interface HubPlayerState {
   radioChannels: Record<string, RadioMessage[]>;
 }
 
-const STORAGE_KEY = 'neuromicon_artmaze_protocol_state_v3';
-const LEGACY_KEY = 'neuromicon_artmaze_hub_v1';
-const CURRENT_SCHEMA_VERSION = 3;
+const STORAGE_KEY = 'neuromicon_artmaze_protocol_state_v4';
+const LEGACY_KEYS = [
+  'neuromicon_artmaze_protocol_state_v3',
+  'neuromicon_artmaze_protocol_state_v2',
+  'neuromicon_artmaze_hub_v1',
+];
+const CURRENT_SCHEMA_VERSION = 4;
 
 function createDefaultState(): HubPlayerState {
   return {
@@ -79,6 +90,7 @@ function createDefaultState(): HubPlayerState {
       captions: false,
       qualityTier: 'auto',
     },
+    audio: { ...DEFAULT_AUDIO_VOLUME_STATE },
     discoveries: [],
     revealedControls: [],
     teleportCount: 0,
@@ -113,10 +125,28 @@ function createDefaultState(): HubPlayerState {
   };
 }
 
+function normalizeAudioState(rawAudio: unknown): AudioVolumeState {
+  if (!rawAudio || typeof rawAudio !== 'object') {
+    return { ...DEFAULT_AUDIO_VOLUME_STATE };
+  }
+  const obj = rawAudio as Partial<AudioVolumeState>;
+  const clamp01 = (v: unknown, def: number) =>
+    typeof v === 'number' && Number.isFinite(v)
+      ? Math.max(0, Math.min(1, v))
+      : def;
+  return {
+    master: clamp01(obj.master, DEFAULT_AUDIO_VOLUME_STATE.master),
+    music: clamp01(obj.music, DEFAULT_AUDIO_VOLUME_STATE.music),
+    ambient: clamp01(obj.ambient, DEFAULT_AUDIO_VOLUME_STATE.ambient),
+    sfx: clamp01(obj.sfx, DEFAULT_AUDIO_VOLUME_STATE.sfx),
+    muted: typeof obj.muted === 'boolean' ? obj.muted : false,
+  };
+}
+
 /**
- * Schema migration table keyed by version (EXPERIENCE_PROTOCOL.md §7.3).
+ * Schema migration table keyed by version (EXPERIENCE_PROTOCOL.md §7.3 & TZ.md §5.3).
  */
-function migrateState(raw: Record<string, unknown>): {
+export function migratePlayerState(raw: Record<string, unknown>): {
   state: HubPlayerState;
   readOnly: boolean;
 } {
@@ -129,13 +159,13 @@ function migrateState(raw: Record<string, unknown>): {
       state: syncDerivedFields({
         ...def,
         ...(raw as Partial<HubPlayerState>),
+        audio: normalizeAudioState(raw.audio),
       }),
       readOnly: true,
     };
   }
 
   if (ver === 1) {
-    // Migrate from v1 shape to v2
     const def = createDefaultState();
     const path =
       raw.path === 'ascend' || raw.path === 'descend' ? raw.path : null;
@@ -161,6 +191,7 @@ function migrateState(raw: Record<string, unknown>): {
       visited: visitedMap,
       identity:
         (raw.identityChoices as Record<string, 'accept' | 'reject'>) ?? {},
+      audio: normalizeAudioState(raw.audio),
       discoveries: Array.isArray(raw.discoveries)
         ? (raw.discoveries as string[])
         : [],
@@ -168,11 +199,14 @@ function migrateState(raw: Record<string, unknown>): {
     return { state: migrated, readOnly: false };
   }
 
+  // Migrate v2 / v3 / v4 -> v4 (preserving comfort, visited, identity, and adding/normalizing audio)
   const def = createDefaultState();
   return {
     state: syncDerivedFields({
       ...def,
       ...(raw as Partial<HubPlayerState>),
+      version: CURRENT_SCHEMA_VERSION,
+      audio: normalizeAudioState(raw.audio),
     }),
     readOnly: false,
   };
@@ -183,8 +217,11 @@ function syncDerivedFields(state: HubPlayerState): HubPlayerState {
   const completedRooms = Object.entries(state.visited)
     .filter(([, v]) => v.completed)
     .map(([k]) => k);
-  const branch = state.segment?.branch ?? state.path ?? state.branch ?? 'ascend';
-  const segmentIndex = (state.segment?.index ?? state.segmentIndex ?? 1) as 1 | 2 | 3;
+  const branch =
+    state.segment?.branch ?? state.path ?? state.branch ?? 'ascend';
+  const segmentIndex = (state.segment?.index ??
+    state.segmentIndex ??
+    1) as 1 | 2 | 3;
   const comfortMode: ComfortMode = state.comfort.seated
     ? 'seated'
     : state.comfort.locomotion;
@@ -199,6 +236,7 @@ function syncDerivedFields(state: HubPlayerState): HubPlayerState {
     comfortMode,
     snapTurnDegrees: state.comfort.snap,
     vignetteEnabled: state.comfort.vignette > 0,
+    audio: normalizeAudioState(state.audio),
   };
 }
 
@@ -210,19 +248,30 @@ class HubPlayerStateStore {
 
   constructor() {
     this.state = this.load();
+    // Apply persisted audio state to AudioMixer before the first sound plays (TZ.md §5.3)
+    audioMixer.setVolumeState(this.state.audio);
   }
 
   private load(): HubPlayerState {
     try {
-      const rawStr =
-        window.localStorage.getItem(STORAGE_KEY) ??
-        window.localStorage.getItem(LEGACY_KEY);
+      if (typeof window === 'undefined' || !window.localStorage) {
+        return createDefaultState();
+      }
+      let rawStr = window.localStorage.getItem(STORAGE_KEY);
+      if (!rawStr) {
+        for (const legacyKey of LEGACY_KEYS) {
+          const found = window.localStorage.getItem(legacyKey);
+          if (found) {
+            rawStr = found;
+            break;
+          }
+        }
+      }
       if (!rawStr) return createDefaultState();
       const parsed = JSON.parse(rawStr) as Record<string, unknown>;
-      const { state, readOnly } = migrateState(parsed);
+      const { state, readOnly } = migratePlayerState(parsed);
       this.isReadOnly = readOnly;
 
-      // Always start in the Grand Cosmic Starting Room (threshold) on initial page load
       state.location = 'threshold';
       state.currentRoomId = null;
       if (state.onboarding.completedSteps.includes('COMMITTED')) {
@@ -239,7 +288,7 @@ class HubPlayerStateStore {
     const snap = this.getState();
     this.listeners.forEach((cb) => cb(snap));
 
-    if (this.isReadOnly) return;
+    if (this.isReadOnly || typeof window === 'undefined') return;
     if (this.saveTimer !== null) {
       window.clearTimeout(this.saveTimer);
     }
@@ -262,6 +311,7 @@ class HubPlayerStateStore {
         completedSteps: [...this.state.onboarding.completedSteps],
       },
       comfort: { ...this.state.comfort },
+      audio: { ...this.state.audio },
       discoveries: [...this.state.discoveries],
       revealedControls: [...this.state.revealedControls],
       visitedRooms: [...this.state.visitedRooms],
@@ -276,6 +326,44 @@ class HubPlayerStateStore {
     return () => {
       this.listeners.delete(listener);
     };
+  }
+
+  public setAudioVolume(
+    bus: AudioBusName | 'master',
+    value01: number
+  ): void {
+    const clamped = Math.max(0, Math.min(1, value01));
+    this.state.audio = {
+      ...this.state.audio,
+      [bus]: clamped,
+    };
+    audioMixer.setVolumeState(this.state.audio);
+    this.notifyAndDebounceSave();
+  }
+
+  public adjustMasterVolumeDelta(delta: number): void {
+    const next = audioMixer.adjustMasterDelta(delta);
+    this.state.audio = {
+      ...this.state.audio,
+      master: next,
+      muted: false,
+    };
+    this.notifyAndDebounceSave();
+  }
+
+  public setAudioMuted(muted: boolean): void {
+    this.state.audio = {
+      ...this.state.audio,
+      muted,
+    };
+    audioMixer.setVolumeState(this.state.audio);
+    this.notifyAndDebounceSave();
+  }
+
+  public toggleAudioMuted(): boolean {
+    const nextMuted = !this.state.audio.muted;
+    this.setAudioMuted(nextMuted);
+    return nextMuted;
   }
 
   public setOnboardingStep(step: OnboardingStepId): void {
@@ -492,9 +580,10 @@ class HubPlayerStateStore {
   public importStateJson(jsonStr: string): boolean {
     try {
       const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
-      const { state, readOnly } = migrateState(parsed);
+      const { state, readOnly } = migratePlayerState(parsed);
       this.state = state;
       this.isReadOnly = readOnly;
+      audioMixer.setVolumeState(this.state.audio);
       this.notifyAndDebounceSave();
       return true;
     } catch {
@@ -505,9 +594,10 @@ class HubPlayerStateStore {
   public resetProgress(): void {
     this.state = createDefaultState();
     this.isReadOnly = false;
+    audioMixer.setVolumeState(this.state.audio);
     try {
       window.localStorage.removeItem(STORAGE_KEY);
-      window.localStorage.removeItem(LEGACY_KEY);
+      LEGACY_KEYS.forEach((k) => window.localStorage.removeItem(k));
     } catch {
       // ignore
     }

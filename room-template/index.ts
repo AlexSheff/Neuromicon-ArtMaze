@@ -2,8 +2,11 @@ import { disposeThreeHierarchy, RoomContext, RoomModule } from '../src/room-sdk'
 
 /**
  * Reference Room API v1 Module (`room-template/index.ts`).
- * Demonstrates building a room under `ctx.root`, rotating artifacts in `update(dt, ctx)`,
- * and disposing all GPU resources in `unmount(ctx)` to pass CI leak checks.
+ * Demonstrates:
+ * - Using `ctx.time.delta` and `ctx.time.paused` (game time, never wall-clock `performance.now`, TZ.md §6.4).
+ * - Accessing `ctx.sky.current()` and `ctx.environment.palette` (TZ.md §3.6).
+ * - Implementing `onPause(ctx)` and `onResume(ctx)` hooks (TZ.md §6.4).
+ * - Disposing all GPU resources in `unmount(ctx)` to pass CI 30-transition leak checks.
  */
 const roomModule: RoomModule = {
   async preload(ctx: RoomContext): Promise<void> {
@@ -11,14 +14,15 @@ const roomModule: RoomModule = {
   },
 
   async mount(ctx: RoomContext): Promise<void> {
-    const { THREE, root } = ctx;
+    const { THREE, root, environment } = ctx;
+    const accentColor = environment.palette[2] ?? '#c8a464';
 
-    // Floating sacred astrolabe ring in the center of the room
+    // Floating sacred astrolabe ring in the center of the room tinted by the room's Nebula palette
     const ringGeo = new THREE.TorusGeometry(0.65, 0.035, 16, 48);
     const ringMat = new THREE.MeshStandardMaterial({
-      color: '#c8a464',
-      roughness: 0.25,
-      metalness: 0.85,
+      color: accentColor,
+      roughness: 0.22,
+      metalness: 0.88,
     });
     const ringMesh = new THREE.Mesh(ringGeo, ringMat);
     ringMesh.name = 'template_astrolabe_ring';
@@ -27,11 +31,21 @@ const roomModule: RoomModule = {
   },
 
   update(dt: number, ctx: RoomContext): void {
+    if (ctx.time.paused || dt <= 0) return;
+    const stepDt = ctx.time.delta;
     const ring = ctx.root.getObjectByName('template_astrolabe_ring');
     if (ring) {
-      ring.rotation.y += dt * 0.45;
-      ring.rotation.x += dt * 0.2;
+      ring.rotation.y += stepDt * 0.45;
+      ring.rotation.x += stepDt * 0.2;
     }
+  },
+
+  onPause(ctx: RoomContext): void {
+    ctx.log(`[${ctx.manifest.id}] Paused at game time ${ctx.time.now.toFixed(2)}s`);
+  },
+
+  onResume(ctx: RoomContext): void {
+    ctx.log(`[${ctx.manifest.id}] Resumed at game time ${ctx.time.now.toFixed(2)}s`);
   },
 
   unmount(ctx: RoomContext): void {
