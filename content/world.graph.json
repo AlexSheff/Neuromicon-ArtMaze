@@ -1,7 +1,10 @@
 {
   "version": "1.0.0",
   "totalRooms": 1149,
-  "organizationAllowlist": ["AlexSheff", "neuromicon-artmaze"],
+  "organizationAllowlist": [
+    "AlexSheff",
+    "neuromicon-artmaze"
+  ],
   "nodes": [
     {
       "id": "ROOM_001",
@@ -14,7 +17,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-ddf288a2ed4a3ef02139d8f55e3d9e4f8cc9b737000000000000000000000001"
+      "entryHash": "sha256-a9944de453baf7b9741af4b3d10256994758ab52ed2a611003354f7e8c8e43d7"
     },
     {
       "id": "ROOM_002",
@@ -27,7 +30,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-995a154afb2500a2821a5edd26ebe599a61e927a000000000000000000000002"
+      "entryHash": "sha256-9b96f93b2d323edb3fb3d5e482d44277e30b16eadb9dd3c7fa3b6413be984a03"
     },
     {
       "id": "ROOM_003",
@@ -40,7 +43,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-3b05d63d970efeb9c853a78090d3a8577836f9be000000000000000000000003"
+      "entryHash": "sha256-154a8ea2936bdbebb6c4213d4affef4701e42b87b28c7c09d7fbd3d48af4512b"
     },
     {
       "id": "ROOM_004",
@@ -53,7 +56,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-7c11f542d36a04ef81c453372ef1540697842516079824150697824150697804"
+      "entryHash": "sha256-b3cf183da77a48e3b17cbb1d359c19be7fa94324839d46ec316245b3db773192"
     },
     {
       "id": "ROOM_005",
@@ -66,7 +69,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-4f88c219a03d71bc58f120049bc8217364519283746591827364591827364505"
+      "entryHash": "sha256-5bd0e9114676b03752fea4328f95b7c8f40ec0b549f236ff1918b5d8ed9c9878"
     },
     {
       "id": "ROOM_006",
@@ -79,7 +82,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-8d22a653e47b15fa92d564483fa2651708953627180935261708935261708906"
+      "entryHash": "sha256-68e414dcac500740294f37bb103af5883bc50cd63f617e9d1bbedf4c482833bf"
     },
     {
       "id": "ROOM_007",
@@ -92,7 +95,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-0f44c875a69d37bc14f786605bc4873920175849302157483920157483920107"
+      "entryHash": "sha256-214c23c0ad0a7a01137bdec067812eadea2e4959406ae64ed3bd1fe4bb79ca0f"
     },
     {
       "id": "ROOM_008",
@@ -105,7 +108,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-5a99d320b14e82cd69a231150cd9328475620394857602938475602938475608"
+      "entryHash": "sha256-1cc4368c0b50bfb826ae20e5869d6df94af57467a62f9f776583eadeb6b70eb4"
     },
     {
       "id": "ROOM_009",
@@ -118,7 +121,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-6b00e431c25f93de70b342261de0439586731405968713049586713049586709"
+      "entryHash": "sha256-9566ecc29d07f4dd858f3c3417aee8fb29b7ed8e9544181f2ce5e36c7e57d330"
     },
     {
       "id": "ROOM_010",
@@ -131,7 +134,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-7c11f542d36a04ef81c453372ef1540697842516079824150697824150697810"
+      "entryHash": "sha256-177588769db42b7ba62f7a9867bf2b31269199f9c2b1cef9ba5ab7a48a2317f4"
     },
     {
       "id": "ROOM_011",
@@ -144,7 +147,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-8d22a653e47b15fa92d564483fa2651708953627180935261708935261708911"
+      "entryHash": "sha256-f68c6813bbb3730a2629a8573fa3567f8d699458c330f703faadd7168cd6cf37"
     },
     {
       "id": "ROOM_012",
@@ -157,7 +160,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-9e33b764f58c26ab03e675594ab3762819064738291046372819046372819012"
+      "entryHash": "sha256-cc9bda11f2f9be954e18a7ec6e034ca2f5fc5a292232eaf66713222d46cb98dd"
     },
     {
       "id": "ROOM_013",
@@ -170,7 +173,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-1a55d986b70e48cd25a897716cd5984031286950413268594031268594031213"
+      "entryHash": "sha256-9f6083cd3794402c20efa3c66610c79c8b2723f60f8b4591d9697fd55e0cc907"
     },
     {
       "id": "ROOM_014",
@@ -183,7 +186,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-2b66e097c81f59de36b908827de6095142397061524379605142379605142314"
+      "entryHash": "sha256-5ef0952893bade9a4fd8911b0516ab1ece8e9f24bc7d44fece0764f750fae581"
     },
     {
       "id": "ROOM_015",
@@ -196,7 +199,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-3c77f108d92a60ef47c019938ef7106253408172635480716253480716253415"
+      "entryHash": "sha256-600d9f6f1778137879a35aa73be7a82592be035f8123c2767db71b2849e4b7bb"
     },
     {
       "id": "ROOM_016",
@@ -209,7 +212,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-4d88a219e03b71fa58d120049fa8217364519283746591827364591827364516"
+      "entryHash": "sha256-43553a1020f6695908b8e0b3e7be4552e17ee5b1f85c3993dc10429b2af7022b"
     },
     {
       "id": "ROOM_017",
@@ -222,7 +225,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-5e99b320f14c82ab69e231150ab9328475620394857602938475602938475617"
+      "entryHash": "sha256-fdc9b12b13b2e3ed64dee84580259eaaf12ec391d0e804d61fb09c0390164616"
     },
     {
       "id": "ROOM_018",
@@ -235,7 +238,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-6f00c431a25d93bc70f342261bc0439586731405968713049586713049586718"
+      "entryHash": "sha256-cf035bca03f904c1ad23273d2bc71d8e74270dfbc4256afa3fea45416df85bb0"
     },
     {
       "id": "ROOM_019",
@@ -248,7 +251,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-7a11d542b36e04cd81a453372cd1540697842516079824150697824150697819"
+      "entryHash": "sha256-26eaa15b8b646303bb319266d66084dcc80633fb91334de9063e31f98297d0fb"
     },
     {
       "id": "ROOM_020",
@@ -261,7 +264,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-8b22e653c47f15de92b564483de2651708953627180935261708935261708920"
+      "entryHash": "sha256-5396b485d44c170947713bd40d4504a1b899bce805d0ba112e288bd927d2a814"
     },
     {
       "id": "ROOM_021",
@@ -274,7 +277,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-9c33f764d58a26ef03c675594ef3762819064738291046372819046372819021"
+      "entryHash": "sha256-9e22e2466ec5a9eb65d91d897ee28f5452c3006cf6e8519484ae10cab0c15ea9"
     },
     {
       "id": "ROOM_022",
@@ -287,7 +290,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-0d44a875e69b37fa14d786605fa4873920175849302157483920157483920122"
+      "entryHash": "sha256-a4388e33b56c082b82aad15ced9610666cfd7d6fcd6d14ca297aa032b05562d8"
     },
     {
       "id": "ROOM_023",
@@ -300,7 +303,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-1e55b986f70c48ab25e897716ab5984031286950413268594031268594031223"
+      "entryHash": "sha256-4c49243e445fc23892fd39c717a9941f715eab310883dd4651dcbcaf7570781e"
     },
     {
       "id": "ROOM_024",
@@ -313,7 +316,7 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-2f66c097a81d59bc36f908827bc6095142397061524379605142379605142324"
+      "entryHash": "sha256-9dc3861c74d5b740989f449ed5de9c9a3b1b42670ade468a3a863c0ede0fd83c"
     },
     {
       "id": "ROOM_025",
@@ -326,34 +329,159 @@
       "status": "ready",
       "repo": "https://github.com/AlexSheff/Neuromicon",
       "ref": "v1.0.0",
-      "entryHash": "sha256-2b66e097c81f59de36b908827de6095142397061524379605142379605142325"
+      "entryHash": "sha256-d8152584de3f068037488319f34dd46b199306b9983e5380d1bed3f5931f6df6"
     }
   ],
   "edges": [
-    { "from": "ROOM_001", "door": "A", "to": "ROOM_002", "type": "regular" },
-    { "from": "ROOM_001", "door": "B", "to": "ROOM_003", "type": "regular" },
-    { "from": "ROOM_001", "door": "C", "to": "ROOM_004", "type": "regular" },
-    { "from": "ROOM_001", "door": "RH", "to": "ROOM_1149", "type": "rabbit-hole" },
-    { "from": "ROOM_002", "door": "A", "to": "ROOM_003", "type": "regular" },
-    { "from": "ROOM_002", "door": "B", "to": "ROOM_005", "type": "regular" },
-    { "from": "ROOM_002", "door": "C", "to": "ROOM_006", "type": "regular" },
-    { "from": "ROOM_003", "door": "A", "to": "ROOM_004", "type": "regular" },
-    { "from": "ROOM_003", "door": "B", "to": "ROOM_007", "type": "regular" },
-    { "from": "ROOM_003", "door": "C", "to": "ROOM_008", "type": "regular" },
-    { "from": "ROOM_004", "door": "A", "to": "ROOM_005", "type": "regular" },
-    { "from": "ROOM_004", "door": "B", "to": "ROOM_009", "type": "regular" },
-    { "from": "ROOM_004", "door": "C", "to": "ROOM_010", "type": "regular" },
-    { "from": "ROOM_005", "door": "A", "to": "ROOM_006", "type": "regular" },
-    { "from": "ROOM_005", "door": "B", "to": "ROOM_011", "type": "regular" },
-    { "from": "ROOM_005", "door": "C", "to": "ROOM_012", "type": "regular" },
-    { "from": "ROOM_012", "door": "A", "to": "ROOM_013", "type": "regular" },
-    { "from": "ROOM_012", "door": "B", "to": "ROOM_014", "type": "regular" },
-    { "from": "ROOM_012", "door": "C", "to": "ROOM_015", "type": "regular" },
-    { "from": "ROOM_020", "door": "A", "to": "ROOM_021", "type": "regular" },
-    { "from": "ROOM_020", "door": "B", "to": "ROOM_022", "type": "regular" },
-    { "from": "ROOM_020", "door": "C", "to": "ROOM_023", "type": "regular" },
-    { "from": "ROOM_025", "door": "A", "to": "ROOM_001", "type": "regular" },
-    { "from": "ROOM_025", "door": "B", "to": "ROOM_012", "type": "regular" },
-    { "from": "ROOM_025", "door": "C", "to": "ROOM_020", "type": "regular" }
+    {
+      "from": "ROOM_001",
+      "door": "A",
+      "to": "ROOM_002",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_001",
+      "door": "B",
+      "to": "ROOM_003",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_001",
+      "door": "C",
+      "to": "ROOM_004",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_001",
+      "door": "RH",
+      "to": "ROOM_1149",
+      "type": "rabbit-hole"
+    },
+    {
+      "from": "ROOM_002",
+      "door": "A",
+      "to": "ROOM_003",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_002",
+      "door": "B",
+      "to": "ROOM_005",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_002",
+      "door": "C",
+      "to": "ROOM_006",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_003",
+      "door": "A",
+      "to": "ROOM_004",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_003",
+      "door": "B",
+      "to": "ROOM_007",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_003",
+      "door": "C",
+      "to": "ROOM_008",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_004",
+      "door": "A",
+      "to": "ROOM_005",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_004",
+      "door": "B",
+      "to": "ROOM_009",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_004",
+      "door": "C",
+      "to": "ROOM_010",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_005",
+      "door": "A",
+      "to": "ROOM_006",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_005",
+      "door": "B",
+      "to": "ROOM_011",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_005",
+      "door": "C",
+      "to": "ROOM_012",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_012",
+      "door": "A",
+      "to": "ROOM_013",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_012",
+      "door": "B",
+      "to": "ROOM_014",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_012",
+      "door": "C",
+      "to": "ROOM_015",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_020",
+      "door": "A",
+      "to": "ROOM_021",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_020",
+      "door": "B",
+      "to": "ROOM_022",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_020",
+      "door": "C",
+      "to": "ROOM_023",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_025",
+      "door": "A",
+      "to": "ROOM_001",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_025",
+      "door": "B",
+      "to": "ROOM_012",
+      "type": "regular"
+    },
+    {
+      "from": "ROOM_025",
+      "door": "C",
+      "to": "ROOM_020",
+      "type": "regular"
+    }
   ]
 }

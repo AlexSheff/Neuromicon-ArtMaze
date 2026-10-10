@@ -3,7 +3,7 @@ import * as THREE from 'three';
 export type CorridorBranch = 'ascend' | 'descend';
 export type ComfortMode = 'teleport' | 'smooth' | 'seated';
 export type MirrorChoice = 'accept' | 'reject' | 'back';
-export type RoomAudioBus = 'music' | 'ambient' | 'sfx';
+export type RoomAudioBus = 'music' | 'ambient' | 'sfx' | 'voice';
 
 export interface RoomV1DoorRequirement {
   type: 'interactReflection' | 'questComplete' | 'identity' | 'observeShadow';

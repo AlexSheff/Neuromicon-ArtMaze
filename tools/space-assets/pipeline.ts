@@ -163,15 +163,26 @@ export function validateNebulaRegistryAndCoverage(): NebulaValidationReport {
   }
 
   // Validate base starfield
+  const EMPTY_SHA256 =
+    'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
   if (!ALLOWED_LICENSES.has(starfieldData.license)) {
     errors.push(`Starfield license ${starfieldData.license} not in allow-list`);
   }
   if (!starfieldData.sourceUrl.startsWith('https://')) {
     errors.push('Starfield sourceUrl must use https://');
   }
+  if (
+    !/^[a-f0-9]{64}$/.test(starfieldData.sha256) ||
+    starfieldData.sha256 === EMPTY_SHA256
+  ) {
+    errors.push(
+      'Starfield sha256 must be a non-empty 64-char cryptographic digest'
+    );
+  }
 
   let warmCount = 0;
   let coolCount = 0;
+  const seenShas = new Set<string>();
 
   nebulae.forEach((n) => {
     if (seenIds.has(n.id)) {
@@ -193,9 +204,18 @@ export function validateNebulaRegistryAndCoverage(): NebulaValidationReport {
     if (!n.sourceUrl.startsWith('https://')) {
       errors.push(`${n.id}: invalid sourceUrl`);
     }
-    if (!/^[a-f0-9]{64}$/.test(n.sha256)) {
-      errors.push(`${n.id}: sha256 must be 64 hex chars`);
+    if (
+      !/^[a-f0-9]{64}$/.test(n.sha256) ||
+      n.sha256 === EMPTY_SHA256 ||
+      n.sha256.includes('112233445566778899aabbccddeeff')
+    ) {
+      errors.push(`${n.id}: sha256 must be a real 64-char file digest`);
     }
+    if (seenShas.has(n.sha256)) {
+      errors.push(`${n.id}: duplicate sha256 digest ${n.sha256}`);
+    }
+    seenShas.add(n.sha256);
+
     if (!n.credit || n.credit.length < 4) {
       errors.push(`${n.id}: missing credit attribution`);
     }
@@ -228,18 +248,40 @@ export function validateNebulaRegistryAndCoverage(): NebulaValidationReport {
     first25Used.add(resolved.nebula.id);
   }
 
+  // Explicitly validate every single room from 1 to 1,149
   const totalRooms = 1149;
+  let coveredRooms = 0;
+  for (let i = 1; i <= totalRooms; i++) {
+    const rid =
+      i <= 999
+        ? `ROOM_${String(i).padStart(3, '0')}`
+        : `ROOM_${String(i).padStart(4, '0')}`;
+    const resolved = resolveRoomNebulaMapping(rid);
+    if (
+      resolved &&
+      seenIds.has(resolved.nebula.id) &&
+      Array.isArray(resolved.mapping.rotation) &&
+      resolved.mapping.rotation.length === 3 &&
+      resolved.mapping.intensity >= 0.2 &&
+      resolved.mapping.intensity <= 1.5
+    ) {
+      coveredRooms += 1;
+    } else {
+      errors.push(`Invalid nebula mapping for ${rid}`);
+    }
+  }
+
   const uniqueRoomMappings = first25Used.size;
-  const variantRoomMappings = totalRooms - uniqueRoomMappings;
+  const variantRoomMappings = coveredRooms - uniqueRoomMappings;
 
   return {
-    valid: errors.length === 0,
+    valid: errors.length === 0 && coveredRooms === totalRooms,
     totalCuratedNebulae: nebulae.length,
     warmCount,
     coolCount,
     uniqueRoomMappings,
     variantRoomMappings,
-    totalCoveredRooms: totalRooms,
+    totalCoveredRooms: coveredRooms,
     errors,
   };
 }

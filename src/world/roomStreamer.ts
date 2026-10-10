@@ -656,8 +656,16 @@ NEUROMICON_25_SPECS.forEach((spec) => {
   ROOM_MANIFESTS[spec.roomId] = buildNeuromiconRoomManifest(spec);
 });
 
-export function getRoomV1Manifest(roomId: string): RoomV1Manifest {
-  return ROOM_MANIFESTS[roomId] ?? ROOM_MANIFESTS.ROOM_001;
+export function getRoomV1Manifest(roomId: string): RoomV1Manifest | null {
+  return Object.prototype.hasOwnProperty.call(ROOM_MANIFESTS, roomId)
+    ? ROOM_MANIFESTS[roomId]
+    : null;
+}
+
+export function getCanonicalRoomPayload(roomId: string): string | null {
+  const manifest = getRoomV1Manifest(roomId);
+  if (!manifest) return null;
+  return JSON.stringify(manifest);
 }
 
 export function getAllRoomV1Manifests(): RoomV1Manifest[] {
@@ -673,6 +681,11 @@ function createRoomPaintingFallbackTexture(
   sector: string,
   accentHex: string
 ): THREE.CanvasTexture {
+  if (typeof document === 'undefined') {
+    const tex = new THREE.DataTexture(new Uint8Array(8 * 8 * 4), 8, 8);
+    tex.needsUpdate = true;
+    return tex as unknown as THREE.CanvasTexture;
+  }
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
   canvas.height = 512;
@@ -715,41 +728,79 @@ function createRoomPaintingFallbackTexture(
 export class RoomStreamer {
   private activeModule: RoomModule | null = null;
   private activeCtx: RoomContext | null = null;
+  private mountGeneration = 0;
 
   /**
-   * Verifies room entry module integrity via WebCrypto SHA-256 (AGENTS.md §4.3 & EXPERIENCE_PROTOCOL.md §7.2.3).
+   * Verifies room entry payload integrity via WebCrypto SHA-256 against the pinned hash in world.graph.json
+   * (AGENTS.md §4.3 & EXPERIENCE_PROTOCOL.md §7.2.3).
+   * Fail-closed: returns false if room is unknown, planned, missing expected hash, WebCrypto is unavailable,
+   * or the computed SHA-256 digest does not match expectedHash.
    */
   public async verifyRoomEntryHash(
     roomId: string,
-    sourcePayload?: string
+    sourcePayload?: string | Uint8Array,
+    expectedHashOverride?: string
   ): Promise<boolean> {
     const node = getWorldNodes().find((n) => n.id === roomId);
-    if (node && node.status === 'planned') return false;
+    if (!node || node.status === 'planned') return false;
 
-    if (typeof crypto !== 'undefined' && crypto.subtle) {
-      const data = new TextEncoder().encode(
-        sourcePayload ?? `neuromicon:${roomId}`
+    const rawExpected = expectedHashOverride ?? node.entryHash;
+    if (!rawExpected || typeof rawExpected !== 'string') return false;
+
+    const expectedHex = rawExpected
+      .replace(/^sha256-/i, '')
+      .trim()
+      .toLowerCase();
+    if (!/^[a-f0-9]{64}$/.test(expectedHex)) return false;
+
+    if (
+      typeof crypto === 'undefined' ||
+      !crypto.subtle ||
+      typeof crypto.subtle.digest !== 'function'
+    ) {
+      return false;
+    }
+
+    let bytes: Uint8Array;
+    if (sourcePayload !== undefined) {
+      bytes =
+        typeof sourcePayload === 'string'
+          ? new TextEncoder().encode(sourcePayload)
+          : sourcePayload;
+    } else {
+      const canonical = getCanonicalRoomPayload(roomId);
+      if (!canonical) return false;
+      bytes = new TextEncoder().encode(canonical);
+    }
+
+    try {
+      const digest = await crypto.subtle.digest(
+        'SHA-256',
+        bytes as unknown as BufferSource
       );
-      const digest = await crypto.subtle.digest('SHA-256', data);
-      const hex = Array.from(new Uint8Array(digest))
+      const actualHex = Array.from(new Uint8Array(digest))
         .map((b) => b.toString(16).padStart(2, '0'))
         .join('');
-      return hex.length === 64;
+      return actualHex === expectedHex;
+    } catch {
+      return false;
     }
-    return true;
   }
 
   public unmountCurrentRoom(root: THREE.Group, scene?: THREE.Scene): void {
+    this.mountGeneration += 1;
     nebulaSkySystem.unmountSky(root, scene);
     if (this.activeModule && this.activeCtx) {
       try {
         this.activeModule.unmount(this.activeCtx);
       } catch {
-        disposeThreeHierarchy(root);
+        // Ensure cleanup continues even if room module throws
       }
-    } else {
-      disposeThreeHierarchy(root);
+      if (this.activeCtx.root && this.activeCtx.root !== root) {
+        disposeThreeHierarchy(this.activeCtx.root);
+      }
     }
+    disposeThreeHierarchy(root);
     this.activeModule = null;
     this.activeCtx = null;
   }
@@ -781,11 +832,24 @@ export class RoomStreamer {
       target: SpatialInteractiveTarget
     ) => void,
     walkableMeshes: THREE.Object3D[]
-  ): RoomV1Manifest {
+  ): RoomV1Manifest | null {
     this.unmountCurrentRoom(root, scene);
 
     const manifest = getRoomV1Manifest(roomId);
     const node = getWorldNodes().find((n) => n.id === roomId);
+    if (!manifest || (node && node.status === 'planned')) {
+      this.mountVoidFallback(
+        roomId,
+        root,
+        scene,
+        state,
+        registerTarget,
+        walkableMeshes
+      );
+      return null;
+    }
+
+    const mountGen = this.mountGeneration;
     const isAscent = node ? node.branch === 'ascend' : true;
 
     // 1. Mount 4-Layer Real Astronomical Nebula Sky + Palette-Driven Lighting Rig (<= 2 real-time lights, 0 shadows, TZ.md §3 & §4)
@@ -952,10 +1016,15 @@ export class RoomStreamer {
       );
       const paintingMat = new THREE.MeshBasicMaterial({ map: fallbackTex });
 
-      if (manifest.artwork.imageUrl) {
+      if (manifest.artwork.imageUrl && typeof document !== 'undefined') {
         const loader = new THREE.TextureLoader();
         loader.setCrossOrigin('anonymous');
         loader.load(manifest.artwork.imageUrl, (loadedTex) => {
+          if (mountGen !== this.mountGeneration) {
+            loadedTex.dispose();
+            return;
+          }
+          fallbackTex.dispose();
           loadedTex.colorSpace = THREE.SRGBColorSpace;
           loadedTex.generateMipmaps = true;
           paintingMat.map = loadedTex;
@@ -1442,32 +1511,115 @@ export class RoomStreamer {
 
   /**
    * 30-Transition GPU Memory Leak Verification (EXPERIENCE_PROTOCOL.md §9.1).
+   * Measures both `renderer.info.memory.geometries` / `renderer.info.memory.textures` deltas
+   * and Three.js native `'dispose'` event tracking across 30 room mount/unmount cycles.
    */
   public runThirtyTransitionLeakTest(
     scene: THREE.Scene,
     state: HubPlayerState,
-    ctx: RoomContext
+    ctx: RoomContext,
+    renderer?: {
+      info: { memory: { geometries: number; textures: number } };
+      render?: (scene: THREE.Scene, camera: THREE.Camera) => void;
+    },
+    camera?: THREE.Camera
   ): {
     iterations: number;
     passed: boolean;
     geometriesDelta: number;
+    texturesDelta: number;
     materialLeaks: number;
   } {
     const testRoot = new THREE.Group();
     scene.add(testRoot);
-    const silentCtx: RoomContext = {
-      ...ctx,
-      audio: {
-        playRoomTrack: () => {},
-        triggerTone: () => {},
-        bus: () => null,
-      },
+
+    const testApiRoot = new THREE.Group();
+    scene.add(testApiRoot);
+
+    // Warm up the single shared L0 Starfield texture before capturing the baseline snapshot
+    nebulaSkySystem.mountRoomSkyAndLighting('ROOM_001', testRoot, scene, {
+      qualityTier: state.comfort.qualityTier,
+      reducedMotion: state.comfort.reducedMotion,
+    });
+    if (renderer?.render && camera) {
+      renderer.render(scene, camera);
+    }
+    nebulaSkySystem.unmountSky(testRoot, scene);
+    nebulaSkySystem.clearPreloadCache();
+    if (renderer?.render && camera) {
+      renderer.render(scene, camera);
+    }
+
+    const baseGeometries = renderer?.info.memory.geometries ?? 0;
+    const baseTextures = renderer?.info.memory.textures ?? 0;
+
+    const undisposedGeometries = new Set<THREE.BufferGeometry>();
+    const undisposedMaterials = new Set<THREE.Material>();
+    const undisposedTextures = new Set<THREE.Texture>();
+
+    const trackHierarchyResources = (group: THREE.Object3D) => {
+      group.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        if (mesh.geometry && !undisposedGeometries.has(mesh.geometry)) {
+          const geo = mesh.geometry;
+          undisposedGeometries.add(geo);
+          const onGeoDispose = () => {
+            undisposedGeometries.delete(geo);
+            geo.removeEventListener('dispose', onGeoDispose);
+          };
+          geo.addEventListener('dispose', onGeoDispose);
+        }
+        if (mesh.material) {
+          const mats = Array.isArray(mesh.material)
+            ? mesh.material
+            : [mesh.material];
+          mats.forEach((mat) => {
+            if (!undisposedMaterials.has(mat)) {
+              undisposedMaterials.add(mat);
+              const onMatDispose = () => {
+                undisposedMaterials.delete(mat);
+                mat.removeEventListener('dispose', onMatDispose);
+              };
+              mat.addEventListener('dispose', onMatDispose);
+            }
+            const basic = mat as THREE.MeshBasicMaterial;
+            // Track all per-room textures (excluding the shared L0 starfield sphere at renderOrder -10)
+            if (
+              basic.map &&
+              mesh.renderOrder !== -10 &&
+              !undisposedTextures.has(basic.map)
+            ) {
+              const tex = basic.map;
+              undisposedTextures.add(tex);
+              const onTexDispose = () => {
+                undisposedTextures.delete(tex);
+                tex.removeEventListener('dispose', onTexDispose);
+              };
+              tex.addEventListener('dispose', onTexDispose);
+            }
+          });
+        }
+      });
     };
 
     for (let i = 0; i < 30; i++) {
+      const cycleRoomId = `ROOM_${String((i % 25) + 1).padStart(3, '0')}`;
+      const cycleManifest =
+        getRoomV1Manifest(cycleRoomId) ?? ctx.manifest;
+      const silentCtx: RoomContext = {
+        ...ctx,
+        root: testApiRoot,
+        manifest: cycleManifest,
+        audio: {
+          playRoomTrack: () => {},
+          triggerTone: () => {},
+          bus: () => null,
+        },
+      };
+
       const dummyWalkables: THREE.Object3D[] = [];
       this.mountRoom(
-        'ROOM_001',
+        cycleRoomId,
         testRoot,
         scene,
         state,
@@ -1475,18 +1627,64 @@ export class RoomStreamer {
         () => {},
         dummyWalkables
       );
+
+      if (scene.environment && !undisposedTextures.has(scene.environment)) {
+        const envTex = scene.environment;
+        undisposedTextures.add(envTex);
+        const onEnvDispose = () => {
+          undisposedTextures.delete(envTex);
+          envTex.removeEventListener('dispose', onEnvDispose);
+        };
+        envTex.addEventListener('dispose', onEnvDispose);
+      }
+
+      trackHierarchyResources(testRoot);
+      trackHierarchyResources(testApiRoot);
+
+      if (renderer?.render && camera) {
+        renderer.render(scene, camera);
+      }
+
       this.unmountCurrentRoom(testRoot, scene);
-      disposeThreeHierarchy(testRoot);
     }
 
-    const remainingChildren = testRoot.children.length;
+    nebulaSkySystem.clearPreloadCache();
+    if (renderer?.render && camera) {
+      renderer.render(scene, camera);
+    }
+
+    const rendererGeoDelta = renderer
+      ? Math.max(0, renderer.info.memory.geometries - baseGeometries)
+      : 0;
+    const rendererTexDelta = renderer
+      ? Math.max(0, renderer.info.memory.textures - baseTextures)
+      : 0;
+
+    const geometriesDelta = Math.max(
+      rendererGeoDelta,
+      undisposedGeometries.size
+    );
+    const texturesDelta = Math.max(
+      rendererTexDelta,
+      undisposedTextures.size
+    );
+    const materialLeaks = undisposedMaterials.size;
+    const remainingChildren =
+      testRoot.children.length + testApiRoot.children.length;
+
     scene.remove(testRoot);
+    scene.remove(testApiRoot);
 
     return {
       iterations: 30,
-      passed: remainingChildren === 0,
-      geometriesDelta: remainingChildren,
-      materialLeaks: remainingChildren,
+      passed:
+        remainingChildren === 0 &&
+        geometriesDelta === 0 &&
+        texturesDelta === 0 &&
+        materialLeaks === 0,
+      geometriesDelta,
+      texturesDelta,
+      materialLeaks,
     };
   }
 }

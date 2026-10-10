@@ -1,10 +1,11 @@
-export type AudioBusName = 'music' | 'ambient' | 'sfx';
+export type AudioBusName = 'music' | 'ambient' | 'sfx' | 'voice';
 
 export interface AudioVolumeState {
   master: number;
   music: number;
   ambient: number;
   sfx: number;
+  voice: number;
   muted: boolean;
 }
 
@@ -21,6 +22,7 @@ export const DEFAULT_AUDIO_VOLUME_STATE: AudioVolumeState = {
   music: 0.8,
   ambient: 0.8,
   sfx: 0.8,
+  voice: 0.8,
   muted: false,
 };
 
@@ -34,12 +36,13 @@ export function sliderToPerceptualGain(value01: number): number {
 }
 
 /**
- * Authoritative WebAudio Bus Mixer & Limiter (TZ.md §5.1 & §6.2).
+ * Authoritative 4-Bus WebAudio Mixer & Limiter (TZ.md §5.1 & §6.2).
  *
  * Audio Graph:
  *   sources -> [music bus]   -\
- *   sources -> [ambient bus] --> [master gain] -> [limiter] -> destination
- *   sources -> [sfx bus]     -/
+ *   sources -> [ambient bus] --\
+ *   sources -> [sfx bus]     ---> [master gain] -> [limiter] -> destination
+ *   sources -> [voice bus]   --/
  *
  * Strictly owns the single connection to `AudioContext.destination`.
  */
@@ -51,6 +54,7 @@ export class AudioMixer {
     music: null,
     ambient: null,
     sfx: null,
+    voice: null,
   };
 
   private state: AudioVolumeState = { ...DEFAULT_AUDIO_VOLUME_STATE };
@@ -99,20 +103,23 @@ export class AudioMixer {
       const masterGain = ctx.createGain();
       this.masterGain = masterGain;
 
-      // Sub-buses: music, ambient, sfx
+      // 4 Sub-buses: music, ambient, sfx, voice
       const musicBus = ctx.createGain();
       const ambientBus = ctx.createGain();
       const sfxBus = ctx.createGain();
+      const voiceBus = ctx.createGain();
 
       this.buses = {
         music: musicBus,
         ambient: ambientBus,
         sfx: sfxBus,
+        voice: voiceBus,
       };
 
       musicBus.connect(masterGain);
       ambientBus.connect(masterGain);
       sfxBus.connect(masterGain);
+      voiceBus.connect(masterGain);
       masterGain.connect(limiter);
 
       // ONLY connection to ctx.destination in the entire codebase (TZ.md §5.1)
@@ -130,7 +137,7 @@ export class AudioMixer {
   }
 
   /**
-   * Room API v1 & Hub Bus Accessor (`ctx.audio.bus('music' | 'ambient' | 'sfx')`, TZ.md §5.1).
+   * Room API v1 & Hub Bus Accessor (`ctx.audio.bus('music' | 'ambient' | 'sfx' | 'voice')`, TZ.md §5.1).
    */
   public bus(name: AudioBusName): GainNode | null {
     this.ensureContext();
@@ -178,6 +185,10 @@ export class AudioMixer {
         partial.sfx !== undefined
           ? Math.max(0, Math.min(1, partial.sfx))
           : this.state.sfx,
+      voice:
+        partial.voice !== undefined
+          ? Math.max(0, Math.min(1, partial.voice))
+          : this.state.voice,
       muted: partial.muted !== undefined ? Boolean(partial.muted) : this.state.muted,
     };
 
@@ -218,7 +229,7 @@ export class AudioMixer {
       timeConstantSec,
       timestampMs: Date.now(),
     });
-    if (this.rampHistory.length > 32) {
+    if (this.rampHistory.length > 40) {
       this.rampHistory.shift();
     }
   }
@@ -236,11 +247,13 @@ export class AudioMixer {
     const musicTarget = sliderToPerceptualGain(this.state.music);
     const ambientTarget = sliderToPerceptualGain(this.state.ambient);
     const sfxTarget = sliderToPerceptualGain(this.state.sfx);
+    const voiceTarget = sliderToPerceptualGain(this.state.voice);
 
     this.recordRamp('master', this.state.master, masterTarget, tc);
     this.recordRamp('music', this.state.music, musicTarget, tc);
     this.recordRamp('ambient', this.state.ambient, ambientTarget, tc);
     this.recordRamp('sfx', this.state.sfx, sfxTarget, tc);
+    this.recordRamp('voice', this.state.voice, voiceTarget, tc);
 
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
@@ -256,6 +269,9 @@ export class AudioMixer {
     }
     if (this.buses.sfx) {
       this.buses.sfx.gain.setTargetAtTime(sfxTarget, now, tc);
+    }
+    if (this.buses.voice) {
+      this.buses.voice.gain.setTargetAtTime(voiceTarget, now, tc);
     }
   }
 

@@ -139,6 +139,7 @@ function normalizeAudioState(rawAudio: unknown): AudioVolumeState {
     music: clamp01(obj.music, DEFAULT_AUDIO_VOLUME_STATE.music),
     ambient: clamp01(obj.ambient, DEFAULT_AUDIO_VOLUME_STATE.ambient),
     sfx: clamp01(obj.sfx, DEFAULT_AUDIO_VOLUME_STATE.sfx),
+    voice: clamp01(obj.voice, DEFAULT_AUDIO_VOLUME_STATE.voice),
     muted: typeof obj.muted === 'boolean' ? obj.muted : false,
   };
 }

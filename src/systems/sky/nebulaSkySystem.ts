@@ -71,10 +71,63 @@ export class NebulaSkySystem {
   }
 
   /**
-   * Builds or returns the shared L0 equirectangular all-sky star map texture (2048x1024 POT, ~2.7 MB mipmapped).
+   * Verifies the cryptographic SHA-256 digest of a local space asset's bytes against its registry sha256.
    */
-  private getSharedStarfieldTexture(): THREE.CanvasTexture {
+  public async verifyAssetBytesSha256(
+    assetUrl: string,
+    expectedSha256: string
+  ): Promise<{ valid: boolean; blobUrl?: string }> {
+    const cleanExpected = expectedSha256
+      .replace(/^sha256-/i, '')
+      .trim()
+      .toLowerCase();
+    if (!/^[a-f0-9]{64}$/.test(cleanExpected)) {
+      return { valid: false };
+    }
+    if (
+      typeof fetch === 'undefined' ||
+      typeof crypto === 'undefined' ||
+      !crypto.subtle
+    ) {
+      return { valid: false };
+    }
+
+    try {
+      const normalizedPath = assetUrl.startsWith('/')
+        ? assetUrl
+        : `/${assetUrl}`;
+      const res = await fetch(normalizedPath);
+      if (!res.ok) return { valid: false };
+      const buf = await res.arrayBuffer();
+      const digest = await crypto.subtle.digest('SHA-256', buf);
+      const actualHex = Array.from(new Uint8Array(digest))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+      if (actualHex !== cleanExpected) {
+        return { valid: false };
+      }
+      const blob = new Blob([buf], { type: 'image/jpeg' });
+      const blobUrl = URL.createObjectURL(blob);
+      return { valid: true, blobUrl };
+    } catch {
+      return { valid: false };
+    }
+  }
+
+  /**
+   * Builds or returns the shared L0 equirectangular all-sky star map texture (2048x1024 POT, ~2.7 MB mipmapped)
+   * and loads the local NASA/Goddard SVS 4851 Deep Star Map (`starfieldData.image`, `assets/space/starfield_2020.jpg`)
+   * verified against `starfieldData.sha256` (TZ.md §3.1 & §3.3).
+   */
+  private getSharedStarfieldTexture(): THREE.Texture {
     if (this.sharedStarfieldTex) return this.sharedStarfieldTex;
+
+    if (typeof document === 'undefined') {
+      const tex = new THREE.DataTexture(new Uint8Array(16 * 16 * 4), 16, 16);
+      tex.needsUpdate = true;
+      this.sharedStarfieldTex = tex as unknown as THREE.CanvasTexture;
+      return tex;
+    }
 
     const canvas = document.createElement('canvas');
     canvas.width = 2048;
@@ -84,7 +137,7 @@ export class NebulaSkySystem {
     ctx.fillStyle = '#020409';
     ctx.fillRect(0, 0, 2048, 1024);
 
-    // Galactic plane band (Milky Way) across the equirectangular equator
+    // Initial synchronous base while local NASA SVS 4851 image decodes
     const band = ctx.createLinearGradient(0, 260, 0, 760);
     band.addColorStop(0, 'rgba(6, 10, 22, 0)');
     band.addColorStop(0.35, 'rgba(28, 42, 78, 0.22)');
@@ -94,13 +147,11 @@ export class NebulaSkySystem {
     ctx.fillStyle = band;
     ctx.fillRect(0, 0, 2048, 1024);
 
-    // Deterministic Hipparcos/Tycho-style stellar distribution (3,200 stars)
     const starColors = ['#ffffff', '#ffe8b8', '#b8d8ff', '#ffd2a6', '#d6e6ff'];
     for (let i = 0; i < 3200; i++) {
       const h1 = Math.imul(i + 1, 2654435761) >>> 0;
       const h2 = Math.imul(i + 7919, 2246822519) >>> 0;
       const sx = h1 % 2048;
-      // Concentrate 45% of stars closer to the galactic plane
       const rawY = (h2 % 1024) / 1024;
       const sy =
         i % 2 === 0
@@ -118,17 +169,46 @@ export class NebulaSkySystem {
     tex.minFilter = THREE.LinearMipmapLinearFilter;
     tex.colorSpace = THREE.SRGBColorSpace;
     this.sharedStarfieldTex = tex;
+
+    // Load and SHA-256-verify the real NASA Goddard SVS 4851 starfield map from `starfieldData.image`
+    if (starfieldData.image && typeof Image !== 'undefined') {
+      void this.verifyAssetBytesSha256(
+        starfieldData.image,
+        starfieldData.sha256
+      ).then(({ valid, blobUrl }) => {
+        if (!valid || !blobUrl) return;
+        const img = new Image();
+        img.onload = () => {
+          ctx.clearRect(0, 0, 2048, 1024);
+          ctx.drawImage(img, 0, 0, 2048, 1024);
+          tex.needsUpdate = true;
+          URL.revokeObjectURL(blobUrl);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(blobUrl);
+        };
+        img.src = blobUrl;
+      });
+    }
+
     return tex;
   }
 
   /**
    * Builds a high-fidelity feathered curved-cap texture (1024x1024) for a specific Nebula entry,
-   * and upgrades it asynchronously when `remoteImageUrl` resolves with radial alpha feathering applied.
+   * loading the local NASA/ESA/JWST image (`nebula.image`, `assets/space/neb_XXXX.jpg`),
+   * verifying its SHA-256 against `nebula.sha256`, and applying radial alpha feathering (TZ.md §3.1 & §3.4.2).
    */
   private createFeatheredNebulaCapTexture(
     nebula: NebulaRegistryEntry,
     mirrorX = false
   ): THREE.CanvasTexture {
+    if (typeof document === 'undefined') {
+      const tex = new THREE.DataTexture(new Uint8Array(16 * 16 * 4), 16, 16);
+      tex.needsUpdate = true;
+      return tex as unknown as THREE.CanvasTexture;
+    }
+
     const canvas = document.createElement('canvas');
     canvas.width = 1024;
     canvas.height = 1024;
@@ -139,7 +219,7 @@ export class NebulaSkySystem {
 
     ctx.clearRect(0, 0, 1024, 1024);
 
-    // Multi-lobe astronomical filament composition inside radial feather mask
+    // Multi-lobe astronomical filament composition inside radial feather mask while local image decodes
     const lobes = 7;
     for (let i = 0; i < lobes; i++) {
       const angle = ((seed + i * 97) % 360) * (Math.PI / 180);
@@ -184,28 +264,37 @@ export class NebulaSkySystem {
     tex.minFilter = THREE.LinearMipmapLinearFilter;
     tex.colorSpace = THREE.SRGBColorSpace;
 
-    // If real observatory image URL is available, composite it through the same radial alpha feather mask
-    if (nebula.remoteImageUrl && typeof Image !== 'undefined') {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        ctx.clearRect(0, 0, 1024, 1024);
-        ctx.save();
-        if (mirrorX) {
-          ctx.translate(1024, 0);
-          ctx.scale(-1, 1);
-        }
-        ctx.drawImage(img, 0, 0, 1024, 1024);
-        ctx.restore();
+    // Load local hosted NASA/ESA astronomical image (`nebula.image`) after SHA-256 verification
+    const localImagePath = nebula.image || nebula.remoteImageUrl;
+    if (localImagePath && typeof Image !== 'undefined') {
+      void this.verifyAssetBytesSha256(localImagePath, nebula.sha256).then(
+        ({ valid, blobUrl }) => {
+          if (!valid || !blobUrl) return;
+          const img = new Image();
+          img.onload = () => {
+            ctx.clearRect(0, 0, 1024, 1024);
+            ctx.save();
+            if (mirrorX) {
+              ctx.translate(1024, 0);
+              ctx.scale(-1, 1);
+            }
+            ctx.drawImage(img, 0, 0, 1024, 1024);
+            ctx.restore();
 
-        // Apply radial alpha feather mask (TZ.md §3.1 & §3.4.2)
-        ctx.globalCompositeOperation = 'destination-in';
-        ctx.fillStyle = feather;
-        ctx.fillRect(0, 0, 1024, 1024);
-        ctx.globalCompositeOperation = 'source-over';
-        tex.needsUpdate = true;
-      };
-      img.src = nebula.remoteImageUrl;
+            // Apply radial alpha feather mask (TZ.md §3.1 & §3.4.2)
+            ctx.globalCompositeOperation = 'destination-in';
+            ctx.fillStyle = feather;
+            ctx.fillRect(0, 0, 1024, 1024);
+            ctx.globalCompositeOperation = 'source-over';
+            tex.needsUpdate = true;
+            URL.revokeObjectURL(blobUrl);
+          };
+          img.onerror = () => {
+            URL.revokeObjectURL(blobUrl);
+          };
+          img.src = blobUrl;
+        }
+      );
     }
 
     return tex;
@@ -216,6 +305,16 @@ export class NebulaSkySystem {
    * in < 1.5 ms at mount time for hero surfaces (mirror, reflective pools, art frames, TZ.md §4.2).
    */
   public createLowResEnvironmentCubemap(palette: string[]): THREE.CubeTexture {
+    if (typeof document === 'undefined') {
+      const dummyFaces = Array.from(
+        { length: 6 },
+        () => new THREE.DataTexture(new Uint8Array(8 * 8 * 4), 8, 8)
+      );
+      const cubeTex = new THREE.CubeTexture(dummyFaces);
+      cubeTex.needsUpdate = true;
+      return cubeTex;
+    }
+
     const [c0, c1, c2] = palette;
     const faces: HTMLCanvasElement[] = [];
 
@@ -260,7 +359,15 @@ export class NebulaSkySystem {
   }
 
   /**
-   * Disposes the current room's sky meshes, materials, and environment cubemap (TZ.md §3.7 & §3.8).
+   * Disposes all preloaded neighbor nebula textures.
+   */
+  public clearPreloadCache(): void {
+    this.preloadedNebulaTextures.forEach((tex) => tex.dispose());
+    this.preloadedNebulaTextures.clear();
+  }
+
+  /**
+   * Disposes the current room's sky meshes, materials, per-room nebula texture, and environment cubemap (TZ.md §3.7 & §3.8).
    */
   public unmountSky(root: THREE.Group, scene?: THREE.Scene): void {
     if (this.activeSkyGroup) {
@@ -275,14 +382,12 @@ export class NebulaSkySystem {
             : [mesh.material];
           mats.forEach((m) => {
             const basic = m as THREE.MeshBasicMaterial;
-            // Dispose per-room nebula texture unless it is the shared L0 starfield or in the neighbor preload cache
-            if (
-              basic.map &&
-              basic.map !== this.sharedStarfieldTex &&
-              !Array.from(this.preloadedNebulaTextures.values()).includes(
-                basic.map
-              )
-            ) {
+            if (basic.map && basic.map !== this.sharedStarfieldTex) {
+              for (const [k, v] of this.preloadedNebulaTextures.entries()) {
+                if (v === basic.map) {
+                  this.preloadedNebulaTextures.delete(k);
+                }
+              }
               basic.map.dispose();
             }
             m.dispose();
@@ -363,12 +468,13 @@ export class NebulaSkySystem {
     // =========================================================================
     const cacheKey = `${nebula.id}:${resolved.mapping.mirrorX ? 'M' : 'N'}`;
     let nebTex = this.preloadedNebulaTextures.get(cacheKey);
-    if (!nebTex) {
+    if (nebTex) {
+      this.preloadedNebulaTextures.delete(cacheKey);
+    } else {
       nebTex = this.createFeatheredNebulaCapTexture(
         nebula,
         resolved.mapping.mirrorX
       );
-      this.preloadedNebulaTextures.set(cacheKey, nebTex);
     }
 
     // Curved spherical cap spanning 72 deg azimuth x 54 deg elevation at radius 64m

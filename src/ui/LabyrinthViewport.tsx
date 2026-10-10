@@ -82,6 +82,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
     iterations: number;
     passed: boolean;
     geometriesDelta: number;
+    texturesDelta: number;
     materialLeaks: number;
   } | null>(null);
 
@@ -236,6 +237,12 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
       } else if (act === 'sfx-down') {
         hubPlayerState.setAudioVolume('sfx', st.audio.sfx - 0.1);
         eng?.mountWorldLockedPausePanel();
+      } else if (act === 'voice-up') {
+        hubPlayerState.setAudioVolume('voice', st.audio.voice + 0.1);
+        eng?.mountWorldLockedPausePanel();
+      } else if (act === 'voice-down') {
+        hubPlayerState.setAudioVolume('voice', st.audio.voice - 0.1);
+        eng?.mountWorldLockedPausePanel();
       } else if (act === 'return-corridor') {
         eng?.setPaused(false);
         eng?.comfort.triggerFadeTransition(() => {
@@ -363,6 +370,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
     if (target.kind === 'room-object' && target.objectId) {
       const roomId = st.currentRoomId || 'ROOM_073';
       const manifest = getRoomV1Manifest(roomId);
+      if (!manifest) return;
       const objDef = manifest.objects.find((o) => o.id === target.objectId);
       if (!objDef) return;
 
@@ -408,6 +416,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
       hubPlayerState.revealControl('zoom');
       const artRoomId = target.roomId || st.currentRoomId || 'ROOM_001';
       const manifest = getRoomV1Manifest(artRoomId);
+      if (!manifest) return;
       setInspectedArtRoomId(artRoomId);
       setActiveDrawer('essay');
       if (st.location === 'room' && st.currentRoomId) {
@@ -848,6 +857,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
                 { key: 'music', label: 'Music (Room MP3 Track)' },
                 { key: 'ambient', label: 'Ambient (Atrium Drone)' },
                 { key: 'sfx', label: 'Effects (Chimes & UI)' },
+                { key: 'voice', label: 'Voice / Radio Signal' },
               ] as const
             ).map((bus) => (
               <div key={bus.key}>
@@ -1028,7 +1038,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
                 {leakResult.passed ? 'PASSED (0 leaks)' : 'FAILED'}
               </div>
               <div className="text-[#a89f91] mt-0.5">
-                {`${telemetry.fps} FPS (${telemetry.frameTimeMs} ms) · ${telemetry.drawCalls} DC · ${telemetry.textureMemoryMB} MB GPU`}
+                {`Δgeo: ${leakResult.geometriesDelta} · Δtex: ${leakResult.texturesDelta} · Δmat: ${leakResult.materialLeaks} · ${telemetry.fps} FPS (${telemetry.frameTimeMs} ms)`}
               </div>
             </div>
           )}
@@ -1298,6 +1308,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
                 { key: 'music', label: 'Music Bus (Room MP3 Track)' },
                 { key: 'ambient', label: 'Ambient Bus (Atrium Drone)' },
                 { key: 'sfx', label: 'Effects Bus (Chimes & UI)' },
+                { key: 'voice', label: 'Voice / Radio Bus' },
               ] as const
             ).map((bus) => (
               <div key={bus.key}>
@@ -1332,6 +1343,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
       {activeDrawer === 'essay' &&
         (() => {
           const artManifest = getRoomV1Manifest(inspectedArtRoomId);
+          if (!artManifest) return null;
           return (
             <div className="absolute top-16 right-4 w-[480px] max-w-[calc(100vw-2rem)] max-h-[84vh] overflow-y-auto bg-[#0e0c0a]/95 border border-[#c8a464]/50 rounded p-5 text-xs text-[#e8e2d5] backdrop-blur-md shadow-2xl z-20 space-y-4">
               <div className="flex items-center justify-between border-b border-white/10 pb-2.5">

@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   asTypedRoomManifest,
   validateRoomManifest,
   ValidationResult,
 } from '../../tools/room-validator/validator';
-import { runRepositoryValidationSuite } from '../../tests/room-validator.test';
+import {
+  runAsyncIntegrityAndLeakVerification,
+  runRepositoryValidationSuite,
+} from '../../tests/room-validator.test';
 import {
   getAllLoadedRoomManifests,
   loadRoomManifest,
@@ -127,6 +130,15 @@ export const RoomValidatorPanel: React.FC<RoomValidatorPanelProps> = ({
   const [mountStatus, setMountStatus] = useState<string | null>(null);
   const suiteSummary = runRepositoryValidationSuite();
   const loadedRooms = getAllLoadedRoomManifests();
+  const [asyncReport, setAsyncReport] = useState<Awaited<
+    ReturnType<typeof runAsyncIntegrityAndLeakVerification>
+  > | null>(null);
+
+  useEffect(() => {
+    void runAsyncIntegrityAndLeakVerification().then((res) => {
+      setAsyncReport(res);
+    });
+  }, []);
 
   const handleValidate = (raw: string) => {
     setJsonInput(raw);
@@ -231,6 +243,39 @@ export const RoomValidatorPanel: React.FC<RoomValidatorPanelProps> = ({
             {`${suiteSummary.nebulaReport.uniqueRoomMappings} Real Nebulae · ${suiteSummary.nebulaReport.totalCoveredRooms} Rooms · 4-Bus v²`}
           </p>
         </div>
+        {asyncReport && (
+          <div className="p-4 bg-[#131210] border border-white/10 rounded">
+            <div className="flex items-center justify-between text-xs font-mono tabular-nums">
+              <span className="text-[#4ea8de] font-semibold">
+                SHA-256 & 30x GPU LEAK
+              </span>
+              <span
+                className={
+                  asyncReport.sha256ReadyRoomsPassed &&
+                  asyncReport.sha256TamperRejected &&
+                  asyncReport.sha256MismatchRejected &&
+                  asyncReport.sha256UnknownRejected &&
+                  asyncReport.leakTestResult.passed &&
+                  suiteSummary.unknownRoomSafePassed
+                    ? 'text-emerald-400'
+                    : 'text-rose-400'
+                }
+              >
+                {asyncReport.sha256ReadyRoomsPassed &&
+                asyncReport.sha256TamperRejected &&
+                asyncReport.sha256MismatchRejected &&
+                asyncReport.sha256UnknownRejected &&
+                asyncReport.leakTestResult.passed &&
+                suiteSummary.unknownRoomSafePassed
+                  ? 'VERIFIED · PASS'
+                  : 'ERROR'}
+              </span>
+            </div>
+            <p className="text-xs text-[#9c9488] mt-1">
+              {`SHA-256 Tamper Rejected · 30x Δgeo:${asyncReport.leakTestResult.geometriesDelta} Δtex:${asyncReport.leakTestResult.texturesDelta} Δmat:${asyncReport.leakTestResult.materialLeaks}`}
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">

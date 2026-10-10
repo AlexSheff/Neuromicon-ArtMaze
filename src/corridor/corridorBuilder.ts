@@ -31,6 +31,8 @@ export type PausePanelActionId =
   | 'ambient-down'
   | 'sfx-up'
   | 'sfx-down'
+  | 'voice-up'
+  | 'voice-down'
   | 'return-corridor'
   | 'open-codex';
 
@@ -80,6 +82,11 @@ export function createSignageTexture(
   accentHex: string,
   badgeHex: string
 ): THREE.CanvasTexture {
+  if (typeof document === 'undefined') {
+    const tex = new THREE.DataTexture(new Uint8Array(8 * 8 * 4), 8, 8);
+    tex.needsUpdate = true;
+    return tex as unknown as THREE.CanvasTexture;
+  }
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 256;
@@ -129,6 +136,11 @@ export function createSignageTexture(
  * Power-of-Two (512x512) Cosmic Constellation & Astral Grid Floor Texture.
  */
 function createCosmicFloorTexture(accentRgba: string): THREE.CanvasTexture {
+  if (typeof document === 'undefined') {
+    const tex = new THREE.DataTexture(new Uint8Array(8 * 8 * 4), 8, 8);
+    tex.needsUpdate = true;
+    return tex as unknown as THREE.CanvasTexture;
+  }
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 512;
@@ -173,6 +185,11 @@ function createCosmicFloorTexture(accentRgba: string): THREE.CanvasTexture {
  * Vertical Gradient Alpha Texture for Cheap Additive Light Shafts (§3.3 & TZ.md §4.4).
  */
 function createLightShaftAlphaTexture(accentHex = '#e5c158'): THREE.CanvasTexture {
+  if (typeof document === 'undefined') {
+    const tex = new THREE.DataTexture(new Uint8Array(8 * 8 * 4), 8, 8);
+    tex.needsUpdate = true;
+    return tex as unknown as THREE.CanvasTexture;
+  }
   const canvas = document.createElement('canvas');
   canvas.width = 128;
   canvas.height = 256;

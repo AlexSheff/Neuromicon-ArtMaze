@@ -462,9 +462,9 @@ export class HubEngine {
     // Row 3: Ambient & SFX Bus Controls
     add3DButton(
       -0.51,
-      -0.28,
+      -0.25,
       0.32,
-      0.14,
+      0.11,
       '−',
       'AMBIENT −',
       'Atrium Bus',
@@ -474,9 +474,9 @@ export class HubEngine {
     );
     add3DButton(
       -0.17,
-      -0.28,
+      -0.25,
       0.32,
-      0.14,
+      0.11,
       '+',
       'AMBIENT +',
       'Atrium Bus',
@@ -486,9 +486,9 @@ export class HubEngine {
     );
     add3DButton(
       0.17,
-      -0.28,
+      -0.25,
       0.32,
-      0.14,
+      0.11,
       '−',
       'EFFECTS −',
       'Chime / UI Bus',
@@ -498,9 +498,9 @@ export class HubEngine {
     );
     add3DButton(
       0.51,
-      -0.28,
+      -0.25,
       0.32,
-      0.14,
+      0.11,
       '+',
       'EFFECTS +',
       'Chime / UI Bus',
@@ -509,27 +509,51 @@ export class HubEngine {
       '#e5c158'
     );
 
-    // Row 4: Return to Sector Room / Open Codex
+    // Row 4: Voice / Radio Bus & Return / Codex Actions
     add3DButton(
-      -0.35,
-      -0.44,
-      0.64,
-      0.13,
+      -0.51,
+      -0.38,
+      0.32,
+      0.1,
+      '−',
+      'VOICE −',
+      'Voice / Radio Bus',
+      `${Math.round(vol.voice * 100)}%`,
+      'voice-down',
+      '#66cc99'
+    );
+    add3DButton(
+      -0.17,
+      -0.38,
+      0.32,
+      0.1,
+      '+',
+      'VOICE +',
+      'Voice / Radio Bus',
+      `${Math.round(vol.voice * 100)}%`,
+      'voice-up',
+      '#66cc99'
+    );
+    add3DButton(
+      0.17,
+      -0.38,
+      0.32,
+      0.1,
       '↺',
       'SECTOR ROOM',
-      'Return to Corridor Hall',
-      'EXIT ROOM',
+      'Exit Room',
+      'EXIT',
       'return-corridor',
       '#4ea8de'
     );
     add3DButton(
-      0.35,
-      -0.44,
-      0.64,
-      0.13,
+      0.51,
+      -0.38,
+      0.32,
+      0.1,
       '❖',
       'OPEN CODEX',
-      'Discovery Journal (R)',
+      'Journal (R)',
       'CODEX',
       'open-codex',
       '#e5c158'
@@ -585,11 +609,18 @@ export class HubEngine {
     iterations: number;
     passed: boolean;
     geometriesDelta: number;
+    texturesDelta: number;
     materialLeaks: number;
   } {
     const st = hubPlayerState.getState();
     const ctx = this.buildRoomContext('ROOM_073', st);
-    return roomStreamer.runThirtyTransitionLeakTest(this.scene, st, ctx);
+    return roomStreamer.runThirtyTransitionLeakTest(
+      this.scene,
+      st,
+      ctx,
+      this.renderer,
+      this.camera
+    );
   }
 
   public dispose(): void {
@@ -605,7 +636,8 @@ export class HubEngine {
     roomId: string,
     state: HubPlayerState
   ): RoomContext {
-    const manifest = getRoomV1Manifest(roomId);
+    const manifest =
+      getRoomV1Manifest(roomId) ?? getRoomV1Manifest('ROOM_073')!;
     const self = this;
 
     return {
@@ -811,7 +843,20 @@ export class HubEngine {
 
     // location === 'room'
     spatialAudioSystem.stopRoomSoundtrack();
-    const roomId = state.currentRoomId || 'ROOM_001';
+    const roomId = state.currentRoomId || '';
+    if (!getRoomV1Manifest(roomId)) {
+      roomStreamer.mountVoidFallback(
+        roomId || 'UNKNOWN_ROOM',
+        this.worldRoot,
+        this.scene,
+        state,
+        registerTarget,
+        this.walkableMeshes
+      );
+      this.pose = { x: 0, y: 0, z: 4.2, yaw: 0, pitch: 0 };
+      return;
+    }
+
     const ctx = this.buildRoomContext(roomId, state);
     roomStreamer.mountRoom(
       roomId,
