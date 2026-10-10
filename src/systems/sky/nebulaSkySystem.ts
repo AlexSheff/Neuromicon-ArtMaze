@@ -93,11 +93,25 @@ export class NebulaSkySystem {
     }
 
     try {
-      const normalizedPath = assetUrl.startsWith('/')
-        ? assetUrl
-        : `/${assetUrl}`;
-      const res = await fetch(normalizedPath);
-      if (!res.ok) return { valid: false };
+      const cleanRel = assetUrl.replace(/^\.?\//, '');
+      const candidateUrls = [
+        `./${cleanRel}`,
+        `./public/${cleanRel}`,
+        `/${cleanRel}`,
+      ];
+      let res: Response | null = null;
+      for (const url of candidateUrls) {
+        try {
+          const attempt = await fetch(url);
+          if (attempt.ok) {
+            res = attempt;
+            break;
+          }
+        } catch {
+          // Try next candidate path
+        }
+      }
+      if (!res || !res.ok) return { valid: false };
       const buf = await res.arrayBuffer();
       const digest = await crypto.subtle.digest('SHA-256', buf);
       const actualHex = Array.from(new Uint8Array(digest))

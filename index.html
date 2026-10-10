@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" style="background-color: #070605; color: #f3ede2;">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -10,9 +10,31 @@
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
   </head>
-  <body>
+  <body style="background-color: #070605; color: #f3ede2; margin: 0; padding: 0;">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      (function () {
+        // When GitHub Pages deploys directly from the 'main' branch root (pages-build-deployment)
+        // instead of the Vite dist artifact, '/src/main.tsx' is present without '/@vite/client'.
+        // Automatically load the pre-compiled static bundle from ./public/bundle/ so both
+        // Meta Quest 2 Browser and desktop browsers boot immediately without a blank screen.
+        var hasRawMain = !!document.querySelector('script[src="/src/main.tsx"]');
+        var hasViteClient = !!document.querySelector('script[src*="@vite/client"]');
+        if (hasRawMain && !hasViteClient) {
+          var css = document.createElement('link');
+          css.rel = 'stylesheet';
+          css.href = './public/bundle/artmaze.css';
+          document.head.appendChild(css);
+
+          var js = document.createElement('script');
+          js.type = 'module';
+          js.src = './public/bundle/artmaze.js';
+          document.body.appendChild(js);
+        }
+      })();
+    </script>
   </body>
 </html>
+
 
