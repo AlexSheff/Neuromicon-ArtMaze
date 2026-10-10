@@ -17,16 +17,18 @@ const roomModule: RoomModule = {
     const { THREE, root, environment } = ctx;
     const accentColor = environment.palette[2] ?? '#c8a464';
 
-    // Floating sacred astrolabe ring in the center of the room tinted by the room's Nebula palette
-    const ringGeo = new THREE.TorusGeometry(0.65, 0.035, 16, 48);
+    // Suspended celestial astrolabe chandelier inside the overhead Oculus light veil (never blocking eye-level doors!)
+    const ringGeo = new THREE.TorusGeometry(0.85, 0.035, 16, 48);
     const ringMat = new THREE.MeshStandardMaterial({
       color: accentColor,
       roughness: 0.22,
       metalness: 0.88,
+      emissive: accentColor,
+      emissiveIntensity: 0.25,
     });
     const ringMesh = new THREE.Mesh(ringGeo, ringMat);
     ringMesh.name = 'template_astrolabe_ring';
-    ringMesh.position.set(0, 2.1, -1.5);
+    ringMesh.position.set(0, 4.8, 0);
     root.add(ringMesh);
   },
 

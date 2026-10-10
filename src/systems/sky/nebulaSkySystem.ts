@@ -324,11 +324,21 @@ export class NebulaSkySystem {
       canvas.height = 64;
       const ctx = canvas.getContext('2d')!;
       const grad = ctx.createLinearGradient(0, 0, 0, 64);
+      // Smooth atmospheric transition: zenith nebula glow -> warm horizon -> soft velvet ground bounce
       grad.addColorStop(0, f === 2 ? c2 : c0);
-      grad.addColorStop(0.5, c1);
-      grad.addColorStop(1, '#05070e');
+      grad.addColorStop(0.45, c1);
+      grad.addColorStop(0.72, '#2a2433');
+      grad.addColorStop(1, '#121624');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, 64, 64);
+
+      // Soft warm horizon/zenith bloom for pleasant, non-harsh PBR reflections
+      const bloom = ctx.createRadialGradient(32, f === 2 ? 32 : 28, 4, 32, 32, 30);
+      bloom.addColorStop(0, `${c2}55`);
+      bloom.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = bloom;
+      ctx.fillRect(0, 0, 64, 64);
+
       faces.push(canvas);
     }
 
@@ -530,10 +540,10 @@ export class NebulaSkySystem {
     dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
     dustGeo.setAttribute('color', new THREE.BufferAttribute(dustColors, 3));
     const dustMat = new THREE.PointsMaterial({
-      size: 0.09,
+      size: 0.08,
       vertexColors: true,
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.48,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
@@ -578,33 +588,38 @@ export class NebulaSkySystem {
     // =========================================================================
     // PALETTE-DRIVEN LIGHTING, FOG & CUBEMAP RIG (TZ.md §4.1 & §4.2)
     // Strictly <= 2 real-time lights, zero real-time shadows!
+    // Tuned for visual comfort, warm architectural readability, and natural sky correspondence.
     // =========================================================================
     const primaryColor = new THREE.Color(nebula.palette[0]).lerp(
-      new THREE.Color('#8899aa'),
-      0.28
+      new THREE.Color('#ede4d4'),
+      0.42
     );
     const darkComplement = new THREE.Color(nebula.palette[0])
-      .offsetHSL(0.5, -0.2, -0.38)
-      .multiplyScalar(0.32);
-    const secondColor = new THREE.Color(nebula.palette[1]);
-    const fogColor = new THREE.Color(nebula.palette[0]).multiplyScalar(0.11);
+      .lerp(new THREE.Color('#222738'), 0.68)
+      .multiplyScalar(0.55);
+    const secondColor = new THREE.Color(nebula.palette[1]).lerp(
+      new THREE.Color('#f8f1e4'),
+      0.38
+    );
+    const fogColor = new THREE.Color(nebula.palette[0])
+      .lerp(new THREE.Color('#0c111e'), 0.82);
 
     scene.background = fogColor;
-    // Low fog density so first 8–10m are clear and sky nebula cap remains vivid (TZ.md §4.1)
+    // Gentle atmospheric depth so nearby stone textures and the overhead Nebula Cap remain crisp and soothing
     scene.fog = new THREE.FogExp2(
       fogColor,
-      0.011 * (opts?.fogScale ?? 1.0)
+      0.0085 * (opts?.fogScale ?? 1.0)
     );
 
     // Low-res environment cubemap for hero reflections (TZ.md §4.2)
     this.activeEnvCubemap = this.createLowResEnvironmentCubemap(nebula.palette);
     scene.environment = this.activeEnvCubemap;
 
-    // Light 1: HemisphereLight (sky = desaturated primary, ground = dark complement)
+    // Light 1: HemisphereLight (sky = warm-balanced nebula primary, ground = soft velvet bounce)
     const hemiLight = new THREE.HemisphereLight(
       primaryColor,
       darkComplement,
-      0.82 * (opts?.ambientScale ?? 1.0)
+      0.98 * (opts?.ambientScale ?? 1.0)
     );
     hemiLight.name = 'nebula_hemi_light';
     skyGroup.add(hemiLight);
@@ -612,15 +627,15 @@ export class NebulaSkySystem {
     // Light 2: Directional "Key" Light aligned with the L1 Nebula Cap direction (TZ.md §4.1)
     const keyLight = new THREE.DirectionalLight(
       secondColor,
-      1.65 * intensity
+      1.32 * intensity
     );
     keyLight.name = 'nebula_directional_key_light';
     keyLight.castShadow = false; // Zero real-time shadows in XR (TZ.md §4.1)
     const capAzimuth = rotation[1];
-    const capElevation = Math.max(0.35, 0.75 - rotation[0]);
+    const capElevation = Math.max(0.4, 0.78 - rotation[0]);
     keyLight.position.set(
       -Math.sin(capAzimuth) * 28,
-      Math.sin(capElevation) * 32,
+      Math.sin(capElevation) * 34,
       -Math.cos(capAzimuth) * 28
     );
     skyGroup.add(keyLight);

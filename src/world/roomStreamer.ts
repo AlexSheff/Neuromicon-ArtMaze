@@ -2,6 +2,10 @@ import * as THREE from 'three';
 import room073Json from '../../room-template/room.json';
 import templateRoomModule from '../../room-template/index';
 import {
+  createArchitecturalWallTexture,
+  createCosmicFloorTexture,
+  createDoorLeafTexture,
+  createLightShaftAlphaTexture,
   createSignageTexture,
   getWorldNodes,
   SpatialInteractiveTarget,
@@ -887,23 +891,57 @@ export class RoomStreamer {
     const halfW = width * 0.5;
     const halfD = depth * 0.5;
 
-    const wallMat = new THREE.MeshLambertMaterial({
-      color: skyRig.tone === 'warm' ? '#1c1816' : '#111722',
+    const floorTex = createCosmicFloorTexture(
+      skyRig.tone === 'warm'
+        ? 'rgba(218, 156, 82, 0.25)'
+        : 'rgba(72, 158, 224, 0.25)',
+      3,
+      3
+    );
+    const wallTex = createArchitecturalWallTexture(
+      skyRig.tone === 'warm' ? '#241e22' : '#162030',
+      accentHex,
+      '#fae6be',
+      4,
+      1
+    );
+    const doorLeafTex = createDoorLeafTexture(
+      skyRig.tone === 'warm' ? '#1c171b' : '#121828',
+      accentHex
+    );
+
+    const wallMat = new THREE.MeshStandardMaterial({
+      map: wallTex,
+      roughness: 0.44,
+      metalness: 0.2,
+    });
+    const stoneTrimMat = new THREE.MeshStandardMaterial({
+      color: skyRig.tone === 'warm' ? '#2c2529' : '#1d283a',
+      roughness: 0.36,
+      metalness: 0.28,
     });
     const floorMat = new THREE.MeshStandardMaterial({
-      color: skyRig.tone === 'warm' ? '#15120f' : '#0b1018',
-      roughness: skyRig.tone === 'cool' ? 0.14 : 0.24,
-      metalness: 0.48,
+      map: floorTex,
+      roughness: skyRig.tone === 'cool' ? 0.2 : 0.26,
+      metalness: 0.44,
     });
     const trimMat = new THREE.MeshStandardMaterial({
       color: accentHex,
       roughness: 0.24,
-      metalness: 0.85,
+      metalness: 0.82,
       emissive: rimHex,
       emissiveIntensity: 0.22,
     });
+    const doorLeafMat = new THREE.MeshStandardMaterial({
+      map: doorLeafTex,
+      roughness: 0.28,
+      metalness: 0.62,
+    });
+    const warmLuminaireMat = new THREE.MeshBasicMaterial({
+      color: '#fff1d0',
+    });
 
-    // 2. Walkable Room Floor (y = 0)
+    // 2. Walkable Room Floor (y = 0, textured honed stone & bronze inlay)
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(width, depth),
       floorMat
@@ -912,48 +950,55 @@ export class RoomStreamer {
     root.add(floor);
     walkableMeshes.push(floor);
 
-    // Open Celestial Oculus Cornice at y = height so the Room's Real Astronomical Nebula Cap & Starfield shine overhead!
+    // Physical Ceiling Oculus Cornice + Luminous Inner Lantern Ring at (0, height, 0)
+    // Light visibly emanates from the overhead Oculus Ring directly onto the central floor medallion!
     const oculusCornice = new THREE.Mesh(
-      new THREE.TorusGeometry(6.8, 0.28, 12, 48),
+      new THREE.TorusGeometry(4.8, 0.28, 12, 48),
       trimMat
     );
     oculusCornice.rotation.x = Math.PI * 0.5;
     oculusCornice.position.set(0, height, 0);
     root.add(oculusCornice);
 
-    // Branch Polish (TZ.md §4.3): Warm Nebula -> Additive Light Shaft; Cool Nebula -> Reflective Caustic Ring Pool
-    if (skyRig.tone === 'warm') {
-      const shaftCone = new THREE.Mesh(
-        new THREE.ConeGeometry(3.4, height, 24, 1, true),
-        new THREE.MeshBasicMaterial({
-          color: rimHex,
-          transparent: true,
-          opacity: 0.14,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-          side: THREE.DoubleSide,
-        })
-      );
-      shaftCone.position.set(0, height * 0.5, -1.5);
-      root.add(shaftCone);
-    } else {
-      const causticRing = new THREE.Mesh(
-        new THREE.RingGeometry(1.1, 2.3, 40),
-        new THREE.MeshStandardMaterial({
-          color: skyRig.palette[1] ?? '#4ea8de',
-          roughness: 0.08,
-          metalness: 0.92,
-          emissive: accentHex,
-          emissiveIntensity: 0.35,
-          side: THREE.DoubleSide,
-        })
-      );
-      causticRing.rotation.x = -Math.PI * 0.5;
-      causticRing.position.set(0, 0.015, -1.5);
-      root.add(causticRing);
-    }
+    const oculusLanternRing = new THREE.Mesh(
+      new THREE.TorusGeometry(4.52, 0.09, 10, 48),
+      warmLuminaireMat
+    );
+    oculusLanternRing.rotation.x = Math.PI * 0.5;
+    oculusLanternRing.position.set(0, height - 0.1, 0);
+    root.add(oculusLanternRing);
 
-    // 4 Outer Walls
+    const shaftTex = createLightShaftAlphaTexture(rimHex);
+    const oculusVeil = new THREE.Mesh(
+      new THREE.CylinderGeometry(2.6, 3.8, height, 32, 1, true),
+      new THREE.MeshBasicMaterial({
+        map: shaftTex,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      })
+    );
+    oculusVeil.position.set(0, height * 0.5, 0);
+    root.add(oculusVeil);
+
+    // Central Sanctuary Floor Medallion directly beneath the Ceiling Oculus
+    const centerFloorMedallion = new THREE.Mesh(
+      new THREE.RingGeometry(1.2, 2.5, 48),
+      new THREE.MeshStandardMaterial({
+        color: skyRig.palette[1] ?? accentHex,
+        roughness: 0.14,
+        metalness: 0.86,
+        emissive: accentHex,
+        emissiveIntensity: 0.28,
+        side: THREE.DoubleSide,
+      })
+    );
+    centerFloorMedallion.rotation.x = -Math.PI * 0.5;
+    centerFloorMedallion.position.set(0, 0.015, 0);
+    root.add(centerFloorMedallion);
+
+    // 4 Textured Outer Sanctuary Walls + Top Perimeter Cove Cornice
     const nWall = new THREE.Mesh(
       new THREE.PlaneGeometry(width, height),
       wallMat
@@ -985,7 +1030,30 @@ export class RoomStreamer {
     eWall.position.set(halfW, height * 0.5, 0);
     root.add(eWall);
 
-    // 3. Monumental Framed Neuromicon Painting on West Sanctuary Wall (Grounded pedestal + framed canvas!)
+    // Flush Wall Pilasters with Physical Warm Alabaster Sconces between the North Doors (-2.1, +2.1) & South Wall (-3.2, +3.2)
+    [
+      { x: -2.1, z: -halfD + 0.18 },
+      { x: 2.1, z: -halfD + 0.18 },
+      { x: -3.2, z: halfD - 0.18 },
+      { x: 3.2, z: halfD - 0.18 },
+    ].forEach((sp) => {
+      const pilaster = new THREE.Mesh(
+        new THREE.BoxGeometry(0.36, height - 0.3, 0.34),
+        stoneTrimMat
+      );
+      pilaster.position.set(sp.x, (height - 0.3) * 0.5, sp.z);
+      root.add(pilaster);
+
+      const sconceZ = sp.z < 0 ? sp.z + 0.22 : sp.z - 0.22;
+      const sconceLamp = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.06, 0.42, 12),
+        warmLuminaireMat
+      );
+      sconceLamp.position.set(sp.x, 3.05, sconceZ);
+      root.add(sconceLamp);
+    });
+
+    // 3. Monumental Framed Neuromicon Painting on West Sanctuary Wall (Grounded pedestal + Brass Gallery Picture Light!)
     if (manifest.artwork) {
       const artGroup = new THREE.Group();
       artGroup.position.set(-halfW + 0.14, 0, -0.2);
@@ -993,10 +1061,10 @@ export class RoomStreamer {
 
       // Grounded stone plinth beneath the painting
       const plinth = new THREE.Mesh(
-        new THREE.BoxGeometry(4.4, 0.35, 0.55),
-        wallMat
+        new THREE.BoxGeometry(4.4, 0.38, 0.58),
+        stoneTrimMat
       );
-      plinth.position.set(0, 0.175, 0.18);
+      plinth.position.set(0, 0.19, 0.18);
       artGroup.add(plinth);
 
       // Sculpted metallic frame
@@ -1006,6 +1074,21 @@ export class RoomStreamer {
       );
       outerFrame.position.set(0, 2.55, 0.08);
       artGroup.add(outerFrame);
+
+      // Physical Brass Gallery Picture Light Bar above the Painting
+      const galleryLightHood = new THREE.Mesh(
+        new THREE.BoxGeometry(2.8, 0.1, 0.32),
+        trimMat
+      );
+      galleryLightHood.position.set(0, 4.08, 0.26);
+      artGroup.add(galleryLightHood);
+
+      const galleryLightTube = new THREE.Mesh(
+        new THREE.BoxGeometry(2.6, 0.06, 0.14),
+        warmLuminaireMat
+      );
+      galleryLightTube.position.set(0, 4.02, 0.3);
+      artGroup.add(galleryLightTube);
 
       // Painting canvas with live TextureLoader from https://github.com/AlexSheff/Neuromicon
       const fallbackTex = createRoomPaintingFallbackTexture(
@@ -1052,7 +1135,7 @@ export class RoomStreamer {
         new THREE.PlaneGeometry(2.4, 0.8),
         new THREE.MeshBasicMaterial({ map: artPlaqueTex })
       );
-      artPlaque.position.set(0, 4.45, 0.16);
+      artPlaque.position.set(0, 4.58, 0.16);
       artGroup.add(artPlaque);
 
       root.add(artGroup);
@@ -1067,7 +1150,7 @@ export class RoomStreamer {
       });
     }
 
-    // 4. Doors A, B, C + Conditional Rabbit Hole (RH) Grounded at y = 0 (§5 & §7.2)
+    // 4. Doors A, B, C + Conditional Rabbit Hole (RH) Grounded at y = 0 with Textured Leaves & Lintel Lamps (§5 & §7.2)
     const doorPlacements: Record<
       'A' | 'B' | 'C' | 'RH',
       { x: number; z: number; rotY: number }
@@ -1109,7 +1192,7 @@ export class RoomStreamer {
 
       const step = new THREE.Mesh(
         new THREE.BoxGeometry(2.4, 0.14, 0.5),
-        wallMat
+        stoneTrimMat
       );
       step.position.set(0, 0.07, 0.18);
       dGroup.add(step);
@@ -1130,13 +1213,17 @@ export class RoomStreamer {
       lintel.position.set(0, 3.65, 0.18);
       dGroup.add(lintel);
 
+      // Physical Lintel Luminaire Bar above each Room Door
+      const doorLamp = new THREE.Mesh(
+        new THREE.BoxGeometry(1.55, 0.06, 0.14),
+        warmLuminaireMat
+      );
+      doorLamp.position.set(0, 3.43, 0.36);
+      dGroup.add(doorLamp);
+
       const leaf = new THREE.Mesh(
         new THREE.BoxGeometry(1.75, 3.36, 0.14),
-        new THREE.MeshStandardMaterial({
-          color: isRH ? '#261838' : isPlanned ? '#1a1a1c' : '#1b1612',
-          roughness: 0.35,
-          metalness: 0.55,
-        })
+        doorLeafMat
       );
       leaf.position.set(0, 0.14 + 1.68, 0.1);
       dGroup.add(leaf);
@@ -1177,44 +1264,65 @@ export class RoomStreamer {
       });
     });
 
-    // 5. Non-Portable Physical Room Objects & Busyboards (Grounded at y = 0, omitting onlyInMirror!)
+    // 5. Non-Portable Physical Room Objects & Busyboards (Placed on Flanking Sanctuary Pedestals, NEVER blocking Door B!)
     const physicalObjects = manifest.objects.filter((o) => !o.onlyInMirror);
     physicalObjects.forEach((obj, idx) => {
-      const ox = (idx - (physicalObjects.length - 1) * 0.5) * 3.6;
-      const oz = 0.5;
+      // Flanking positions (x = -3.6 or +3.6, z = 2.0) keep the central sightline to Doors A, B, C 100% open!
+      const side = idx % 2 === 0 ? -1 : 1;
+      const rowOffset = Math.floor(idx / 2) * 2.4;
+      const ox = side * 3.6;
+      const oz = 2.0 + rowOffset;
 
       const objGroup = new THREE.Group();
       objGroup.position.set(ox, 0, oz);
+      objGroup.rotation.y = side < 0 ? Math.PI * 0.18 : -Math.PI * 0.18;
 
+      // Sculpted Octagonal Sanctuary Pedestal + Warm Illuminated Ring
       const ped = new THREE.Mesh(
-        new THREE.BoxGeometry(1.1, 0.36, 1.1),
-        wallMat
+        new THREE.CylinderGeometry(0.56, 0.68, 0.88, 8),
+        stoneTrimMat
       );
-      ped.position.y = 0.18;
+      ped.position.y = 0.44;
       objGroup.add(ped);
+
+      const pedLightRing = new THREE.Mesh(
+        new THREE.TorusGeometry(0.58, 0.035, 10, 24),
+        warmLuminaireMat
+      );
+      pedLightRing.rotation.x = Math.PI * 0.5;
+      pedLightRing.position.y = 0.88;
+      objGroup.add(pedLightRing);
 
       if (obj.type === 'busyboard') {
         const ring1 = new THREE.Mesh(
-          new THREE.TorusGeometry(0.48, 0.04, 14, 36),
+          new THREE.TorusGeometry(0.46, 0.04, 14, 36),
           trimMat
         );
-        ring1.position.y = 1.25;
+        ring1.position.y = 1.48;
         objGroup.add(ring1);
 
         const ring2 = new THREE.Mesh(
-          new THREE.TorusGeometry(0.32, 0.035, 14, 32),
+          new THREE.TorusGeometry(0.31, 0.035, 14, 32),
           trimMat
         );
         ring2.rotation.y = Math.PI * 0.35;
-        ring2.position.y = 1.25;
+        ring2.position.y = 1.48;
         objGroup.add(ring2);
       } else {
-        const body = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.28, 0.4, 1.9, 6),
+        // Sculpted Crystalline Resonator cradled inside a Bronze Harmonic Ring (never a plain column!)
+        const outerCradle = new THREE.Mesh(
+          new THREE.TorusGeometry(0.44, 0.035, 12, 32),
           trimMat
         );
-        body.position.y = 0.36 + 0.95;
-        objGroup.add(body);
+        outerCradle.position.y = 1.48;
+        objGroup.add(outerCradle);
+
+        const crystalCore = new THREE.Mesh(
+          new THREE.OctahedronGeometry(0.26, 0),
+          trimMat
+        );
+        crystalCore.position.y = 1.48;
+        objGroup.add(crystalCore);
       }
 
       const oPlaqueTex = createSignageTexture(
@@ -1232,7 +1340,7 @@ export class RoomStreamer {
           side: THREE.DoubleSide,
         })
       );
-      oPlaque.position.set(0, 2.55, 0);
+      oPlaque.position.set(0, 2.32, 0);
       objGroup.add(oPlaque);
 
       root.add(objGroup);
@@ -1247,29 +1355,46 @@ export class RoomStreamer {
       });
     });
 
-    // 6. The Mirror System on East Wall (Grounded at y = 0, with 3D Mirror Choices + Ghost Reflection!)
+    // 6. The Mirror System on East Wall (Grounded at y = 0, with Twin Alabaster Luminaire Columns + 3D Mirror Choices + Ghost Reflection!)
     const mirrorGroup = new THREE.Group();
     mirrorGroup.position.set(halfW - 0.1, 0, -0.5);
     mirrorGroup.rotation.y = -Math.PI * 0.5;
 
     const mBase = new THREE.Mesh(
-      new THREE.BoxGeometry(3.8, 0.22, 0.55),
-      wallMat
+      new THREE.BoxGeometry(3.8, 0.24, 0.58),
+      stoneTrimMat
     );
-    mBase.position.set(0, 0.11, 0.2);
+    mBase.position.set(0, 0.12, 0.2);
     mirrorGroup.add(mBase);
+
+    const mSurround = new THREE.Mesh(
+      new THREE.BoxGeometry(3.75, 3.9, 0.16),
+      trimMat
+    );
+    mSurround.position.set(0, 2.05, 0.06);
+    mirrorGroup.add(mSurround);
+
+    // Twin Vertical Alabaster Luminaire Columns flanking the Mirror Glass
+    [-1.8, 1.8].forEach((mx) => {
+      const mLamp = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.05, 0.05, 3.4, 12),
+        warmLuminaireMat
+      );
+      mLamp.position.set(mx, 2.05, 0.2);
+      mirrorGroup.add(mLamp);
+    });
 
     const glass = new THREE.Mesh(
       new THREE.PlaneGeometry(3.4, 3.6),
       new THREE.MeshStandardMaterial({
-        color: '#102234',
+        color: '#14293e',
         roughness: 0.08,
         metalness: 0.88,
         transparent: true,
-        opacity: 0.78,
+        opacity: 0.82,
       })
     );
-    glass.position.set(0, 2.0, 0.12);
+    glass.position.set(0, 2.05, 0.15);
     mirrorGroup.add(glass);
 
     const mPlaqueTex = createSignageTexture(
@@ -1286,7 +1411,7 @@ export class RoomStreamer {
       new THREE.PlaneGeometry(2.6, 0.85),
       new THREE.MeshBasicMaterial({ map: mPlaqueTex })
     );
-    mPlaque.position.set(0, 4.35, 0.22);
+    mPlaque.position.set(0, 4.42, 0.22);
     mirrorGroup.add(mPlaque);
 
     const choices: Array<{
@@ -1380,6 +1505,20 @@ export class RoomStreamer {
     sArch.position.y = 1.8;
     southExitGroup.add(sArch);
 
+    const sLeaf = new THREE.Mesh(
+      new THREE.BoxGeometry(2.05, 3.3, 0.16),
+      doorLeafMat
+    );
+    sLeaf.position.set(0, 1.68, 0.1);
+    southExitGroup.add(sLeaf);
+
+    const sLamp = new THREE.Mesh(
+      new THREE.BoxGeometry(1.7, 0.07, 0.15),
+      warmLuminaireMat
+    );
+    sLamp.position.set(0, 3.5, 0.26);
+    southExitGroup.add(sLamp);
+
     const sPlaqueTex = createSignageTexture(
       '↺',
       `SECTOR ROOM ${state.segmentIndex}`,
@@ -1392,7 +1531,7 @@ export class RoomStreamer {
       new THREE.PlaneGeometry(2.2, 0.8),
       new THREE.MeshBasicMaterial({ map: sPlaqueTex })
     );
-    sPlaque.position.set(0, 4.15, 0.22);
+    sPlaque.position.set(0, 4.18, 0.22);
     southExitGroup.add(sPlaque);
 
     root.add(southExitGroup);
@@ -1431,19 +1570,21 @@ export class RoomStreamer {
     this.unmountCurrentRoom(root, scene);
 
     nebulaSkySystem.mountRoomSkyAndLighting('VOID_FALLBACK', root, scene, {
-      intensity: 0.5,
+      intensity: 0.65,
       qualityTier: state.comfort.qualityTier,
       reducedMotion: state.comfort.reducedMotion,
-      fogScale: 1.5,
+      fogScale: 1.2,
     });
 
+    const floorTex = createCosmicFloorTexture('rgba(78, 168, 222, 0.24)', 3, 3);
     const islandMat = new THREE.MeshStandardMaterial({
-      color: '#0c1622',
-      roughness: 0.12,
-      metalness: 0.85,
+      color: '#162234',
+      map: floorTex,
+      roughness: 0.24,
+      metalness: 0.48,
     });
     const island = new THREE.Mesh(
-      new THREE.CylinderGeometry(7.5, 8.2, 0.4, 36),
+      new THREE.CylinderGeometry(7.5, 8.2, 0.4, 48),
       islandMat
     );
     island.position.set(0, -0.2, 0);
