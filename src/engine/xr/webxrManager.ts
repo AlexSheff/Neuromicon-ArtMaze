@@ -1,5 +1,12 @@
 import * as THREE from 'three';
 
+function applyRadialDeadzone(x: number, y: number, deadzone = 0.16): [number, number] {
+  const magnitude = Math.hypot(x, y);
+  if (magnitude <= deadzone) return [0, 0];
+  const scale = Math.min(1, (magnitude - deadzone) / (magnitude * (1 - deadzone)));
+  return [x * scale, y * scale];
+}
+
 export interface XRStatus {
   supported: boolean;
   active: boolean;
@@ -202,19 +209,17 @@ class WebXRManager {
       const gp = source.gamepad;
       if (!gp) continue;
 
-      // Oculus Touch thumbsticks are on axes[2] (X) and axes[3] (Y), fallback to [0]/[1]
+      // Oculus Touch thumbsticks are on axes[2]/[3], fallback to axes[0]/[1].
       const axX = gp.axes.length >= 4 ? gp.axes[2] : gp.axes[0] ?? 0;
       const axY = gp.axes.length >= 4 ? gp.axes[3] : gp.axes[1] ?? 0;
 
-      if (source.handedness === 'left') {
-        if (Math.abs(axX) > 0.16) moveX += axX;
-        if (Math.abs(axY) > 0.16) moveZ += axY;
+      if (source.handedness === 'left' || source.handedness === 'none') {
+        const [moveStickX, moveStickY] = applyRadialDeadzone(axX, axY);
+        moveX += moveStickX;
+        moveZ += moveStickY;
       } else if (source.handedness === 'right') {
-        if (Math.abs(axX) > 0.22) turnX += axX;
-        if (Math.abs(axY) > 0.18) moveZ += axY;
-      } else {
-        if (Math.abs(axY) > 0.16) moveZ += axY;
-        if (Math.abs(axX) > 0.22) turnX += axX;
+        const [turnStickX] = applyRadialDeadzone(axX, 0, 0.22);
+        turnX += turnStickX;
       }
 
       // Button 0 = Index Trigger, Button 1 = Grip/Squeeze, Button 4 = A/X (Interact), Button 5 = B/Y (Pause, TZ.md §6.1)

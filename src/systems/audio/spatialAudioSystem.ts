@@ -18,6 +18,11 @@ import {
 export class SpatialAudioSystem {
   private mp3Audio: HTMLAudioElement | null = null;
   private mediaElementSource: MediaElementAudioSourceNode | null = null;
+  private analyser: AnalyserNode | null = null;
+  private spectrum = new Uint8Array(0);
+  private readonly reactiveLevels = { low: 0, mid: 0, high: 0, highPeak: 0, beat: 0 };
+  private previousLow = 0;
+  private beatCooldown = 0;
   private currentRoomTrackUrl = '';
   private isMp3Streaming = false;
   private inRoom = false;
@@ -75,7 +80,12 @@ export class SpatialAudioSystem {
       if (ctx && musicBus && typeof ctx.createMediaElementSource === 'function') {
         try {
           this.mediaElementSource = ctx.createMediaElementSource(this.mp3Audio);
-          this.mediaElementSource.connect(musicBus);
+          this.analyser = ctx.createAnalyser();
+          this.analyser.fftSize = 512;
+          this.analyser.smoothingTimeConstant = 0.72;
+          this.spectrum = new Uint8Array(this.analyser.frequencyBinCount);
+          this.mediaElementSource.connect(this.analyser);
+          this.analyser.connect(musicBus);
         } catch {
           // Fallback if browser disallows MediaElementSource before gesture
         }
@@ -88,6 +98,48 @@ export class SpatialAudioSystem {
 
   public getBus(busName: AudioBusName): GainNode | null {
     return audioMixer.bus(busName);
+  }
+
+  /** Returns smoothed low, mid, and high music-band energy for lightweight room effects. */
+  public getReactiveLevels(): Readonly<typeof this.reactiveLevels> {
+    const levels = this.reactiveLevels;
+    if (!this.analyser || !this.isStreamingMp3() || this.spectrum.length === 0) {
+      levels.low = levels.mid = levels.high = levels.highPeak = levels.beat = 0;
+      this.previousLow = 0;
+      return levels;
+    }
+
+    this.analyser.getByteFrequencyData(this.spectrum);
+    const lowEnd = Math.max(1, Math.floor(this.spectrum.length * 0.08));
+    const midEnd = Math.max(lowEnd + 1, Math.floor(this.spectrum.length * 0.42));
+    let low = 0;
+    let mid = 0;
+    let high = 0;
+    let highPeak = 0;
+    for (let i = 0; i < lowEnd; i++) low += this.spectrum[i];
+    for (let i = lowEnd; i < midEnd; i++) mid += this.spectrum[i];
+    for (let i = midEnd; i < this.spectrum.length; i++) {
+      high += this.spectrum[i];
+      highPeak = Math.max(highPeak, this.spectrum[i]);
+    }
+    low /= lowEnd * 255;
+    mid /= (midEnd - lowEnd) * 255;
+    high /= (this.spectrum.length - midEnd) * 255;
+
+    const onset = Math.max(0, low - this.previousLow);
+    this.previousLow += (low - this.previousLow) * 0.22;
+    this.beatCooldown = Math.max(0, this.beatCooldown - 1 / 72);
+    if (onset > 0.075 && this.beatCooldown === 0) {
+      levels.beat = 1;
+      this.beatCooldown = 0.18;
+    } else {
+      levels.beat *= 0.82;
+    }
+    levels.low = low;
+    levels.mid = mid;
+    levels.high = high;
+    levels.highPeak = highPeak / 255;
+    return levels;
   }
 
   public getVolumeState(): AudioVolumeState {

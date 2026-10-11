@@ -2,6 +2,7 @@
 
 @layer base {
   :root {
+    font-size: 18px;
     --font-display: "Cinzel", "Cormorant Garamond", Georgia, "Times New Roman", serif;
     --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     --font-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
@@ -11,6 +12,8 @@
     background-color: #0b0a09;
     color: #e8e2d5;
     font-family: var(--font-sans);
+    font-size: 17px;
+    line-height: 1.55;
     letter-spacing: 0.01em;
     margin: 0;
     padding: 0;

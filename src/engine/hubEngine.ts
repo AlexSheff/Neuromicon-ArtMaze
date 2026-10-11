@@ -14,6 +14,7 @@ import {
   RoomContext,
 } from '../room-sdk';
 import { spatialAudioSystem } from '../systems/audio/spatialAudioSystem';
+import { AudioReactiveVisuals } from '../systems/audio/audioReactiveVisuals';
 import { nebulaSkySystem } from '../systems/sky/nebulaSkySystem';
 import { HubPlayerState, hubPlayerState } from '../state/playerState';
 import { getRoomV1Manifest, roomStreamer } from '../world/roomStreamer';
@@ -63,6 +64,7 @@ export class HubEngine {
   public readonly comfort: ComfortSystem;
 
   private worldRoot: THREE.Group;
+  private audioReactiveVisuals: AudioReactiveVisuals;
   private roomApiRoot: THREE.Group;
   private pausePanelRoot: THREE.Group;
   private raycaster: THREE.Raycaster;
@@ -100,7 +102,6 @@ export class HubEngine {
   private pauseListeners: Set<(paused: boolean) => void> = new Set();
 
   private snapCooldown = 0;
-  private teleportStickCooldown = 0;
   private builtSceneKey = '';
   private fovZoom = false;
 
@@ -157,6 +158,7 @@ export class HubEngine {
 
     this.worldRoot = new THREE.Group();
     this.scene.add(this.worldRoot);
+    this.audioReactiveVisuals = new AudioReactiveVisuals();
 
     this.roomApiRoot = new THREE.Group();
     this.scene.add(this.roomApiRoot);
@@ -743,6 +745,7 @@ export class HubEngine {
     roomStreamer.unmountCurrentRoom(this.roomApiRoot, this.scene);
     nebulaSkySystem.unmountSky(this.worldRoot, this.scene);
     disposeThreeHierarchy(this.worldRoot);
+    disposeThreeHierarchy(this.audioReactiveVisuals.root);
     this.renderer.dispose();
   }
 
@@ -885,6 +888,7 @@ export class HubEngine {
     roomStreamer.unmountCurrentRoom(this.roomApiRoot, this.scene);
     nebulaSkySystem.unmountSky(this.worldRoot, this.scene);
     disposeThreeHierarchy(this.worldRoot);
+    this.audioReactiveVisuals = new AudioReactiveVisuals();
 
     const registerTarget = (
       mesh: THREE.Object3D,
@@ -960,6 +964,7 @@ export class HubEngine {
     }
 
     const ctx = this.buildRoomContext(roomId, state);
+    this.worldRoot.add(this.audioReactiveVisuals.root);
     roomStreamer.mountRoom(
       roomId,
       this.worldRoot,
@@ -1083,24 +1088,7 @@ export class HubEngine {
 
       const isMovingStick = Math.hypot(forward, strafe) > 0.15;
 
-      if (this.teleportStickCooldown > 0) {
-        this.teleportStickCooldown = Math.max(
-          0,
-          this.teleportStickCooldown - gameDt
-        );
-      }
-
-      if (isXR && state.comfort.locomotion === 'teleport') {
-        this.comfort.setTargetVignette(0);
-        if (forward > 0.65 && this.teleportStickCooldown <= 0) {
-          this.teleportStickCooldown = 0.45;
-          const moveYaw = this.getActiveHeadingYaw();
-          const stepDist = 2.4;
-          const nx = this.pose.x - Math.sin(moveYaw) * stepDist;
-          const nz = this.pose.z - Math.cos(moveYaw) * stepDist;
-          this.clampAndApplyPosition(nx, nz, state);
-        }
-      } else if (isMovingStick) {
+      if (isMovingStick) {
         const len = Math.min(1, Math.hypot(forward, strafe));
         const normF = forward / Math.max(1, Math.hypot(forward, strafe));
         const normS = strafe / Math.max(1, Math.hypot(forward, strafe));
@@ -1171,6 +1159,11 @@ export class HubEngine {
     this.playerRig.updateMatrixWorld(true);
 
     roomStreamer.updateCurrentRoom(gameDt);
+    this.audioReactiveVisuals.update(
+      this.gameTimeSec,
+      spatialAudioSystem.getReactiveLevels(),
+      state.location === 'room' && !this.paused
+    );
     this.comfort.update(dt, state.vignetteEnabled || this.paused);
 
     // 6. RAYCAST & PRELOAD / CONTEXTUAL DISCOVERY

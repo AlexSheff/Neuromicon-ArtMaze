@@ -233,11 +233,12 @@ function createPaintingArtworkTexture(
   mutated: boolean
 ): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
+  const aspectRatio = Math.max(0.65, Math.min(2.2, painting.aspectRatio ?? 1.45));
   canvas.width = 768;
-  canvas.height = 512;
+  canvas.height = Math.round(768 / aspectRatio);
   const ctx = canvas.getContext('2d')!;
 
-  const grad = ctx.createRadialGradient(384, 230, 30, 384, 256, 420);
+  const grad = ctx.createRadialGradient(384, canvas.height * 0.45, 30, 384, canvas.height * 0.5, canvas.height * 0.8);
   if (mutated) {
     grad.addColorStop(0, '#1e3246');
     grad.addColorStop(0.6, '#0f1822');
@@ -248,7 +249,12 @@ function createPaintingArtworkTexture(
     grad.addColorStop(1, '#0a0806');
   }
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 768, 512);
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // Keep the art and lettering proportional on landscape, square, and portrait canvases.
+  ctx.save();
+  ctx.translate(384, canvas.height * 0.5);
+  ctx.scale(Math.min(1, (canvas.height - 80) / 512), Math.min(1, (canvas.height - 80) / 512));
+  ctx.translate(-384, -256);
 
   ctx.strokeStyle = mutated ? '#7da2c4' : '#c8a464';
   ctx.lineWidth = 2.5;
@@ -291,18 +297,20 @@ function createPaintingArtworkTexture(
   }
 
   ctx.fillStyle = 'rgba(243, 237, 226, 0.9)';
-  ctx.font = '600 22px "Cinzel", Georgia, serif';
+  ctx.font = '600 30px "Cinzel", Georgia, serif';
   ctx.textAlign = 'center';
-  ctx.fillText(painting.metadata.title, 384, 455);
+  ctx.fillText(painting.metadata.title, 384, 455, 700);
 
   ctx.fillStyle = 'rgba(200, 164, 100, 0.78)';
-  ctx.font = '400 15px system-ui, sans-serif';
+  ctx.font = '500 21px system-ui, sans-serif';
   ctx.fillText(
     `${painting.metadata.author} · ${painting.metadata.license}`,
     384,
-    482
+    482,
+    700
   );
 
+  ctx.restore();
   return new THREE.CanvasTexture(canvas);
 }
 
@@ -317,7 +325,7 @@ function createArchitecturalPlaqueTexture(
   canvas.height = 160;
   const ctx = canvas.getContext('2d')!;
 
-  ctx.fillStyle = 'rgba(14, 13, 11, 0.94)';
+  ctx.fillStyle = 'rgba(5, 7, 12, 0.98)';
   ctx.fillRect(0, 0, 512, 160);
 
   ctx.strokeStyle = accentHex;
@@ -325,13 +333,13 @@ function createArchitecturalPlaqueTexture(
   ctx.strokeRect(4, 4, 504, 152);
 
   ctx.fillStyle = accentHex;
-  ctx.font = '600 23px "Cinzel", Georgia, serif';
+  ctx.font = '700 30px "Cinzel", Georgia, serif';
   ctx.textAlign = 'center';
-  ctx.fillText(`${badge} · ${title}`.slice(0, 36), 256, 66);
+  ctx.fillText(`${badge} · ${title}`.slice(0, 36), 256, 66, 470);
 
   ctx.fillStyle = '#e8e2d5';
-  ctx.font = '400 18px system-ui, sans-serif';
-  ctx.fillText(subtitle.slice(0, 48), 256, 112);
+  ctx.font = '600 23px system-ui, sans-serif';
+  ctx.fillText(subtitle.slice(0, 48), 256, 112, 470);
 
   return new THREE.CanvasTexture(canvas);
 }
@@ -682,26 +690,9 @@ export class ThreeLabyrinthEngine {
     const halfW = width * 0.5;
     const halfD = depth * 0.5;
 
-    // 1. Multi-Layered Architectural Lighting (Hemisphere + Oculus Key + Warm Sconces)
-    const hemiLight = new THREE.HemisphereLight('#f2e6d0', '#1c1815', 0.68);
+    // Galaxy/sky lighting supplies the room ambience; keep one inexpensive fill light.
+    const hemiLight = new THREE.HemisphereLight(palette.accent, '#090b12', 0.9);
     this.roomGroup.add(hemiLight);
-
-    const keyLight = new THREE.PointLight('#ffe4b5', 28, width * 1.8, 1.35);
-    keyLight.position.set(0, height - 0.35, 0);
-    this.roomGroup.add(keyLight);
-
-    const northLight = new THREE.PointLight(
-      palette.accent,
-      16,
-      depth * 1.3,
-      1.45
-    );
-    northLight.position.set(0, height * 0.72, -halfD + 2.2);
-    this.roomGroup.add(northLight);
-
-    const southLight = new THREE.PointLight('#8ea8c4', 12, depth * 1.3, 1.45);
-    southLight.position.set(0, height * 0.72, halfD - 2.2);
-    this.roomGroup.add(southLight);
 
     // 2. Polished Travertine Floor at y = 0 + Sacred Labyrinth Compass Rose Medallion
     const floorTex = createPolishedFloorTexture(palette.floor, palette.accent);
@@ -788,29 +779,6 @@ export class ThreeLabyrinthEngine {
     oculusRim.position.set(0, height - 0.02, 0);
     this.roomGroup.add(oculusRim);
 
-    const oculusSky = new THREE.Mesh(
-      new THREE.CircleGeometry(1.15, 40),
-      new THREE.MeshBasicMaterial({
-        color: '#fff1cc',
-        side: THREE.DoubleSide,
-      })
-    );
-    oculusSky.rotation.x = Math.PI * 0.5;
-    oculusSky.position.set(0, height - 0.01, 0);
-    this.roomGroup.add(oculusSky);
-
-    const lightShaft = new THREE.Mesh(
-      new THREE.ConeGeometry(2.8, height, 32, 1, true),
-      new THREE.MeshBasicMaterial({
-        color: '#ffe9b8',
-        transparent: true,
-        opacity: 0.045,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-      })
-    );
-    lightShaft.position.set(0, height * 0.5, 0);
-    this.roomGroup.add(lightShaft);
 
     // 4. Outer Architectural Walls + Base Plinth Dado + Upper Entablature Cornice
     const wallTex = createAshlarWallTexture(palette.wall, palette.accent);
@@ -1128,9 +1096,9 @@ export class ThreeLabyrinthEngine {
         halfD,
         painting.position[1] || 2.25
       );
-      const scale = painting.scale ?? 1.25;
+      const scale = painting.scale ?? 1.65;
       const pw = 1.8 * scale;
-      const ph = 1.22 * scale;
+      const ph = pw / Math.max(0.65, Math.min(2.2, painting.aspectRatio ?? 1.45));
 
       const pGroup = new THREE.Group();
       pGroup.position.set(anchor.cx, anchor.cy, anchor.cz);
@@ -1172,13 +1140,6 @@ export class ThreeLabyrinthEngine {
       );
       artCanvas.position.set(0, 0, 0.11);
       pGroup.add(artCanvas);
-
-      const lampBar = new THREE.Mesh(
-        new THREE.BoxGeometry(0.68, 0.05, 0.24),
-        accentTrimMat
-      );
-      lampBar.position.set(0, ph * 0.5 + 0.22, 0.12);
-      pGroup.add(lampBar);
 
       this.roomGroup.add(pGroup);
 

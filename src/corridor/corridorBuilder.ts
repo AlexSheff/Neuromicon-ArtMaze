@@ -204,13 +204,13 @@ export function createSignageTexture(
 
   // Portal Title, Subtitle & Telemetry Status on right
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#f6f0e4';
-  ctx.font = '600 22px "Cinzel", Georgia, serif';
-  ctx.fillText(title.slice(0, 25), 154, 90);
+  ctx.fillStyle = '#fff8ea';
+  ctx.font = '700 30px "Cinzel", Georgia, serif';
+  ctx.fillText(title.slice(0, 25), 154, 94, 332);
 
-  ctx.fillStyle = '#b9c6dc';
-  ctx.font = '400 16px system-ui, sans-serif';
-  ctx.fillText(subtitle.slice(0, 34), 154, 136);
+  ctx.fillStyle = '#e0e8f2';
+  ctx.font = '600 23px system-ui, sans-serif';
+  ctx.fillText(subtitle.slice(0, 34), 154, 140, 332);
 
   // Built-in display circuit divider
   ctx.strokeStyle = `${accentHex}66`;
@@ -221,8 +221,8 @@ export function createSignageTexture(
   ctx.stroke();
 
   ctx.fillStyle = badgeHex;
-  ctx.font = '600 15px monospace';
-  ctx.fillText(`◈ ${statusBadge}`, 154, 192);
+  ctx.font = '700 19px monospace';
+  ctx.fillText(`◈ ${statusBadge}`, 154, 194, 270);
 
   // Mini telemetry spectrum bars on bottom right
   const barCols = ['#4ea8de', '#9d4edd', '#e5c158'];

@@ -1141,6 +1141,9 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
             <div className="text-[11px] font-mono text-[#a89f91] mb-1.5">
               Locomotion:
             </div>
+            <p className="text-xs text-[#d8cfc0] leading-relaxed mb-2">
+              VR: left stick moves, right stick snap-turns. Point at the floor and press the trigger to teleport.
+            </p>
             <div className="grid grid-cols-2 gap-1.5">
               {(['teleport', 'smooth'] as const).map((m) => (
                 <button
