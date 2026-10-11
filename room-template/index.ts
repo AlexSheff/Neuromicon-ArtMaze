@@ -28,7 +28,7 @@ const roomModule: RoomModule = {
     });
     const ringMesh = new THREE.Mesh(ringGeo, ringMat);
     ringMesh.name = 'template_astrolabe_ring';
-    ringMesh.position.set(0, 4.8, 0);
+    ringMesh.position.set(0, 6.2, 0);
     root.add(ringMesh);
   },
 

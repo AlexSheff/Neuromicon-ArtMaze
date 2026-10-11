@@ -1,3 +1,4 @@
+import worldGraphData from '../../content/world.graph.json';
 import { eventBus, OnboardingStepId } from '../events/eventBus';
 import { ComfortMode, CorridorBranch } from '../room-sdk';
 import {
@@ -6,6 +7,30 @@ import {
   AudioVolumeState,
   DEFAULT_AUDIO_VOLUME_STATE,
 } from '../systems/audio/mixer';
+import { playerStateStore } from '../systems/state/playerStateStore';
+
+function resolveRoomSectorMeta(
+  roomId: string
+): { branch: CorridorBranch; segment: 1 | 2 | 3 } | null {
+  const nodes =
+    (worldGraphData.nodes as Array<{
+      id: string;
+      branch?: CorridorBranch;
+      segment?: 1 | 2 | 3;
+    }>) ?? [];
+  const found = nodes.find((n) => n.id === roomId);
+  if (found && found.branch && found.segment) {
+    return { branch: found.branch, segment: found.segment };
+  }
+  const match = /^ROOM_0*(\d+)$/i.exec(roomId);
+  if (match) {
+    const num = parseInt(match[1], 10);
+    if (num >= 1 && num <= 11) return { branch: 'ascend', segment: 1 };
+    if (num >= 12 && num <= 19) return { branch: 'descend', segment: 2 };
+    if (num >= 20 && num <= 25) return { branch: 'ascend', segment: 3 };
+  }
+  return null;
+}
 
 export type HubLocation = 'threshold' | 'corridor' | 'room' | 'void';
 
@@ -411,18 +436,7 @@ class HubPlayerStateStore {
 
   public chooseBranchFromThreshold(branch: CorridorBranch): void {
     const seg: 1 | 2 | 3 = branch === 'ascend' ? 1 : 2;
-    this.state.path = branch;
-    this.state.branch = branch;
-    this.state.segmentIndex = seg;
-    this.state.segment = { branch, index: seg };
-    this.state.location = 'corridor';
-    this.state.currentRoomId = null;
-    if (!this.state.onboarding.completedSteps.includes('COMMITTED')) {
-      this.state.onboarding.completedSteps.push('COMMITTED');
-    }
-    this.state.onboarding.currentStep = 'COMMITTED';
-    this.unlockDiscovery('codex.entry.threshold');
-    this.notifyAndDebounceSave();
+    this.setCorridorSegment(branch, seg);
   }
 
   public returnToThreshold(): void {
@@ -432,6 +446,7 @@ class HubPlayerStateStore {
   }
 
   public setCorridorSegment(branch: CorridorBranch, segment: 1 | 2 | 3): void {
+    const prevStep = this.state.onboarding.currentStep;
     if (!this.state.path) {
       this.state.path = branch;
     }
@@ -444,7 +459,11 @@ class HubPlayerStateStore {
       this.state.onboarding.completedSteps.push('COMMITTED');
     }
     this.state.onboarding.currentStep = 'COMMITTED';
+    this.unlockDiscovery('codex.entry.threshold');
     this.notifyAndDebounceSave();
+    if (prevStep !== 'COMMITTED') {
+      eventBus.emit('onboarding:step', { from: prevStep, to: 'COMMITTED' });
+    }
   }
 
   public enterRoom(
@@ -452,25 +471,40 @@ class HubPlayerStateStore {
     fromBranch?: CorridorBranch,
     fromSegment?: 1 | 2 | 3
   ): void {
-    if (fromBranch && fromSegment) {
-      this.state.branch = fromBranch;
-      this.state.segmentIndex = fromSegment;
-      this.state.segment = { branch: fromBranch, index: fromSegment };
+    if (roomId === 'CORRIDOR') {
+      this.returnToCorridor();
+      return;
     }
+    if (roomId === 'THRESHOLD') {
+      this.returnToThreshold();
+      return;
+    }
+
+    const resolvedMeta = resolveRoomSectorMeta(roomId);
+    const nextBranch = fromBranch ?? resolvedMeta?.branch ?? this.state.branch;
+    const nextSegment =
+      fromSegment ?? resolvedMeta?.segment ?? this.state.segmentIndex;
+
+    this.state.branch = nextBranch;
+    this.state.segmentIndex = nextSegment;
+    this.state.segment = { branch: nextBranch, index: nextSegment };
     this.state.location = 'room';
     this.state.currentRoomId = roomId;
+
     const prev = this.state.visited[roomId];
     this.state.visited[roomId] = {
       at: Date.now(),
       completed: prev?.completed ?? false,
     };
     this.revealControl('radio');
+    playerStateStore.enterRoom(roomId);
     this.notifyAndDebounceSave();
   }
 
   public enterVoidFallback(roomId: string): void {
     this.state.location = 'void';
     this.state.currentRoomId = roomId;
+    playerStateStore.enterVoid('starfield');
     this.unlockDiscovery('codex.entry.void_fallback');
     this.notifyAndDebounceSave();
   }
@@ -495,6 +529,7 @@ class HubPlayerStateStore {
     choice: 'accept' | 'reject'
   ): void {
     this.state.identity[roomId] = choice;
+    playerStateStore.recordMirrorChoice(roomId, choice);
     this.notifyAndDebounceSave();
   }
 
@@ -502,6 +537,7 @@ class HubPlayerStateStore {
     if (!this.state.discoveries.includes(key)) {
       this.state.discoveries.push(key);
       this.revealControl('codex');
+      playerStateStore.recordDiscovery(key);
       this.notifyAndDebounceSave();
       eventBus.emit('codex:unlocked', { entryId: key });
     }

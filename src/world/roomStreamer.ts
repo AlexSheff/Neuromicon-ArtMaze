@@ -2,10 +2,16 @@ import * as THREE from 'three';
 import room073Json from '../../room-template/room.json';
 import templateRoomModule from '../../room-template/index';
 import {
+  buildArtmazeHeaderBanner,
+  buildFloorElectricCircuitSparks,
+  buildGothicRibbedVaultsAndOculus,
+  buildQuartzPlasmaColumn,
+  buildVRExplorerScaleFigure,
+  buildWiredSciFiGothicPortal,
+  clearSignageTextureCache,
   createArchitecturalWallTexture,
   createCosmicFloorTexture,
   createDoorLeafTexture,
-  createLightShaftAlphaTexture,
   createSignageTexture,
   getWorldNodes,
   SpatialInteractiveTarget,
@@ -891,57 +897,63 @@ export class RoomStreamer {
     const halfW = width * 0.5;
     const halfD = depth * 0.5;
 
+    const plasmaHex =
+      skyRig.palette[1] ?? (skyRig.tone === 'warm' ? '#9d4edd' : '#b388ff');
+
     const floorTex = createCosmicFloorTexture(
       skyRig.tone === 'warm'
-        ? 'rgba(218, 156, 82, 0.25)'
-        : 'rgba(72, 158, 224, 0.25)',
+        ? 'rgba(229, 193, 88, 0.28)'
+        : 'rgba(78, 168, 222, 0.28)',
       3,
       3
     );
     const wallTex = createArchitecturalWallTexture(
-      skyRig.tone === 'warm' ? '#241e22' : '#162030',
+      '#060912',
       accentHex,
-      '#fae6be',
+      plasmaHex,
       4,
       1
     );
     const doorLeafTex = createDoorLeafTexture(
-      skyRig.tone === 'warm' ? '#1c171b' : '#121828',
-      accentHex
+      '#070b16',
+      accentHex,
+      plasmaHex
     );
 
     const wallMat = new THREE.MeshStandardMaterial({
       map: wallTex,
-      roughness: 0.44,
-      metalness: 0.2,
+      roughness: 0.5,
+      metalness: 0.24,
     });
     const stoneTrimMat = new THREE.MeshStandardMaterial({
-      color: skyRig.tone === 'warm' ? '#2c2529' : '#1d283a',
-      roughness: 0.36,
-      metalness: 0.28,
+      color: '#0e1320',
+      roughness: 0.4,
+      metalness: 0.32,
     });
     const floorMat = new THREE.MeshStandardMaterial({
       map: floorTex,
-      roughness: skyRig.tone === 'cool' ? 0.2 : 0.26,
-      metalness: 0.44,
+      roughness: 0.16,
+      metalness: 0.58,
     });
     const trimMat = new THREE.MeshStandardMaterial({
       color: accentHex,
-      roughness: 0.24,
-      metalness: 0.82,
+      roughness: 0.2,
+      metalness: 0.85,
       emissive: rimHex,
-      emissiveIntensity: 0.22,
+      emissiveIntensity: 0.28,
     });
     const doorLeafMat = new THREE.MeshStandardMaterial({
       map: doorLeafTex,
-      roughness: 0.28,
-      metalness: 0.62,
+      roughness: 0.22,
+      metalness: 0.72,
+      emissive: accentHex,
+      emissiveIntensity: 0.16,
     });
     const warmLuminaireMat = new THREE.MeshBasicMaterial({
-      color: '#fff1d0',
+      color: '#ffe8a3',
     });
 
-    // 2. Walkable Room Floor (y = 0, textured honed stone & bronze inlay)
+    // 2. Walkable Polished Dark Basalt Floor (y = 0, with Sacred Geometry, Fractals, Circuits & Travelling Electric Sparks!)
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(width, depth),
       floorMat
@@ -950,39 +962,30 @@ export class RoomStreamer {
     root.add(floor);
     walkableMeshes.push(floor);
 
-    // Physical Ceiling Oculus Cornice + Luminous Inner Lantern Ring at (0, height, 0)
-    // Light visibly emanates from the overhead Oculus Ring directly onto the central floor medallion!
-    const oculusCornice = new THREE.Mesh(
-      new THREE.TorusGeometry(4.8, 0.28, 12, 48),
-      trimMat
-    );
-    oculusCornice.rotation.x = Math.PI * 0.5;
-    oculusCornice.position.set(0, height, 0);
-    root.add(oculusCornice);
+    buildFloorElectricCircuitSparks({
+      root,
+      maxRadius: 7.4,
+      primaryHex: plasmaHex,
+      secondaryHex: '#4ea8de',
+      goldHex: '#e5c158',
+    });
 
-    const oculusLanternRing = new THREE.Mesh(
-      new THREE.TorusGeometry(4.52, 0.09, 10, 48),
-      warmLuminaireMat
-    );
-    oculusLanternRing.rotation.x = Math.PI * 0.5;
-    oculusLanternRing.position.set(0, height - 0.1, 0);
-    root.add(oculusLanternRing);
+    // High Gothic Cathedral Ribbed Vaults & Open Celestial Oculus at (0, height + 2.2, 0)
+    buildGothicRibbedVaultsAndOculus({
+      root,
+      oculusRadius: 4.8,
+      spanRadiusX: halfW - 0.5,
+      spanRadiusZ: halfD - 0.5,
+      wallHeight: height,
+      vaultApexY: height + 2.2,
+      ribAnglesDeg: [-40, 40, -75, 75, -135, 135],
+      basaltMat: stoneTrimMat,
+      trimMat,
+      innerGlowHex: accentHex,
+      veilHex: rimHex,
+    });
 
-    const shaftTex = createLightShaftAlphaTexture(rimHex);
-    const oculusVeil = new THREE.Mesh(
-      new THREE.CylinderGeometry(2.6, 3.8, height, 32, 1, true),
-      new THREE.MeshBasicMaterial({
-        map: shaftTex,
-        transparent: true,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      })
-    );
-    oculusVeil.position.set(0, height * 0.5, 0);
-    root.add(oculusVeil);
-
-    // Central Sanctuary Floor Medallion directly beneath the Ceiling Oculus
+    // Central Fractal Floor Medallion directly beneath the Celestial Oculus
     const centerFloorMedallion = new THREE.Mesh(
       new THREE.RingGeometry(1.2, 2.5, 48),
       new THREE.MeshStandardMaterial({
@@ -990,7 +993,7 @@ export class RoomStreamer {
         roughness: 0.14,
         metalness: 0.86,
         emissive: accentHex,
-        emissiveIntensity: 0.28,
+        emissiveIntensity: 0.32,
         side: THREE.DoubleSide,
       })
     );
@@ -998,7 +1001,7 @@ export class RoomStreamer {
     centerFloorMedallion.position.set(0, 0.015, 0);
     root.add(centerFloorMedallion);
 
-    // 4 Textured Outer Sanctuary Walls + Top Perimeter Cove Cornice
+    // 4 Dark Basalt & Slate Gothic Cathedral Outer Walls
     const nWall = new THREE.Mesh(
       new THREE.PlaneGeometry(width, height),
       wallMat
@@ -1030,28 +1033,57 @@ export class RoomStreamer {
     eWall.position.set(halfW, height * 0.5, 0);
     root.add(eWall);
 
-    // Flush Wall Pilasters with Physical Warm Alabaster Sconces between the North Doors (-2.1, +2.1) & South Wall (-3.2, +3.2)
-    [
-      { x: -2.1, z: -halfD + 0.18 },
-      { x: 2.1, z: -halfD + 0.18 },
-      { x: -3.2, z: halfD - 0.18 },
-      { x: 3.2, z: halfD - 0.18 },
-    ].forEach((sp) => {
-      const pilaster = new THREE.Mesh(
-        new THREE.BoxGeometry(0.36, height - 0.3, 0.34),
-        stoneTrimMat
-      );
-      pilaster.position.set(sp.x, (height - 0.3) * 0.5, sp.z);
-      root.add(pilaster);
-
-      const sconceZ = sp.z < 0 ? sp.z + 0.22 : sp.z - 0.22;
-      const sconceLamp = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.08, 0.06, 0.42, 12),
-        warmLuminaireMat
-      );
-      sconceLamp.position.set(sp.x, 3.05, sconceZ);
-      root.add(sconceLamp);
+    // Tall Transparent Quartz Glass Plasma Columns with Swirling Plasma & Periodic Branching Lightning!
+    // Placed at the 6 Gothic Vault Pier positions (strictly flanking doors & walls, never blocking sightlines!)
+    const roomPlasmaColumnCoords = [
+      { x: -6.3, z: -halfD + 0.65 },
+      { x: 6.3, z: -halfD + 0.65 },
+      { x: -halfW + 0.65, z: 3.8 },
+      { x: halfW - 0.65, z: 3.8 },
+      { x: -4.8, z: halfD - 0.65 },
+      { x: 4.8, z: halfD - 0.65 },
+    ];
+    roomPlasmaColumnCoords.forEach((pc, idx) => {
+      const plasmaCol = buildQuartzPlasmaColumn({
+        x: pc.x,
+        z: pc.z,
+        height: height - 0.15,
+        radius: 0.36,
+        primaryHex: plasmaHex,
+        secondaryHex: accentHex,
+        goldHex: '#e5c158',
+        basaltMat: stoneTrimMat,
+        trimMat,
+        phaseSeed: idx * 1.73 + 0.4,
+      });
+      root.add(plasmaCol);
     });
+
+    // Scale Figure of a Player in a VR Headset (`фигура игрока в VR-шлеме`) anchoring the monumental scale of the room
+    root.add(
+      buildVRExplorerScaleFigure({
+        x: -5.2,
+        z: 1.8,
+        rotY: 0.32,
+        visorHex: accentHex,
+        trimHex: plasmaHex,
+      })
+    );
+
+    // Central Overhead Banner above the 3 North Portals: `ARTMAZE // NEUROMICON PROJECT` + GitHub Repo Link
+    root.add(
+      buildArtmazeHeaderBanner({
+        x: 0,
+        y: 5.75,
+        z: -halfD + 0.26,
+        width: 5.2,
+        height: 1.25,
+        accentHex,
+        plasmaHex,
+        repoUrl: node?.repo || 'github.com/AlexSheff/Neuromicon',
+        trimMat,
+      })
+    );
 
     // 3. Monumental Framed Neuromicon Painting on West Sanctuary Wall (Grounded pedestal + Brass Gallery Picture Light!)
     if (manifest.artwork) {
@@ -1150,7 +1182,7 @@ export class RoomStreamer {
       });
     }
 
-    // 4. Doors A, B, C + Conditional Rabbit Hole (RH) Grounded at y = 0 with Textured Leaves & Lintel Lamps (§5 & §7.2)
+    // 4. Wired Sci-Fi/Gothic Portals A, B, C + Conditional Rabbit Hole (RH) Grounded at y = 0 with Connected 3D Power Cables (§5 & §7.2)
     const doorPlacements: Record<
       'A' | 'B' | 'C' | 'RH',
       { x: number; z: number; rotY: number }
@@ -1161,7 +1193,7 @@ export class RoomStreamer {
       RH: { x: -halfW + 0.08, z: -5.2, rotY: Math.PI * 0.5 },
     };
 
-    manifest.doors.forEach((door) => {
+    manifest.doors.forEach((door, doorIdx) => {
       if (door.visibility === 'hidden') {
         if (!door.requirement) return;
         const reqKey = `${manifest.id}:${door.requirement.type}:${door.requirement.target}`;
@@ -1176,10 +1208,6 @@ export class RoomStreamer {
       const pose = doorPlacements[door.id] ?? doorPlacements.C;
       const isRH = door.id === 'RH';
 
-      const dGroup = new THREE.Group();
-      dGroup.position.set(pose.x, 0, pose.z);
-      dGroup.rotation.y = pose.rotY;
-
       const dMat = isRH
         ? new THREE.MeshStandardMaterial({
             color: '#f0d27a',
@@ -1189,44 +1217,6 @@ export class RoomStreamer {
             emissiveIntensity: 0.5,
           })
         : trimMat;
-
-      const step = new THREE.Mesh(
-        new THREE.BoxGeometry(2.4, 0.14, 0.5),
-        stoneTrimMat
-      );
-      step.position.set(0, 0.07, 0.18);
-      dGroup.add(step);
-
-      [-0.95, 0.95].forEach((jx) => {
-        const jamb = new THREE.Mesh(
-          new THREE.BoxGeometry(0.24, 3.5, 0.36),
-          dMat
-        );
-        jamb.position.set(jx, 1.75, 0.16);
-        dGroup.add(jamb);
-      });
-
-      const lintel = new THREE.Mesh(
-        new THREE.BoxGeometry(2.45, 0.4, 0.44),
-        dMat
-      );
-      lintel.position.set(0, 3.65, 0.18);
-      dGroup.add(lintel);
-
-      // Physical Lintel Luminaire Bar above each Room Door
-      const doorLamp = new THREE.Mesh(
-        new THREE.BoxGeometry(1.55, 0.06, 0.14),
-        warmLuminaireMat
-      );
-      doorLamp.position.set(0, 3.43, 0.36);
-      dGroup.add(doorLamp);
-
-      const leaf = new THREE.Mesh(
-        new THREE.BoxGeometry(1.75, 3.36, 0.14),
-        doorLeafMat
-      );
-      leaf.position.set(0, 0.14 + 1.68, 0.1);
-      dGroup.add(leaf);
 
       const destTitle =
         destManifest?.identity.name || door.label || door.destination;
@@ -1243,12 +1233,24 @@ export class RoomStreamer {
         isRH ? '#f0d27a' : accentHex,
         isPlanned ? '#888888' : '#66cc99'
       );
-      const plaque = new THREE.Mesh(
-        new THREE.PlaneGeometry(2.15, 0.74),
-        new THREE.MeshBasicMaterial({ map: plaqueTex })
-      );
-      plaque.position.set(0, 4.28, 0.24);
-      dGroup.add(plaque);
+
+      const dGroup = buildWiredSciFiGothicPortal({
+        x: pose.x,
+        z: pose.z,
+        rotY: pose.rotY,
+        width: 2.35,
+        height: 3.65,
+        frameMat: dMat,
+        vortexMat: doorLeafMat,
+        accentHex: isRH ? '#f0d27a' : accentHex,
+        plasmaHex: skyRig.palette[1] ?? '#9d4edd',
+        statusColorHex: isPlanned ? '#888888' : isRH ? '#f0d27a' : '#66cc99',
+        plaqueTex,
+        plaqueWidth: 2.15,
+        plaqueHeight: 0.78,
+        cableSpread: 0.88,
+        phaseSeed: doorIdx * 1.45 + 0.5,
+      });
 
       root.add(dGroup);
       registerTarget(dGroup, {
@@ -1259,8 +1261,8 @@ export class RoomStreamer {
         status: isPlanned ? 'planned' : 'ready',
         title: `${door.symbol || door.id} · ${destTitle}`,
         titleRu: `${door.symbol || door.id} · ${destTitle}`,
-        subtitle: destDim,
-        subtitleRu: destDim,
+        subtitle: `${destDim} · Wired Portal`,
+        subtitleRu: `${destDim} · Wired Portal`,
       });
     });
 
@@ -1493,52 +1495,39 @@ export class RoomStreamer {
 
     root.add(mirrorGroup);
 
-    // 7. South Exit Portal: Return to the Sector Room (Stops Room MP3 on exit)
-    const southExitGroup = new THREE.Group();
-    southExitGroup.position.set(0, 0, halfD - 0.12);
-    southExitGroup.rotation.y = Math.PI;
-
-    const sArch = new THREE.Mesh(
-      new THREE.BoxGeometry(2.6, 3.6, 0.28),
-      trimMat
-    );
-    sArch.position.y = 1.8;
-    southExitGroup.add(sArch);
-
-    const sLeaf = new THREE.Mesh(
-      new THREE.BoxGeometry(2.05, 3.3, 0.16),
-      doorLeafMat
-    );
-    sLeaf.position.set(0, 1.68, 0.1);
-    southExitGroup.add(sLeaf);
-
-    const sLamp = new THREE.Mesh(
-      new THREE.BoxGeometry(1.7, 0.07, 0.15),
-      warmLuminaireMat
-    );
-    sLamp.position.set(0, 3.5, 0.26);
-    southExitGroup.add(sLamp);
-
+    // 7. South Wired Exit Portal: Return to the Sector Room (Stops Room MP3 on exit)
     const sPlaqueTex = createSignageTexture(
       '↺',
       `SECTOR ROOM ${state.segmentIndex}`,
       'EXIT ROOM (STOPS TRACK)',
-      'RETURN',
+      'RETURN PORTAL',
       accentHex,
       '#d8cfc0'
     );
-    const sPlaque = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.2, 0.8),
-      new THREE.MeshBasicMaterial({ map: sPlaqueTex })
-    );
-    sPlaque.position.set(0, 4.18, 0.22);
-    southExitGroup.add(sPlaque);
+
+    const southExitGroup = buildWiredSciFiGothicPortal({
+      x: 0,
+      z: halfD - 0.12,
+      rotY: Math.PI,
+      width: 2.55,
+      height: 3.7,
+      frameMat: trimMat,
+      vortexMat: doorLeafMat,
+      accentHex,
+      plasmaHex: skyRig.palette[1] ?? '#9d4edd',
+      statusColorHex: '#ffe8a3',
+      plaqueTex: sPlaqueTex,
+      plaqueWidth: 2.2,
+      plaqueHeight: 0.82,
+      cableSpread: 0.95,
+      phaseSeed: 5.2,
+    });
 
     root.add(southExitGroup);
     registerTarget(southExitGroup, {
       id: `ROOM_SOUTH_EXIT_${manifest.id}`,
-      kind: 'room-mirror',
-      mirrorChoice: 'back',
+      kind: 'room-door',
+      roomId: 'CORRIDOR',
       title: `↺ RETURN TO SECTOR ROOM ${state.segmentIndex}`,
       titleRu: `↺ RETURN TO SECTOR ROOM ${state.segmentIndex}`,
       subtitle: 'Leave Room & Stop Track',
@@ -1576,53 +1565,82 @@ export class RoomStreamer {
       fogScale: 1.2,
     });
 
-    const floorTex = createCosmicFloorTexture('rgba(78, 168, 222, 0.24)', 3, 3);
+    const floorTex = createCosmicFloorTexture('rgba(78, 168, 222, 0.28)', 3, 3);
     const islandMat = new THREE.MeshStandardMaterial({
-      color: '#162234',
+      color: '#0b101e',
       map: floorTex,
-      roughness: 0.24,
-      metalness: 0.48,
+      roughness: 0.16,
+      metalness: 0.58,
     });
+    const gothicBasaltMat = new THREE.MeshStandardMaterial({
+      color: '#0e1320',
+      roughness: 0.42,
+      metalness: 0.32,
+    });
+    const trimMat = new THREE.MeshStandardMaterial({
+      color: '#c8a464',
+      roughness: 0.2,
+      metalness: 0.85,
+      emissive: '#382910',
+      emissiveIntensity: 0.45,
+    });
+
     const island = new THREE.Mesh(
-      new THREE.CylinderGeometry(7.5, 8.2, 0.4, 48),
+      new THREE.CylinderGeometry(7.8, 8.5, 0.4, 48),
       islandMat
     );
     island.position.set(0, -0.2, 0);
     root.add(island);
     walkableMeshes.push(island);
 
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: '#4ea8de',
-      transparent: true,
-      opacity: 0.4,
-      side: THREE.DoubleSide,
+    buildFloorElectricCircuitSparks({
+      root,
+      maxRadius: 7.2,
+      primaryHex: '#9d4edd',
+      secondaryHex: '#4ea8de',
+      goldHex: '#e5c158',
     });
-    for (let i = 1; i <= 4; i++) {
-      const ring = new THREE.Mesh(
-        new THREE.RingGeometry(i * 2.4, i * 2.4 + 0.08, 48),
-        ringMat
+
+    // Flanking Quartz Glass Plasma Columns in Void Fallback
+    [-4.2, 4.2].forEach((px, idx) => {
+      root.add(
+        buildQuartzPlasmaColumn({
+          x: px,
+          z: -3.2,
+          height: 6.8,
+          radius: 0.36,
+          primaryHex: '#9d4edd',
+          secondaryHex: '#4ea8de',
+          goldHex: '#e5c158',
+          basaltMat: gothicBasaltMat,
+          trimMat,
+          phaseSeed: idx * 2.1 + 0.7,
+        })
       );
-      ring.rotation.x = -Math.PI * 0.5;
-      ring.position.set(0, 0.02, -2.0);
-      root.add(ring);
-    }
+    });
 
-    const portalGroup = new THREE.Group();
-    portalGroup.position.set(0, 0, -3.2);
-
-    const arch = new THREE.Mesh(
-      new THREE.BoxGeometry(2.6, 3.8, 0.28),
-      new THREE.MeshStandardMaterial({
-        color: '#c8a464',
-        roughness: 0.25,
-        metalness: 0.82,
-        emissive: '#382910',
-        emissiveIntensity: 0.45,
+    root.add(
+      buildVRExplorerScaleFigure({
+        x: -2.6,
+        z: -1.4,
+        rotY: 0.22,
+        visorHex: '#4ea8de',
+        trimHex: '#e5c158',
       })
     );
-    arch.position.y = 1.9;
-    portalGroup.add(arch);
 
+    const voidVortexTex = createDoorLeafTexture(
+      '#050915',
+      '#c8a464',
+      '#4ea8de'
+    );
+    const voidVortexMat = new THREE.MeshStandardMaterial({
+      map: voidVortexTex,
+      roughness: 0.2,
+      metalness: 0.75,
+      emissive: '#4ea8de',
+      emissiveIntensity: 0.22,
+    });
     const plaqueTex = createSignageTexture(
       '↺',
       roomId,
@@ -1631,18 +1649,30 @@ export class RoomStreamer {
       '#c8a464',
       '#7cc6f2'
     );
-    const plaque = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.2, 1.1),
-      new THREE.MeshBasicMaterial({ map: plaqueTex })
-    );
-    plaque.position.set(0, 4.35, 0.2);
-    portalGroup.add(plaque);
+
+    const portalGroup = buildWiredSciFiGothicPortal({
+      x: 0,
+      z: -3.2,
+      rotY: 0,
+      width: 2.6,
+      height: 3.8,
+      frameMat: trimMat,
+      vortexMat: voidVortexMat,
+      accentHex: '#c8a464',
+      plasmaHex: '#4ea8de',
+      statusColorHex: '#7cc6f2',
+      plaqueTex,
+      plaqueWidth: 2.2,
+      plaqueHeight: 1.05,
+      cableSpread: 1.05,
+      phaseSeed: 3.3,
+    });
 
     root.add(portalGroup);
     registerTarget(portalGroup, {
       id: 'VOID_FALLBACK_RETURN',
-      kind: 'room-mirror',
-      mirrorChoice: 'back',
+      kind: 'room-door',
+      roomId: 'CORRIDOR',
       title: `↺ ${state.branch.toUpperCase()} · ${state.segmentIndex}`,
       titleRu: `↺ ${state.branch.toUpperCase()} · ${state.segmentIndex}`,
       subtitle: roomId,
@@ -1790,6 +1820,7 @@ export class RoomStreamer {
     }
 
     nebulaSkySystem.clearPreloadCache();
+    clearSignageTextureCache();
     if (renderer?.render && camera) {
       renderer.render(scene, camera);
     }

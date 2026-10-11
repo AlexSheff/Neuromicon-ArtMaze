@@ -173,7 +173,9 @@ export function disposeThreeHierarchy(root: THREE.Object3D): void {
         : [mesh.material];
       mats.forEach((m) => {
         const std = m as THREE.MeshStandardMaterial;
-        if (std.map) std.map.dispose();
+        if (std.map && !std.map.userData?.cachedSignage) {
+          std.map.dispose();
+        }
         m.dispose();
       });
     }

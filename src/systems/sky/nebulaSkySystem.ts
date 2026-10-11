@@ -338,17 +338,18 @@ export class NebulaSkySystem {
       canvas.height = 64;
       const ctx = canvas.getContext('2d')!;
       const grad = ctx.createLinearGradient(0, 0, 0, 64);
-      // Smooth atmospheric transition: zenith nebula glow -> warm horizon -> soft velvet ground bounce
+      // Gothic-Plasma-Cosmic Twilight cubemap: zenith nebula -> plasma violet/blue mid -> deep basalt floor
       grad.addColorStop(0, f === 2 ? c2 : c0);
-      grad.addColorStop(0.45, c1);
-      grad.addColorStop(0.72, '#2a2433');
-      grad.addColorStop(1, '#121624');
+      grad.addColorStop(0.38, c1);
+      grad.addColorStop(0.65, '#261844');
+      grad.addColorStop(1, '#060811');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, 64, 64);
 
-      // Soft warm horizon/zenith bloom for pleasant, non-harsh PBR reflections
-      const bloom = ctx.createRadialGradient(32, f === 2 ? 32 : 28, 4, 32, 32, 30);
-      bloom.addColorStop(0, `${c2}55`);
+      // Plasma column & portal specular reflection bands for polished dark stone & quartz glass
+      const bloom = ctx.createRadialGradient(32, f === 2 ? 32 : 28, 3, 32, 32, 30);
+      bloom.addColorStop(0, `${c2}88`);
+      bloom.addColorStop(0.5, '#9d4edd44');
       bloom.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = bloom;
       ctx.fillRect(0, 0, 64, 64);
@@ -554,10 +555,10 @@ export class NebulaSkySystem {
     dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
     dustGeo.setAttribute('color', new THREE.BufferAttribute(dustColors, 3));
     const dustMat = new THREE.PointsMaterial({
-      size: 0.08,
+      size: 0.085,
       vertexColors: true,
       transparent: true,
-      opacity: 0.48,
+      opacity: 0.56,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
@@ -602,38 +603,38 @@ export class NebulaSkySystem {
     // =========================================================================
     // PALETTE-DRIVEN LIGHTING, FOG & CUBEMAP RIG (TZ.md §4.1 & §4.2)
     // Strictly <= 2 real-time lights, zero real-time shadows!
-    // Tuned for visual comfort, warm architectural readability, and natural sky correspondence.
+    // Tuned for "Комфортный Космический Полумрак": deep basalt/slate shadows where light is an accent.
     // =========================================================================
     const primaryColor = new THREE.Color(nebula.palette[0]).lerp(
-      new THREE.Color('#ede4d4'),
-      0.42
+      new THREE.Color('#9d65ff'),
+      0.28
     );
     const darkComplement = new THREE.Color(nebula.palette[0])
-      .lerp(new THREE.Color('#222738'), 0.68)
-      .multiplyScalar(0.55);
-    const secondColor = new THREE.Color(nebula.palette[1]).lerp(
-      new THREE.Color('#f8f1e4'),
-      0.38
+      .lerp(new THREE.Color('#090d1a'), 0.78)
+      .multiplyScalar(0.42);
+    const secondColor = new THREE.Color(nebula.palette[2] ?? nebula.palette[1]).lerp(
+      new THREE.Color('#f4d284'),
+      0.35
     );
     const fogColor = new THREE.Color(nebula.palette[0])
-      .lerp(new THREE.Color('#0c111e'), 0.82);
+      .lerp(new THREE.Color('#05070f'), 0.88);
 
     scene.background = fogColor;
-    // Gentle atmospheric depth so nearby stone textures and the overhead Nebula Cap remain crisp and soothing
+    // Deep gothic cathedral twilight fog so upper vaults fade into mystery while the Oculus & Plasma glow crisply
     scene.fog = new THREE.FogExp2(
       fogColor,
-      0.0085 * (opts?.fogScale ?? 1.0)
+      0.0092 * (opts?.fogScale ?? 1.0)
     );
 
     // Low-res environment cubemap for hero reflections (TZ.md §4.2)
     this.activeEnvCubemap = this.createLowResEnvironmentCubemap(nebula.palette);
     scene.environment = this.activeEnvCubemap;
 
-    // Light 1: HemisphereLight (sky = warm-balanced nebula primary, ground = soft velvet bounce)
+    // Light 1: HemisphereLight (sky = cosmic plasma primary, ground = deep basalt shadow bounce)
     const hemiLight = new THREE.HemisphereLight(
       primaryColor,
       darkComplement,
-      0.98 * (opts?.ambientScale ?? 1.0)
+      0.74 * (opts?.ambientScale ?? 1.0)
     );
     hemiLight.name = 'nebula_hemi_light';
     skyGroup.add(hemiLight);
@@ -641,7 +642,7 @@ export class NebulaSkySystem {
     // Light 2: Directional "Key" Light aligned with the L1 Nebula Cap direction (TZ.md §4.1)
     const keyLight = new THREE.DirectionalLight(
       secondColor,
-      1.32 * intensity
+      1.18 * intensity
     );
     keyLight.name = 'nebula_directional_key_light';
     keyLight.castShadow = false; // Zero real-time shadows in XR (TZ.md §4.1)

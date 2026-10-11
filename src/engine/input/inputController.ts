@@ -11,24 +11,39 @@ export interface InputState {
   yawDelta: number;
   pitchDelta: number;
   interactPressed: boolean;
+  pointerNdcX?: number;
+  pointerNdcY?: number;
+  pointerActive?: boolean;
 }
 
 /**
  * Unified Action Input Layer (EXPERIENCE_PROTOCOL.md §7.4).
  * Maps desktop keyboard/mouse and XR controllers to high-level actions (move, turn, interact).
  * Resolves the README `R` key collision: Snap Turn uses `Q` / `E` (or ArrowLeft / ArrowRight),
- * while `Space` / Click / VR Trigger triggers `interact` and `R` is reserved for the Codex journal.
+ * while `Space` / `Enter` / `F` / Canvas Click / VR Trigger triggers `interact` and `R` is reserved for the Codex journal.
  */
 export class InputController {
   private keys: Set<string> = new Set();
   private yawDelta = 0;
-  private pitchAngle = 0;
+  private pitchDelta = 0;
   private isDragging = false;
   private lastPointerX = 0;
   private lastPointerY = 0;
   private dragDistance = 0;
+  private pointerNdcX = 0;
+  private pointerNdcY = 0;
+  private pointerActive = false;
   private interactQueued = false;
   private element: HTMLElement | null = null;
+
+  private updatePointerNdc(clientX: number, clientY: number): void {
+    if (!this.element) return;
+    const rect = this.element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    this.pointerNdcX = ((clientX - rect.left) / rect.width) * 2 - 1;
+    this.pointerNdcY = -((clientY - rect.top) / rect.height) * 2 + 1;
+    this.pointerActive = true;
+  }
 
   private onKeyDown = (e: KeyboardEvent) => {
     const tag = (e.target as HTMLElement | null)?.tagName;
@@ -51,16 +66,18 @@ export class InputController {
     this.dragDistance = 0;
     this.lastPointerX = e.clientX;
     this.lastPointerY = e.clientY;
+    this.updatePointerNdc(e.clientX, e.clientY);
   };
 
   private onPointerMove = (e: PointerEvent) => {
     if (document.pointerLockElement === this.element) {
+      this.pointerActive = false;
       this.yawDelta -= e.movementX * 0.0026;
-      this.pitchAngle = Math.max(
-        -1.15,
-        Math.min(1.15, this.pitchAngle - e.movementY * 0.0022)
-      );
+      this.pitchDelta -= e.movementY * 0.0022;
       return;
+    }
+    if (this.element && e.target === this.element) {
+      this.updatePointerNdc(e.clientX, e.clientY);
     }
     if (!this.isDragging) return;
     const dx = e.clientX - this.lastPointerX;
@@ -70,22 +87,26 @@ export class InputController {
     this.dragDistance += Math.hypot(dx, dy);
 
     this.yawDelta -= dx * 0.0042;
-    this.pitchAngle = Math.max(
-      -1.15,
-      Math.min(1.15, this.pitchAngle - dy * 0.0032)
-    );
+    this.pitchDelta -= dy * 0.0032;
   };
 
-  private onPointerUp = () => {
+  private onPointerUp = (e: PointerEvent) => {
+    if (!this.isDragging) return;
     this.isDragging = false;
+    if (this.element && e.target === this.element) {
+      this.updatePointerNdc(e.clientX, e.clientY);
+      if (this.dragDistance < 6) {
+        this.interactQueued = true;
+      }
+    }
+  };
+
+  private onPointerLeave = () => {
+    this.pointerActive = false;
   };
 
   public wasClickNotDrag(): boolean {
     return this.dragDistance < 6;
-  }
-
-  public setPitch(pitch: number): void {
-    this.pitchAngle = Math.max(-1.15, Math.min(1.15, pitch));
   }
 
   public attach(element: HTMLElement): void {
@@ -93,6 +114,7 @@ export class InputController {
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
     element.addEventListener('pointerdown', this.onPointerDown);
+    element.addEventListener('pointerleave', this.onPointerLeave);
     window.addEventListener('pointermove', this.onPointerMove);
     window.addEventListener('pointerup', this.onPointerUp);
   }
@@ -102,6 +124,7 @@ export class InputController {
     window.removeEventListener('keyup', this.onKeyUp);
     if (this.element) {
       this.element.removeEventListener('pointerdown', this.onPointerDown);
+      this.element.removeEventListener('pointerleave', this.onPointerLeave);
     }
     window.removeEventListener('pointermove', this.onPointerMove);
     window.removeEventListener('pointerup', this.onPointerUp);
@@ -121,10 +144,14 @@ export class InputController {
       turnLeft: this.keys.has('ArrowLeft') || this.keys.has('KeyQ'),
       turnRight: this.keys.has('ArrowRight') || this.keys.has('KeyE'),
       yawDelta: this.yawDelta,
-      pitchDelta: this.pitchAngle,
+      pitchDelta: this.pitchDelta,
       interactPressed: this.interactQueued,
+      pointerNdcX: this.pointerNdcX,
+      pointerNdcY: this.pointerNdcY,
+      pointerActive: this.pointerActive,
     };
     this.yawDelta = 0;
+    this.pitchDelta = 0;
     this.interactQueued = false;
     return state;
   }

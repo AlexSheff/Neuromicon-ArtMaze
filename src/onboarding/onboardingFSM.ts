@@ -112,6 +112,14 @@ export class OnboardingFSM {
       this.branchHoldTimer = 0;
       this.holdingBranch = null;
       this.transitionTo('AWAKEN');
+    } else if (
+      st.onboarding.currentStep === 'COMMITTED' &&
+      this.currentStep !== 'COMMITTED'
+    ) {
+      this.currentStep = 'COMMITTED';
+      this.revealProgress = 1;
+      this.holdingBranch = null;
+      this.branchHoldTimer = 0;
     }
 
     this.elapsedInStep += dt;

@@ -8,6 +8,7 @@ import {
 import { onboardingFSM } from '../onboarding/onboardingFSM';
 import { OnboardingVisualState } from '../onboarding/types';
 import {
+  CorridorBranch,
   disposeThreeHierarchy,
   MirrorChoice,
   RoomContext,
@@ -71,6 +72,8 @@ export class HubEngine {
   // Pre-allocated scratch vectors to guarantee ZERO per-frame GC allocations (§6)
   private readonly _scratchOrigin = new THREE.Vector3();
   private readonly _scratchDir = new THREE.Vector3();
+  private readonly _scratchNdc = new THREE.Vector2();
+  private transitionInProgress = false;
 
   private interactiveEntries: Array<{
     mesh: THREE.Object3D;
@@ -114,11 +117,20 @@ export class HubEngine {
   private snapBurstWindow = 0;
 
   constructor(canvas: HTMLCanvasElement) {
-    this.renderer = new THREE.WebGLRenderer({
-      canvas,
-      antialias: true,
-      powerPreference: 'high-performance',
-    });
+    let glRenderer: THREE.WebGLRenderer;
+    try {
+      glRenderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: true,
+        powerPreference: 'high-performance',
+      });
+    } catch {
+      glRenderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: false,
+      });
+    }
+    this.renderer = glRenderer;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
@@ -592,17 +604,119 @@ export class HubEngine {
   }
 
   public teleportTo(x: number, z: number, yaw?: number): void {
-    if (this.paused) return;
+    if (this.paused || this.transitionInProgress) return;
     const st = hubPlayerState.getState();
     const speed = st.comfort.reducedMotion ? 25.0 : 9.0;
     this.comfort.triggerFadeTransition(() => {
-      this.pose.x = x;
-      this.pose.z = z;
+      this.clampPositionDirect(x, z, st);
       if (yaw !== undefined) {
         this.pose.yaw = yaw;
       }
       hubPlayerState.incrementTeleportCount();
     }, speed);
+  }
+
+  /**
+   * Single authoritative transition pipeline for all portals, RoomContext doors, and return portals.
+   * Eliminates duplicated transition code, prevents overlapping double-transitions, and enforces
+   * SHA-256 registry verification with Void Fallback (§7.2.3).
+   */
+  public transitionToDestination(
+    destinationId: string,
+    opts?: {
+      status?: 'ready' | 'planned';
+      fromBranch?: CorridorBranch;
+      fromSegment?: 1 | 2 | 3;
+    }
+  ): void {
+    if (this.transitionInProgress) return;
+    const targetId = (destinationId || '').trim();
+    if (!targetId) return;
+
+    if (targetId === 'CORRIDOR') {
+      this.transitionInProgress = true;
+      this.comfort.triggerFadeTransition(() => {
+        try {
+          hubPlayerState.returnToCorridor();
+        } finally {
+          this.transitionInProgress = false;
+        }
+      });
+      return;
+    }
+
+    if (targetId === 'THRESHOLD') {
+      this.transitionInProgress = true;
+      this.comfort.triggerFadeTransition(() => {
+        try {
+          hubPlayerState.returnToThreshold();
+        } finally {
+          this.transitionInProgress = false;
+        }
+      });
+      return;
+    }
+
+    if (opts?.status === 'planned' || !getRoomV1Manifest(targetId)) {
+      this.transitionInProgress = true;
+      this.comfort.triggerFadeTransition(() => {
+        try {
+          hubPlayerState.enterVoidFallback(targetId);
+        } finally {
+          this.transitionInProgress = false;
+        }
+      });
+      return;
+    }
+
+    this.transitionInProgress = true;
+    let settled = false;
+    const timeoutId = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      this.comfort.triggerFadeTransition(() => {
+        try {
+          hubPlayerState.enterVoidFallback(targetId);
+        } finally {
+          this.transitionInProgress = false;
+        }
+      });
+    }, 8000);
+
+    void roomStreamer
+      .verifyRoomEntryHash(targetId)
+      .then((valid) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeoutId);
+        this.comfort.triggerFadeTransition(() => {
+          try {
+            if (valid) {
+              hubPlayerState.enterRoom(
+                targetId,
+                opts?.fromBranch,
+                opts?.fromSegment
+              );
+            } else {
+              hubPlayerState.enterVoidFallback(targetId);
+            }
+          } finally {
+            this.transitionInProgress = false;
+          }
+        });
+      })
+      .catch(() => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeoutId);
+        this.comfort.triggerFadeTransition(() => {
+          try {
+            hubPlayerState.enterVoidFallback(targetId);
+          } finally {
+            this.transitionInProgress = false;
+          }
+        });
+      });
   }
 
   public runLeakCheck(): {
@@ -721,32 +835,20 @@ export class HubEngine {
         openDoor: (doorId) => {
           const door = manifest.doors.find((d) => d.id === doorId);
           if (door) {
-            this.comfort.triggerFadeTransition(() => {
-              hubPlayerState.enterRoom(door.destination);
-            });
+            this.transitionToDestination(door.destination);
           }
         },
         returnToCorridor: () => {
-          this.comfort.triggerFadeTransition(() => {
-            hubPlayerState.returnToCorridor();
-          });
+          this.transitionToDestination('CORRIDOR');
         },
       },
       exit: (destinationRoomId) => {
-        this.comfort.triggerFadeTransition(() => {
-          if (destinationRoomId === 'CORRIDOR') {
-            hubPlayerState.returnToCorridor();
-          } else {
-            hubPlayerState.enterRoom(destinationRoomId);
-          }
-        });
+        this.transitionToDestination(destinationRoomId);
       },
       mirror: {
         choose: (choice: MirrorChoice) => {
           if (choice === 'back') {
-            this.comfort.triggerFadeTransition(() => {
-              hubPlayerState.returnToCorridor();
-            });
+            this.transitionToDestination('CORRIDOR');
           } else {
             hubPlayerState.recordMirrorChoice(roomId, choice);
           }
@@ -919,7 +1021,7 @@ export class HubEngine {
       state.segmentIndex,
       state.currentRoomId || 'NONE',
       state.comfort.qualityTier,
-      state.visitedRooms.join(','),
+      state.visitedRooms.length,
       state.completedRooms.join(','),
       state.discoveries.join(','),
       state.teleportCount >= 5 ? 'SMOOTH_SWITCH' : 'NO_SWITCH',
@@ -939,7 +1041,11 @@ export class HubEngine {
     // even while paused (matching VR head tracking never freezing, TZ.md §6.2)
     if (!isXR) {
       this.pose.yaw += desktopInput.yawDelta;
-      this.pose.pitch = desktopInput.pitchDelta;
+      this.pose.pitch = THREE.MathUtils.clamp(
+        this.pose.pitch + desktopInput.pitchDelta,
+        -1.15,
+        1.15
+      );
     }
 
     // 1. ROTATION & LOCOMOTION: Frozen when paused (`!this.paused`, TZ.md §6.2)
@@ -1039,7 +1145,14 @@ export class HubEngine {
       );
     }
 
-    // 4. UPDATE NEBULA SKY SYSTEM (Crossfade <= 1.2s, slow drift <= 0.2 deg/s, strictly OFF when paused/Reduced Motion/Seated)
+    // 4. UPDATE DYNAMIC GOTHIC-PLASMA-COSMIC ATMOSPHERE & NEBULA SKY SYSTEM (Frozen when paused)
+    if (gameDt > 0) {
+      CorridorBuilder.updateDynamicAtmosphere(
+        this.worldRoot,
+        this.gameTimeSec,
+        state.comfort.reducedMotion
+      );
+    }
     nebulaSkySystem.update(gameDt, this.gameTimeSec, {
       reducedMotion: state.comfort.reducedMotion,
       seated: state.comfort.seated,
@@ -1061,7 +1174,7 @@ export class HubEngine {
     this.comfort.update(dt, state.vignetteEnabled || this.paused);
 
     // 6. RAYCAST & PRELOAD / CONTEXTUAL DISCOVERY
-    const hovered = this.performRaycast();
+    const hovered = this.performRaycast(desktopInput);
 
     if (!this.paused) {
       // Preload target room's nebula texture on door gaze (TZ.md §3.7)
@@ -1189,7 +1302,7 @@ export class HubEngine {
     }, speed);
   }
 
-  private performRaycast(): HubHoveredResult {
+  private performRaycast(desktopInput?: InputState): HubHoveredResult {
     // While paused, ONLY the world-locked 3D Pause & Audio Panel is raycastable;
     // world doors, objects, and floor teleport rings are disabled (TZ.md §6.2)
     const activeEntries = this.paused
@@ -1213,6 +1326,16 @@ export class HubEngine {
           break;
         }
       }
+    } else if (desktopInput?.pointerActive) {
+      this._scratchNdc.set(
+        desktopInput.pointerNdcX ?? 0,
+        desktopInput.pointerNdcY ?? 0
+      );
+      this.raycaster.setFromCamera(this._scratchNdc, this.camera);
+      this._scratchOrigin.copy(this.raycaster.ray.origin);
+      this._scratchDir.copy(this.raycaster.ray.direction);
+      rayUsed = true;
+      interactiveHits = this.raycaster.intersectObjects(targetMeshes, true);
     }
 
     if (interactiveHits.length === 0) {
@@ -1253,10 +1376,27 @@ export class HubEngine {
     this.reticleMesh.visible = false;
 
     if (!this.paused && rayUsed && this.walkableMeshes.length > 0) {
-      const floorHits = this.raycaster.intersectObjects(
+      if (!this.renderer.xr.isPresenting && desktopInput?.pointerActive) {
+        this._scratchNdc.set(
+          desktopInput.pointerNdcX ?? 0,
+          desktopInput.pointerNdcY ?? 0
+        );
+        this.raycaster.setFromCamera(this._scratchNdc, this.camera);
+      }
+      let floorHits = this.raycaster.intersectObjects(
         this.walkableMeshes,
         true
       );
+      if (
+        floorHits.length === 0 &&
+        !this.renderer.xr.isPresenting &&
+        desktopInput?.pointerActive
+      ) {
+        this.camera.getWorldPosition(this._scratchOrigin);
+        this.camera.getWorldDirection(this._scratchDir);
+        this.raycaster.set(this._scratchOrigin, this._scratchDir);
+        floorHits = this.raycaster.intersectObjects(this.walkableMeshes, true);
+      }
       if (floorHits.length > 0 && floorHits[0].distance <= 14.0) {
         const pt = floorHits[0].point;
         this.comfort.teleportRing.visible = true;

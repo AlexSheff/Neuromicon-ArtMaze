@@ -44,67 +44,60 @@ export default function App() {
 
   /**
    * §2.1 Entry Sequence: Single user gesture that unlocks WebAudio, advances Onboarding FSM,
-   * and (if VR button clicked) starts the immersive-vr WebXR session.
+   * and (if VR button clicked) starts the immersive-vr WebXR session synchronously within user activation.
    */
   const handleEnterWorld = async (startVR: boolean) => {
     spatialAudioSystem.start();
     onboardingFSM.startFromEntryGesture();
     setHasEnteredWorld(true);
     if (startVR) {
-      window.setTimeout(() => {
-        void webxrManager.toggleVRSession();
-      }, 120);
+      await webxrManager.toggleVRSession();
     }
   };
 
   const handleEnterRoom = (roomId: string) => {
-    playerStateStore.enterRoom(roomId);
     hubPlayerState.enterRoom(roomId);
     setActiveSection('labyrinth');
   };
 
   const handleEnterVoid = (voidType: VoidType) => {
-    playerStateStore.enterVoid(voidType);
     hubPlayerState.enterVoidFallback(`VOID_${voidType.toUpperCase()}`);
     setActiveSection('labyrinth');
   };
 
-  // §2.1 Minimal Pre-World Entry Screen (English-only: Title + Enter + conditional VR button)
-  if (!hasEnteredWorld) {
-    return (
-      <div className="min-h-screen w-full bg-[#070605] text-[#f3ede2] flex flex-col items-center justify-center px-6 select-none relative overflow-hidden">
-        {/* Subtle vertical light line evoking the Threshold atrium */}
-        <div className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-[1px] bg-gradient-to-b from-[#e5c158]/40 via-[#c8a464]/15 to-[#4ea8de]/40" />
+  return (
+    <div className="min-h-screen bg-[#0b0a09] text-[#e8e2d5] flex flex-col relative">
+      {/* §2.1 Minimal Pre-World Entry Screen (English-only: Title + Enter + conditional VR button) */}
+      {!hasEnteredWorld && (
+        <div className="fixed inset-0 z-50 bg-[#070605]/90 backdrop-blur-sm text-[#f3ede2] flex flex-col items-center justify-center px-6 select-none overflow-hidden">
+          {/* Subtle vertical light line evoking the Threshold atrium */}
+          <div className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-[1px] bg-gradient-to-b from-[#e5c158]/40 via-[#c8a464]/15 to-[#4ea8de]/40" />
 
-        <div className="relative z-10 flex flex-col items-center text-center max-w-md">
-          <h1 className="font-display text-2xl md:text-4xl font-semibold tracking-[0.28em] text-[#f3ede2] mb-10">
-            {t('entry.title', 'en')}
-          </h1>
+          <div className="relative z-10 flex flex-col items-center text-center max-w-md">
+            <h1 className="font-display text-2xl md:text-4xl font-semibold tracking-[0.28em] text-[#f3ede2] mb-10">
+              {t('entry.title', 'en')}
+            </h1>
 
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => void handleEnterWorld(false)}
-              className="px-10 py-3.5 rounded bg-[#c8a464] hover:bg-[#d6b475] text-[#0b0a09] font-display text-sm font-semibold tracking-[0.2em] uppercase transition-all shadow-[0_0_32px_rgba(200,164,100,0.28)] cursor-pointer"
-            >
-              {t('entry.enter', 'en')}
-            </button>
-
-            {vrSupported && (
+            <div className="flex items-center gap-4">
               <button
-                onClick={() => void handleEnterWorld(true)}
-                className="px-5 py-3.5 rounded bg-white/5 hover:bg-white/10 border border-[#c8a464]/50 text-[#e5c158] font-mono text-xs font-semibold tracking-[0.18em] uppercase transition-colors cursor-pointer"
+                onClick={() => void handleEnterWorld(false)}
+                className="px-10 py-3.5 rounded bg-[#c8a464] hover:bg-[#d6b475] text-[#0b0a09] font-display text-sm font-semibold tracking-[0.2em] uppercase transition-all shadow-[0_0_32px_rgba(200,164,100,0.28)] cursor-pointer"
               >
-                {t('entry.vr', 'en')}
+                {t('entry.enter', 'en')}
               </button>
-            )}
+
+              {vrSupported && (
+                <button
+                  onClick={() => void handleEnterWorld(true)}
+                  className="px-5 py-3.5 rounded bg-white/5 hover:bg-white/10 border border-[#c8a464]/50 text-[#e5c158] font-mono text-xs font-semibold tracking-[0.18em] uppercase transition-colors cursor-pointer"
+                >
+                  {t('entry.vr', 'en')}
+                </button>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-[#0b0a09] text-[#e8e2d5] flex flex-col">
+      )}
       {activeSection !== 'labyrinth' && (
         <header className="h-[54px] flex items-center justify-between px-6 border-b border-white/10 bg-[#0e0d0b] shrink-0">
           <button

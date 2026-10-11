@@ -11,7 +11,7 @@ import { OnboardingVisualState } from '../onboarding/types';
 import { spatialAudioSystem } from '../systems/audio/spatialAudioSystem';
 import { HubPlayerState, hubPlayerState } from '../state/playerState';
 import { PlayerState } from '../types/artmaze';
-import { getRoomV1Manifest, roomStreamer } from '../world/roomStreamer';
+import { getRoomV1Manifest } from '../world/roomStreamer';
 
 interface LabyrinthViewportProps {
   lang?: 'en' | 'ru';
@@ -75,6 +75,8 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
   const [xrActive, setXrActive] = useState<boolean>(() =>
     webxrManager.isSessionActive()
   );
+  const [vrSupported, setVrSupported] = useState<boolean>(false);
+  const [webglError, setWebglError] = useState<string | null>(null);
   const [whisperText, setWhisperText] = useState<string | null>(null);
   const [captionText, setCaptionText] = useState<string | null>(null);
   const [radioDraft, setRadioDraft] = useState<string>('');
@@ -87,9 +89,11 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
   } | null>(null);
 
   const hoveredRef = useRef<SpatialInteractiveTarget | null>(null);
-  const floorHitRef = useRef<{ x: number; z: number } | null>(null);
 
   useEffect(() => {
+    void webxrManager.checkSupport().then((supported) => {
+      setVrSupported(supported);
+    });
     return hubPlayerState.subscribe((next) => {
       setHubState(next);
     });
@@ -245,9 +249,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
         eng?.mountWorldLockedPausePanel();
       } else if (act === 'return-corridor') {
         eng?.setPaused(false);
-        eng?.comfort.triggerFadeTransition(() => {
-          hubPlayerState.returnToCorridor();
-        });
+        eng?.transitionToDestination('CORRIDOR');
       } else if (act === 'open-codex') {
         eng?.setPaused(false);
         setActiveDrawer('codex');
@@ -305,63 +307,30 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
     // 6. Return to Threshold Atrium
     if (target.kind === 'corridor-return') {
       spatialAudioSystem.triggerChime(392);
-      eng?.comfort.triggerFadeTransition(() => {
-        hubPlayerState.returnToThreshold();
-      });
+      eng?.transitionToDestination('THRESHOLD');
       return;
     }
 
-    // 7. Corridor Door -> Room or Designed Void Fallback (§7.2.3)
+    // 7. Corridor Portal -> Room or Designed Void Fallback (§7.2.3)
     if (target.kind === 'corridor-door' && target.roomId) {
-      const rid = target.roomId;
-      if (target.status === 'planned') {
-        spatialAudioSystem.triggerChime(220);
-        eng?.comfort.triggerFadeTransition(() => {
-          hubPlayerState.enterVoidFallback(rid);
-        });
-        return;
-      }
-
-      spatialAudioSystem.triggerChime(523.25);
-      let settled = false;
-      const timeoutId = window.setTimeout(() => {
-        if (!settled) {
-          settled = true;
-          eng?.comfort.triggerFadeTransition(() => {
-            hubPlayerState.enterVoidFallback(rid);
-          });
-        }
-      }, 8000);
-
-      void roomStreamer.verifyRoomEntryHash(rid).then((valid) => {
-        if (settled) return;
-        settled = true;
-        window.clearTimeout(timeoutId);
-        eng?.comfort.triggerFadeTransition(() => {
-          if (valid) {
-            hubPlayerState.enterRoom(rid, st.branch, st.segmentIndex);
-          } else {
-            hubPlayerState.enterVoidFallback(rid);
-          }
-        });
+      spatialAudioSystem.triggerChime(
+        target.status === 'planned' ? 220 : 523.25
+      );
+      eng?.transitionToDestination(target.roomId, {
+        status: target.status,
+        fromBranch: st.branch,
+        fromSegment: st.segmentIndex,
       });
       return;
     }
 
-    // 8. Room Door -> Next Room or Designed Void Fallback (§7.2.3)
+    // 8. Room Portal -> Next Room, Corridor, or Designed Void Fallback (§7.2.3)
     if (target.kind === 'room-door' && target.roomId) {
-      const rid = target.roomId;
-      if (target.status === 'planned') {
-        spatialAudioSystem.triggerChime(220);
-        eng?.comfort.triggerFadeTransition(() => {
-          hubPlayerState.enterVoidFallback(rid);
-        });
-        return;
-      }
-
-      spatialAudioSystem.triggerChime(587.33);
-      eng?.comfort.triggerFadeTransition(() => {
-        hubPlayerState.enterRoom(rid);
+      spatialAudioSystem.triggerChime(
+        target.status === 'planned' ? 220 : 587.33
+      );
+      eng?.transitionToDestination(target.roomId, {
+        status: target.status,
       });
       return;
     }
@@ -399,9 +368,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
 
       if (choice === 'back') {
         spatialAudioSystem.triggerChime(392);
-        eng?.comfort.triggerFadeTransition(() => {
-          hubPlayerState.returnToCorridor();
-        });
+        eng?.transitionToDestination('CORRIDOR');
         return;
       }
 
@@ -445,7 +412,15 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
     const container = containerRef.current;
     if (!canvas || !container) return;
 
-    const engine = new HubEngine(canvas);
+    let engine: HubEngine;
+    try {
+      engine = new HubEngine(canvas);
+    } catch (err) {
+      setWebglError(
+        err instanceof Error ? err.message : 'WebGL2 context unavailable'
+      );
+      return;
+    }
     engineRef.current = engine;
     webxrManager.attachRenderer(engine.renderer);
     const offPause = engine.onPauseChange((p) => {
@@ -484,11 +459,9 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
         engine.stepAndRender(dt, desktopInput, xrInput, curState, now / 1000);
 
       hoveredRef.current = hovered.target;
-      floorHitRef.current = hovered.floorHitPoint
-        ? { x: hovered.floorHitPoint.x, z: hovered.floorHitPoint.z }
-        : null;
 
       if (desktopInput.interactPressed || xrInput.triggerJustPressed) {
+        spatialAudioSystem.start();
         if (hovered.target) {
           executeSpatialAction(hovered.target);
         } else if (!engine.isPaused() && hovered.floorHitPoint) {
@@ -498,13 +471,9 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
 
       if (!engine.isPaused() && xrInput.squeezeJustPressed) {
         if (curState.location === 'room' || curState.location === 'void') {
-          engine.comfort.triggerFadeTransition(() => {
-            hubPlayerState.returnToCorridor();
-          });
+          engine.transitionToDestination('CORRIDOR');
         } else if (curState.location === 'corridor') {
-          engine.comfort.triggerFadeTransition(() => {
-            hubPlayerState.returnToThreshold();
-          });
+          engine.transitionToDestination('THRESHOLD');
         }
       }
 
@@ -530,21 +499,9 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
   }, []);
 
   const handleCanvasClick = () => {
-    if (!inputRef.current.wasClickNotDrag()) return;
+    // Unlock WebAudio context on user gesture; spatial interaction & teleportation are handled
+    // once per frame via InputController.interactPressed so actions never fire twice.
     spatialAudioSystem.start();
-
-    if (hoveredRef.current) {
-      executeSpatialAction(hoveredRef.current);
-    } else if (
-      floorHitRef.current &&
-      engineRef.current &&
-      !engineRef.current.isPaused()
-    ) {
-      engineRef.current.teleportTo(
-        floorHitRef.current.x,
-        floorHitRef.current.z
-      );
-    }
   };
 
   const activeChannel =
@@ -669,8 +626,36 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
         </div>
       )}
 
+      {webglError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-[#070605] text-[#f3ede2] p-6 z-30">
+          <div className="max-w-md border border-[#c8a464]/40 bg-[#12100e] p-6 rounded text-center space-y-3">
+            <div className="font-display text-base text-[#e5c158] tracking-widest uppercase">
+              {t('entry.title', 'en')}
+            </div>
+            <p className="font-mono text-xs text-[#a89f91]">{webglError}</p>
+          </div>
+        </div>
+      )}
+
       {/* Contextual Discovery & VR Wrist / Palm Non-Keyboard Controls (§2.5 & TZ.md §5.2, §6.1) */}
       <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+        {vrSupported && (
+          <button
+            onClick={() => {
+              spatialAudioSystem.start();
+              void webxrManager.toggleVRSession();
+            }}
+            title="Enter / Exit WebXR (Meta Quest 2)"
+            className={`px-3 py-1.5 rounded text-xs font-mono border transition-colors ${
+              xrActive
+                ? 'bg-[#e5c158] text-[#0b0a09] border-[#e5c158] font-semibold'
+                : 'bg-[#12100e]/85 text-[#e5c158] border-[#c8a464]/50 hover:border-[#e5c158]'
+            }`}
+          >
+            {t('entry.vr', 'en')}
+          </button>
+        )}
+
         {isControlRevealed('zoom') && (
           <button
             onClick={() => {
@@ -890,9 +875,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
               <button
                 onClick={() => {
                   engineRef.current?.setPaused(false);
-                  engineRef.current?.comfort.triggerFadeTransition(() => {
-                    hubPlayerState.returnToCorridor();
-                  });
+                  engineRef.current?.transitionToDestination('CORRIDOR');
                 }}
                 className="flex-1 py-1.5 px-2.5 rounded bg-white/10 hover:bg-white/15 text-[#f3ede2] font-mono text-[11px]"
               >
@@ -983,10 +966,14 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
                 <button
                   key={seg}
                   onClick={() => {
-                    hubPlayerState.setCorridorSegment(
-                      seg === 2 ? 'descend' : 'ascend',
-                      seg
-                    );
+                    const targetBranch = seg === 2 ? 'descend' : 'ascend';
+                    if (engineRef.current) {
+                      engineRef.current.comfort.triggerFadeTransition(() => {
+                        hubPlayerState.setCorridorSegment(targetBranch, seg);
+                      });
+                    } else {
+                      hubPlayerState.setCorridorSegment(targetBranch, seg);
+                    }
                     setActiveDrawer('none');
                   }}
                   className={`py-1.5 px-2 rounded border text-[10px] font-mono transition-colors ${
