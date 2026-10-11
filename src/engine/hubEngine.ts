@@ -48,6 +48,59 @@ export interface HubHoveredResult {
   distance: number;
 }
 
+function estimateSceneTextureMemoryMB(scene: THREE.Scene): number {
+  const textures = new Set<THREE.Texture>();
+  scene.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    if (!mesh.material) return;
+    const materials = Array.isArray(mesh.material)
+      ? mesh.material
+      : [mesh.material];
+    for (const material of materials) {
+      for (const value of Object.values(material)) {
+        if (value instanceof THREE.Texture) textures.add(value);
+      }
+    }
+  });
+
+  let bytes = 0;
+  const countImageBytes = (image: unknown, bytesPerPixel: number): number => {
+    if (Array.isArray(image)) {
+      return image.reduce(
+        (sum, face) => sum + countImageBytes(face, bytesPerPixel),
+        0
+      );
+    }
+    if (!image || typeof image !== 'object') return 0;
+    const size = image as {
+      width?: number;
+      height?: number;
+      naturalWidth?: number;
+      naturalHeight?: number;
+      videoWidth?: number;
+      videoHeight?: number;
+    };
+    const width = size.naturalWidth || size.videoWidth || size.width || 0;
+    const height = size.naturalHeight || size.videoHeight || size.height || 0;
+    return width * height * bytesPerPixel;
+  };
+
+  textures.forEach((texture) => {
+    const bytesPerPixel =
+      texture.format === THREE.RedFormat || texture.format === THREE.AlphaFormat
+        ? 1
+        : texture.format === THREE.RGFormat
+        ? 2
+        : texture.format === THREE.RGBFormat
+        ? 3
+        : 4;
+    const mipFactor = texture.generateMipmaps ? 4 / 3 : 1;
+    bytes += countImageBytes(texture.image, bytesPerPixel) * mipFactor;
+  });
+
+  return Number((bytes / (1024 * 1024)).toFixed(1));
+}
+
 /**
  * Universal WebXR + Desktop 3D Engine for Neuromicon Artmaze (EXPERIENCE_PROTOCOL.md & TZ.md).
  * - Zero per-frame allocations (pre-allocated scratch vectors).
@@ -112,6 +165,8 @@ export class HubEngine {
   private rollingFrameMs = 11.2;
   private resolutionScale = 1.0;
   private scalerCheckTimer = 0;
+  private textureEstimateTimer = 0;
+  private estimatedTextureMemoryMB = 0;
 
   // Contextual Discovery Timers (§2.5)
   private distantGazeTimer = 0;
@@ -1237,7 +1292,11 @@ export class HubEngine {
     this.renderer.render(this.scene, this.camera);
 
     const info = this.renderer.info;
-    const estTexMB = Number((info.memory.textures * 0.85).toFixed(1));
+    this.textureEstimateTimer += dt;
+    if (this.textureEstimateTimer >= 1) {
+      this.estimatedTextureMemoryMB = estimateSceneTextureMemoryMB(this.scene);
+      this.textureEstimateTimer %= 1;
+    }
     const skyState = nebulaSkySystem.getCurrentSkyState();
 
     return {
@@ -1249,7 +1308,7 @@ export class HubEngine {
         triangles: info.render.triangles,
         geometries: info.memory.geometries,
         textures: info.memory.textures,
-        textureMemoryMB: estTexMB,
+        textureMemoryMB: this.estimatedTextureMemoryMB,
         resolutionScale: Number(this.resolutionScale.toFixed(2)),
         nebulaId: skyState.nebulaId,
         nebulaName: skyState.nebulaName,

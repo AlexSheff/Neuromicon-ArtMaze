@@ -1259,6 +1259,29 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
               ))}
             </div>
           </div>
+
+          <div
+            aria-label="Live render performance metrics"
+            className="rounded border border-white/10 bg-black/30 p-3"
+          >
+            <div className="mb-2 font-mono text-[11px] font-semibold uppercase tracking-wide text-[#e5c158]">
+              Live Performance
+            </div>
+            <div className="grid grid-cols-3 gap-x-3 gap-y-2 font-mono text-[11px]">
+              <div><span className="block text-[#a89f91]">FPS</span><span>{telemetry.fps}</span></div>
+              <div><span className="block text-[#a89f91]">Frame</span><span>{telemetry.frameTimeMs} ms</span></div>
+              <div><span className="block text-[#a89f91]">Draw calls</span><span>{telemetry.drawCalls}</span></div>
+              <div><span className="block text-[#a89f91]">Triangles</span><span>{telemetry.triangles.toLocaleString()}</span></div>
+              <div><span className="block text-[#a89f91]">Geometries</span><span>{telemetry.geometries}</span></div>
+              <div><span className="block text-[#a89f91]">Textures</span><span>{telemetry.textures}</span></div>
+              <div><span className="block text-[#a89f91]">Texture GPU est.</span><span>{telemetry.textureMemoryMB} MB</span></div>
+              <div><span className="block text-[#a89f91]">Sky calls</span><span>{telemetry.skyDrawCalls}</span></div>
+              <div><span className="block text-[#a89f91]">Resolution</span><span>{telemetry.resolutionScale}×</span></div>
+            </div>
+            <p className="mt-2 text-[10px] leading-relaxed text-[#a89f91]">
+              Texture memory is an estimate from loaded image dimensions and pixel format.
+            </p>
+          </div>
         </div>
       )}
 

@@ -209,9 +209,15 @@ class WebXRManager {
       const gp = source.gamepad;
       if (!gp) continue;
 
-      // Oculus Touch thumbsticks are on axes[2]/[3], fallback to axes[0]/[1].
-      const axX = gp.axes.length >= 4 ? gp.axes[2] : gp.axes[0] ?? 0;
-      const axY = gp.axes.length >= 4 ? gp.axes[3] : gp.axes[1] ?? 0;
+      // The xr-standard mapping exposes the thumbstick on axes[2]/[3]; generic
+      // mappings may expose only axes[0]/[1]. Keep a profile fallback for older Quest browsers.
+      const hasStandardMapping = gp.mapping === 'xr-standard';
+      const usesExtendedOculusAxes =
+        gp.axes.length >= 4 &&
+        source.profiles?.some((profile) => profile.includes('oculus-touch'));
+      const stickOffset = hasStandardMapping || usesExtendedOculusAxes ? 2 : 0;
+      const axX = gp.axes[stickOffset] ?? 0;
+      const axY = gp.axes[stickOffset + 1] ?? 0;
 
       if (source.handedness === 'left' || source.handedness === 'none') {
         const [moveStickX, moveStickY] = applyRadialDeadzone(axX, axY);

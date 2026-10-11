@@ -233,11 +233,20 @@ function createPaintingArtworkTexture(
   mutated: boolean
 ): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
-  canvas.width = 768;
-  canvas.height = 768;
+  const rawAspect = painting.aspectRatio ?? 1;
+  const sourceAspect =
+    Number.isFinite(rawAspect) && rawAspect >= 0.25 && rawAspect <= 4
+      ? rawAspect
+      : 1;
+  const shortEdge = 768;
+  canvas.width = Math.round(sourceAspect >= 1 ? shortEdge * sourceAspect : shortEdge);
+  canvas.height = Math.round(sourceAspect >= 1 ? shortEdge : shortEdge / sourceAspect);
   const ctx = canvas.getContext('2d')!;
+  const cx = canvas.width * 0.5;
+  const cy = canvas.height * 0.5;
+  const unit = Math.min(canvas.width, canvas.height) / shortEdge;
 
-  const grad = ctx.createRadialGradient(384, canvas.height * 0.45, 30, 384, canvas.height * 0.5, canvas.height * 0.8);
+  const grad = ctx.createRadialGradient(cx, cy - 30 * unit, 30 * unit, cx, cy, Math.max(canvas.width, canvas.height) * 0.8);
   if (mutated) {
     grad.addColorStop(0, '#1e3246');
     grad.addColorStop(0.6, '#0f1822');
@@ -249,12 +258,13 @@ function createPaintingArtworkTexture(
   }
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  // Keep the artwork centered inside the required square display format.
   ctx.save();
-  ctx.translate(384, 384);
-  ctx.scale(1, 1);
-  ctx.translate(-384, -256);
-
+  ctx.translate(cx, cy);
+  ctx.scale(
+    unit * (sourceAspect >= 1 ? sourceAspect : 1),
+    unit * (sourceAspect < 1 ? 1 / sourceAspect : 1)
+  );
+  ctx.translate(-384, -384);
   ctx.strokeStyle = mutated ? '#7da2c4' : '#c8a464';
   ctx.lineWidth = 2.5;
 
@@ -262,7 +272,7 @@ function createPaintingArtworkTexture(
     for (let i = 1; i <= 6; i++) {
       const s = i * 48;
       ctx.save();
-      ctx.translate(384, 240);
+      ctx.translate(384, 384);
       ctx.rotate(i * 0.22);
       ctx.strokeRect(-s, -s * 0.7, s * 2, s * 1.4);
       ctx.restore();
@@ -271,50 +281,53 @@ function createPaintingArtworkTexture(
     for (let i = 1; i <= 6; i++) {
       const w = 310 - i * 42;
       const h = 190 - i * 24;
-      ctx.strokeRect(384 - w, 250 - h, w * 2, h * 2);
+      ctx.strokeRect(384 - w, 300 - h, w * 2, h * 2);
       ctx.beginPath();
-      ctx.arc(384, 250 - h * 0.3, w, Math.PI, 0);
+      ctx.arc(384, 300 - h * 0.3, w, Math.PI, 0);
       ctx.stroke();
     }
   } else if (motifIndex % 3 === 1) {
     ctx.beginPath();
-    ctx.arc(384, 210, 110, 0, Math.PI * 2);
-    ctx.arc(384, 210, 68, 0, Math.PI * 2);
-    ctx.moveTo(80, 310);
-    ctx.lineTo(688, 310);
+    ctx.arc(384, 290, 110, 0, Math.PI * 2);
+    ctx.arc(384, 290, 68, 0, Math.PI * 2);
+    ctx.moveTo(28, 385);
+    ctx.lineTo(740, 385);
     ctx.stroke();
   } else {
     for (let r = 45; r <= 180; r += 45) {
       ctx.beginPath();
-      ctx.moveTo(384, 235 - r);
-      ctx.lineTo(384 + r * 1.3, 235);
-      ctx.lineTo(384, 235 + r);
-      ctx.lineTo(384 - r * 1.3, 235);
+      ctx.moveTo(384, 384 - r);
+      ctx.lineTo(384 + r * 1.3, 384);
+      ctx.lineTo(384, 384 + r);
+      ctx.lineTo(384 - r * 1.3, 384);
       ctx.closePath();
       ctx.stroke();
     }
   }
 
+  ctx.restore();
+
   ctx.fillStyle = 'rgba(243, 237, 226, 0.9)';
-  ctx.font = '600 30px "Cinzel", Georgia, serif';
+  ctx.font = `600 ${Math.round(30 * unit)}px "Cinzel", Georgia, serif`;
   ctx.textAlign = 'center';
-  ctx.fillText(painting.metadata.title, 384, 583, 700);
+  ctx.fillText(painting.metadata.title, cx, cy + canvas.height * 0.36, canvas.width * 0.9);
 
   ctx.fillStyle = 'rgba(200, 164, 100, 0.78)';
-  ctx.font = '500 21px system-ui, sans-serif';
+  ctx.font = `500 ${Math.round(21 * unit)}px system-ui, sans-serif`;
   ctx.fillText(
     `${painting.metadata.author} · ${painting.metadata.license}`,
-    384,
-    610,
-    700
+    cx,
+    cy + canvas.height * 0.41,
+    canvas.width * 0.9
   );
 
-  ctx.restore();
-  return new THREE.CanvasTexture(canvas);
+  return createSquareSourceTexture(canvas);
 }
 
 /** Square letterboxed texture that keeps the complete source image visible. */
-function createSquareSourceTexture(image: HTMLImageElement): THREE.CanvasTexture {
+function createSquareSourceTexture(
+  image: HTMLImageElement | HTMLCanvasElement
+): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 768;
   canvas.height = 768;
@@ -322,8 +335,10 @@ function createSquareSourceTexture(image: HTMLImageElement): THREE.CanvasTexture
   ctx.fillStyle = '#080b12';
   ctx.fillRect(0, 0, 768, 768);
 
-  const sourceWidth = image.naturalWidth || image.width;
-  const sourceHeight = image.naturalHeight || image.height;
+  const sourceWidth =
+    'naturalWidth' in image ? image.naturalWidth || image.width : image.width;
+  const sourceHeight =
+    'naturalHeight' in image ? image.naturalHeight || image.height : image.height;
   if (sourceWidth > 0 && sourceHeight > 0) {
     const scale = Math.min(720 / sourceWidth, 720 / sourceHeight);
     const width = sourceWidth * scale;
@@ -1164,7 +1179,14 @@ export class ThreeLabyrinthEngine {
       artCanvas.position.set(0, 0, 0.11);
       pGroup.add(artCanvas);
 
-      if (painting.image && typeof document !== 'undefined') {
+      const isProceduralArchivalPlate = painting.metadata.source.startsWith(
+        'Procedural Archival Plate'
+      );
+      if (
+        painting.image &&
+        !isProceduralArchivalPlate &&
+        typeof document !== 'undefined'
+      ) {
         try {
           const sourceUrl = new URL(painting.image, document.baseURI).href;
           const loader = new THREE.TextureLoader();

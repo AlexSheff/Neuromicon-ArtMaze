@@ -20,7 +20,15 @@ export class SpatialAudioSystem {
   private mediaElementSource: MediaElementAudioSourceNode | null = null;
   private analyser: AnalyserNode | null = null;
   private spectrum = new Uint8Array(0);
-  private readonly reactiveLevels = { low: 0, mid: 0, high: 0, highPeak: 0, beat: 0 };
+  private waveform = new Uint8Array(0);
+  private readonly reactiveLevels = {
+    low: 0,
+    mid: 0,
+    high: 0,
+    highPeak: 0,
+    amplitude: 0,
+    beat: 0,
+  };
   private previousLow = 0;
   private beatCooldown = 0;
   private currentRoomTrackUrl = '';
@@ -84,6 +92,7 @@ export class SpatialAudioSystem {
           this.analyser.fftSize = 512;
           this.analyser.smoothingTimeConstant = 0.72;
           this.spectrum = new Uint8Array(this.analyser.frequencyBinCount);
+          this.waveform = new Uint8Array(this.analyser.fftSize);
           this.mediaElementSource.connect(this.analyser);
           this.analyser.connect(musicBus);
         } catch {
@@ -100,16 +109,17 @@ export class SpatialAudioSystem {
     return audioMixer.bus(busName);
   }
 
-  /** Returns smoothed low, mid, and high music-band energy for lightweight room effects. */
+  /** Returns band energy, spectral peaks, waveform RMS amplitude, and beat onsets. */
   public getReactiveLevels(): Readonly<typeof this.reactiveLevels> {
     const levels = this.reactiveLevels;
     if (!this.analyser || !this.isStreamingMp3() || this.spectrum.length === 0) {
-      levels.low = levels.mid = levels.high = levels.highPeak = levels.beat = 0;
+      levels.low = levels.mid = levels.high = levels.highPeak = levels.amplitude = levels.beat = 0;
       this.previousLow = 0;
       return levels;
     }
 
     this.analyser.getByteFrequencyData(this.spectrum);
+    this.analyser.getByteTimeDomainData(this.waveform);
     const lowEnd = Math.max(1, Math.floor(this.spectrum.length * 0.08));
     const midEnd = Math.max(lowEnd + 1, Math.floor(this.spectrum.length * 0.42));
     let low = 0;
@@ -139,6 +149,16 @@ export class SpatialAudioSystem {
     levels.mid = mid;
     levels.high = high;
     levels.highPeak = highPeak / 255;
+    let waveformEnergy = 0;
+    for (let i = 0; i < this.waveform.length; i++) {
+      const sample = (this.waveform[i] - 128) / 128;
+      waveformEnergy += sample * sample;
+    }
+    // Scale RMS for a useful visual response while keeping silence at exactly zero.
+    levels.amplitude = Math.min(
+      1,
+      Math.sqrt(waveformEnergy / Math.max(1, this.waveform.length)) * 2.5
+    );
     return levels;
   }
 

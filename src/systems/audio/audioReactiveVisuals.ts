@@ -5,6 +5,7 @@ export interface AudioReactiveLevels {
   mid: number;
   high: number;
   highPeak: number;
+  amplitude: number;
   beat: number;
 }
 
@@ -64,6 +65,8 @@ export class AudioReactiveVisuals {
       color: '#b9efff',
       roughness: 0.08,
       metalness: 0.12,
+      emissive: '#163047',
+      emissiveIntensity: 0.12,
       transmission: 0.68,
       thickness: 0.16,
       iridescence: 1,
@@ -93,11 +96,18 @@ export class AudioReactiveVisuals {
 
     const dt = Math.max(0, Math.min(0.05, timeSec - this.lastTimeSec));
     this.lastTimeSec = timeSec;
-    const energy = Math.min(1, levels.beat * 0.58 + levels.low * 0.9);
+    const energy = Math.min(
+      1,
+      levels.beat * 0.42 + levels.low * 0.62 + levels.amplitude * 0.78
+    );
     for (const layer of this.particleLayers) {
       const amount = levels[layer.band];
-      layer.points.material.opacity = 0.12 + amount * 0.62 + levels.beat * 0.24;
-      layer.points.material.size = 0.035 + amount * 0.09;
+      layer.points.material.opacity = Math.min(
+        0.94,
+        0.1 + amount * 0.48 + levels.amplitude * 0.3 + levels.beat * 0.24
+      );
+      layer.points.material.size =
+        0.035 + amount * 0.075 + levels.amplitude * 0.045;
       layer.points.rotation.y +=
         dt *
         (layer.band === 'high' ? -1 : 1) *
@@ -108,7 +118,7 @@ export class AudioReactiveVisuals {
           i,
           layer.baseY[i] +
             Math.sin(timeSec * (0.7 + amount * 2.2) + i * 0.83) *
-              (0.025 + amount * 0.12 + levels.beat * 0.14)
+              (0.025 + amount * 0.1 + levels.amplitude * 0.09 + levels.beat * 0.12)
         );
       }
       position.needsUpdate = true;
@@ -116,19 +126,25 @@ export class AudioReactiveVisuals {
         (layer.band === 'low' ? 0.04 : layer.band === 'mid' ? 0.48 : 0.72) +
           amount * 0.12 + levels.beat * 0.08,
         0.82,
-        0.52 + amount * 0.22 + levels.highPeak * 0.12
+        0.49 + amount * 0.18 + levels.highPeak * 0.1 + levels.amplitude * 0.12
       );
     }
 
     const material = this.bubbles.material as THREE.MeshPhysicalMaterial;
-    material.opacity = 0.42 + Math.min(0.3, levels.highPeak * 0.24 + energy * 0.16);
-    material.color.setHSL(0.53 + levels.highPeak * 0.18, 0.7, 0.78);
+    material.opacity = 0.36 + Math.min(
+      0.42,
+      levels.highPeak * 0.24 + energy * 0.16 + levels.amplitude * 0.12
+    );
+    material.emissiveIntensity = 0.12 + levels.amplitude * 0.42 + levels.beat * 0.18;
+    material.color.setHSL(0.53 + levels.highPeak * 0.18, 0.72, 0.64 + energy * 0.15);
     for (let i = 0; i < this.bubbles.count; i++) {
       const angle = (i / this.bubbles.count) * Math.PI * 2 + timeSec * (0.055 + levels.mid * 0.09);
-      const radius = 1.7 + Math.sin(timeSec * 0.8 + i * 1.7) * 0.18;
+      const radius =
+        1.7 + Math.sin(timeSec * (0.8 + levels.mid * 0.18) + i * 1.7) *
+          (0.12 + levels.amplitude * 0.1);
       this.bubblePosition.set(
         Math.cos(angle) * radius,
-        1.05 + (i % 4) * 0.38 + Math.sin(timeSec * 1.1 + i) * 0.11 + energy * 0.08,
+        1.05 + (i % 4) * 0.38 + Math.sin(timeSec * 1.1 + i) * 0.09 + energy * 0.12,
         Math.sin(angle) * radius - 0.35
       );
       const scale = (0.55 + (i % 3) * 0.2) * (1 + energy * 0.16);
