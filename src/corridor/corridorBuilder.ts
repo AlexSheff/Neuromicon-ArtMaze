@@ -1371,7 +1371,7 @@ export function buildWiredSciFiGothicPortal(opts: {
       uPlasma: { value: new THREE.Color(opts.plasmaHex ?? '#77c9ff') },
     },
     vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
-    fragmentShader: `uniform float uTime; uniform float uBeat; uniform float uLow; uniform float uMid; uniform float uHigh; uniform float uAmplitude; uniform vec3 uColor; uniform vec3 uPlasma; varying vec2 vUv; void main(){ vec2 p=(vUv-0.5)*2.0; float r=length(p); float swirl=0.5+0.5*sin(8.0*r-uTime*(0.22+uLow*0.18)+atan(p.y,p.x)*1.4); float rim=(1.0-smoothstep(0.72,1.0,r)); vec3 color=mix(uColor,uPlasma,clamp(swirl*0.34+uHigh*0.2,0.0,1.0)); color=mix(color,vec3(1.0,0.78,0.42),uLow*0.12); float alpha=rim*(0.06+0.1*(1.0-r)+uBeat*0.07+uMid*0.035+uAmplitude*0.045); gl_FragColor=vec4(color,alpha); }`,
+    fragmentShader: `uniform float uTime; uniform float uBeat; uniform float uLow; uniform float uMid; uniform float uHigh; uniform float uAmplitude; uniform vec3 uColor; uniform vec3 uPlasma; varying vec2 vUv; void main(){ vec2 p=(vUv-0.5)*2.0; float r=length(p); float swirl=0.5+0.5*sin(8.0*r-uTime*(0.22+uLow*0.18)+atan(p.y,p.x)*1.4); float rim=(1.0-smoothstep(0.72,1.0,r)); float core=1.0-smoothstep(0.0,1.0,r); vec3 color=mix(uColor,uPlasma,clamp(swirl*0.42+uHigh*0.2,0.0,1.0)); color=mix(color,vec3(1.0,0.82,0.58),uLow*0.16); color=mix(color,vec3(0.76,0.9,1.0),core*0.18+uBeat*0.06); float alpha=rim*(0.17+0.13*(1.0-r)+uBeat*0.12+uMid*0.05+uAmplitude*0.07); gl_FragColor=vec4(color,alpha); }`,
   });
   const apertureGeometry = new THREE.ShapeGeometry(apertureShape, 48);
   const aperturePositions = apertureGeometry.getAttribute('position');
