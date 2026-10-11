@@ -1143,7 +1143,7 @@ export class RoomStreamer {
       const mesh = new THREE.Mesh(
         new THREE.TorusGeometry(ring.radius, ring.tube, 8, 64), exhibitMetal
       );
-      mesh.rotation.set(...ring.rotation);
+      mesh.rotation.set(ring.rotation[0], ring.rotation[1], ring.rotation[2]);
       ringsPiece.add(mesh);
     });
     root.add(ringsPiece);
