@@ -287,9 +287,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
     if (target.kind === 'threshold-branch' && target.branch) {
       const chosen = target.branch;
       spatialAudioSystem.triggerChime(chosen === 'ascend' ? 523.25 : 293.66);
-      eng?.comfort.triggerFadeTransition(() => {
-        hubPlayerState.chooseBranchFromThreshold(chosen);
-      });
+      eng?.transitionToThresholdBranch(chosen);
       return;
     }
 
@@ -298,9 +296,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
       const b = target.branch;
       const s = target.segment;
       spatialAudioSystem.triggerChime(440);
-      eng?.comfort.triggerFadeTransition(() => {
-        hubPlayerState.setCorridorSegment(b, s);
-      });
+      eng?.transitionToCorridorSegment(b, s);
       return;
     }
 
@@ -983,9 +979,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
                   onClick={() => {
                     const targetBranch = seg === 2 ? 'descend' : 'ascend';
                     if (engineRef.current) {
-                      engineRef.current.comfort.triggerFadeTransition(() => {
-                        hubPlayerState.setCorridorSegment(targetBranch, seg);
-                      });
+                      engineRef.current.transitionToCorridorSegment(targetBranch, seg);
                     } else {
                       hubPlayerState.setCorridorSegment(targetBranch, seg);
                     }

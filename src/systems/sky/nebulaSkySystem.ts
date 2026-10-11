@@ -220,8 +220,10 @@ export class NebulaSkySystem {
       return tex as unknown as THREE.CanvasTexture;
     }
 
-    const width = 1536;
-    const height = 1152;
+    // A 2K wide cap keeps fine nebula filaments readable in headset view without
+    // promoting every room's sky texture to a desktop-only 4K allocation.
+    const width = 2048;
+    const height = 1536;
     const centerX = width * 0.5;
     const centerY = height * 0.5;
     const canvas = document.createElement('canvas');
@@ -489,7 +491,8 @@ export class NebulaSkySystem {
       );
     }
 
-    // Curved spherical cap spanning 72 deg azimuth x 54 deg elevation at radius 64m
+    // Preserve the curated 74° × 54° sky window. The feathered alpha mask
+    // removes the rectangular texture boundary without stretching the image.
     const phiLength = THREE.MathUtils.degToRad(74);
     const thetaLength = THREE.MathUtils.degToRad(54);
     const capGeo = new THREE.SphereGeometry(
@@ -506,7 +509,7 @@ export class NebulaSkySystem {
       map: nebTex,
       side: THREE.BackSide,
       transparent: true,
-      opacity: 0.08, // Crossfades gently to preserve color and detail.
+      opacity: 0.02, // Fade in gently without a visible rectangular patch.
       blending: THREE.NormalBlending,
       depthWrite: false,
     });
@@ -625,7 +628,7 @@ export class NebulaSkySystem {
     const hemiLight = new THREE.HemisphereLight(
       primaryColor,
       darkComplement,
-      0.74 * (opts?.ambientScale ?? 1.0)
+      0.28 * (opts?.ambientScale ?? 1.0)
     );
     hemiLight.name = 'nebula_hemi_light';
     skyGroup.add(hemiLight);
@@ -633,7 +636,7 @@ export class NebulaSkySystem {
     // Light 2: Directional "Key" Light aligned with the L1 Nebula Cap direction (TZ.md §4.1)
     const keyLight = new THREE.DirectionalLight(
       secondColor,
-      1.18 * intensity
+      0.42 * intensity
     );
     keyLight.name = 'nebula_directional_key_light';
     keyLight.castShadow = false; // Zero real-time shadows in XR (TZ.md §4.1)
@@ -656,7 +659,7 @@ export class NebulaSkySystem {
       rotation: [...rotation] as [number, number, number],
       intensity,
       drawCalls: skyDrawCalls,
-      skyTextureMemoryMB: 5.4, // L0 (2.7MB) + L1 Cap (2.6MB) + Cubemap (0.1MB) <= 32 MB budget
+      skyTextureMemoryMB: 27.6, // RGBA L0/L1 textures with mip chains + small cubemap, under 32 MB.
     };
 
     return this.getCurrentSkyState();
@@ -680,7 +683,7 @@ export class NebulaSkySystem {
       const t01 = this.crossfadeElapsed / 1.2;
       const mat = this.activeNebulaMesh.material as THREE.MeshBasicMaterial;
       mat.opacity =
-        0.08 + (this.activeRigState.intensity * 0.62) * t01;
+        0.02 + (this.activeRigState.intensity * 0.34) * t01;
     }
 
     // Vection guard (TZ.md §3.1): Sky rotation is strictly OFF in Reduced Motion and Seated mode

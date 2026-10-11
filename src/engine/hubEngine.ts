@@ -675,6 +675,32 @@ export class HubEngine {
     }, speed);
   }
 
+  /** Moves between the threshold and a sector through the same guarded fade pipeline as room doors. */
+  public transitionToThresholdBranch(branch: CorridorBranch): void {
+    if (this.paused || this.transitionInProgress) return;
+    this.transitionInProgress = true;
+    this.comfort.triggerFadeTransition(() => {
+      try {
+        hubPlayerState.chooseBranchFromThreshold(branch);
+      } finally {
+        this.transitionInProgress = false;
+      }
+    });
+  }
+
+  /** Changes sector halls without allowing overlapping click, gaze, or controller activations. */
+  public transitionToCorridorSegment(branch: CorridorBranch, segment: 1 | 2 | 3): void {
+    if (this.paused || this.transitionInProgress) return;
+    this.transitionInProgress = true;
+    this.comfort.triggerFadeTransition(() => {
+      try {
+        hubPlayerState.setCorridorSegment(branch, segment);
+      } finally {
+        this.transitionInProgress = false;
+      }
+    });
+  }
+
   /**
    * Single authoritative transition pipeline for all portals, RoomContext doors, and return portals.
    * Eliminates duplicated transition code, prevents overlapping double-transitions, and enforces
@@ -949,6 +975,7 @@ export class HubEngine {
     disposeThreeHierarchy(this.worldRoot);
     disposeThreeHierarchy(this.audioReactiveVisuals.root);
     this.audioReactiveVisuals = new AudioReactiveVisuals();
+    this.worldRoot.add(this.audioReactiveVisuals.root);
 
     const registerTarget = (
       mesh: THREE.Object3D,
@@ -1248,7 +1275,7 @@ export class HubEngine {
     this.audioReactiveVisuals.update(
       this.gameTimeSec,
       spatialAudioSystem.getReactiveLevels(),
-      false
+      true
     );
     this.comfort.update(dt, state.vignetteEnabled || this.paused);
 

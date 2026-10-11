@@ -1329,7 +1329,7 @@ export function buildWiredSciFiGothicPortal(opts: {
 
   // A clean elliptical silhouette keeps the sky visible around every transition.
   const outerRing = new THREE.Mesh(
-    new THREE.TorusGeometry(1, 0.065, 10, 72),
+    new THREE.TorusGeometry(1, 0.038, 8, 64),
     frameMat
   );
   outerRing.scale.set(width * 0.5, height * 0.5, 1);
@@ -1339,11 +1339,11 @@ export function buildWiredSciFiGothicPortal(opts: {
   const haloMaterial = new THREE.MeshBasicMaterial({
     color: statusColorHex ?? accentHex,
     transparent: true,
-    opacity: 0.82,
+    opacity: 0.32,
     toneMapped: false,
   });
   const halo = new THREE.Mesh(
-    new THREE.TorusGeometry(1, 0.022, 6, 72),
+    new THREE.TorusGeometry(1, 0.014, 5, 64),
     haloMaterial
   );
   halo.scale.set(width * 0.458, height * 0.458, 1);
@@ -1371,7 +1371,7 @@ export function buildWiredSciFiGothicPortal(opts: {
       uPlasma: { value: new THREE.Color(opts.plasmaHex ?? '#77c9ff') },
     },
     vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
-    fragmentShader: `uniform float uTime; uniform float uBeat; uniform float uLow; uniform float uMid; uniform float uHigh; uniform float uAmplitude; uniform vec3 uColor; uniform vec3 uPlasma; varying vec2 vUv; void main(){ vec2 p=(vUv-0.5)*2.0; float r=length(p); float swirl=0.5+0.5*sin(8.0*r-uTime*(0.22+uLow*0.18)+atan(p.y,p.x)*1.4); float rim=(1.0-smoothstep(0.72,1.0,r)); float core=1.0-smoothstep(0.0,1.0,r); vec3 color=mix(uColor,uPlasma,clamp(swirl*0.42+uHigh*0.2,0.0,1.0)); color=mix(color,vec3(1.0,0.82,0.58),uLow*0.16); color=mix(color,vec3(0.76,0.9,1.0),core*0.18+uBeat*0.06); float alpha=rim*(0.17+0.13*(1.0-r)+uBeat*0.12+uMid*0.05+uAmplitude*0.07); gl_FragColor=vec4(color,alpha); }`,
+    fragmentShader: `uniform float uTime; uniform float uBeat; uniform float uLow; uniform float uMid; uniform float uHigh; uniform float uAmplitude; uniform vec3 uColor; uniform vec3 uPlasma; varying vec2 vUv; void main(){ vec2 p=(vUv-0.5)*2.0; float r=length(p); float swirl=0.5+0.5*sin(8.0*r-uTime*(0.12+uLow*0.1)+atan(p.y,p.x)*1.4); float rim=(1.0-smoothstep(0.72,1.0,r)); float core=1.0-smoothstep(0.0,1.0,r); vec3 color=mix(uColor,uPlasma,clamp(swirl*0.3+uHigh*0.12,0.0,1.0)); color=mix(color,vec3(1.0,0.82,0.58),uLow*0.08); color=mix(color,vec3(0.76,0.9,1.0),core*0.08+uBeat*0.025); float alpha=rim*(0.055+0.065*(1.0-r)+uBeat*0.04+uMid*0.02+uAmplitude*0.025); gl_FragColor=vec4(color,alpha); }`,
   });
   const apertureGeometry = new THREE.ShapeGeometry(apertureShape, 48);
   const aperturePositions = apertureGeometry.getAttribute('position');
@@ -1472,17 +1472,9 @@ export class CorridorBuilder {
       }
     );
 
-    const floorTex = createCosmicFloorTexture(
-      'rgba(229, 193, 88, 0.28)',
-      5,
-      5
-    );
-    // Polished dark basalt stone reflecting plasma columns and portals
+    // The gallery floor should absorb light; reflections are reserved for a few exhibits.
     const cosmicFloorMat = new THREE.MeshStandardMaterial({
-      color: '#0d1322',
-      map: floorTex,
-      roughness: 0.16,
-      metalness: 0.58,
+      color: '#080a10', roughness: 0.9, metalness: 0.04,
     });
 
     const stoneWallTex = createArchitecturalWallTexture(
@@ -1500,25 +1492,16 @@ export class CorridorBuilder {
     });
 
     const goldHeroMat = new THREE.MeshStandardMaterial({
-      color: '#e5c158',
-      roughness: 0.18,
-      metalness: 0.86,
-      emissive: '#54380c',
-      emissiveIntensity: 0.42,
+      color: '#594b3c', roughness: 0.62, metalness: 0.3,
+      emissive: '#54380c', emissiveIntensity: 0.06,
     });
     const cyanHeroMat = new THREE.MeshStandardMaterial({
-      color: '#4ea8de',
-      roughness: 0.18,
-      metalness: 0.86,
-      emissive: '#0e3b66',
-      emissiveIntensity: 0.48,
+      color: '#354750', roughness: 0.62, metalness: 0.28,
+      emissive: '#0e3b66', emissiveIntensity: 0.06,
     });
     const violetHeroMat = new THREE.MeshStandardMaterial({
-      color: '#b388ff',
-      roughness: 0.18,
-      metalness: 0.86,
-      emissive: '#38146b',
-      emissiveIntensity: 0.48,
+      color: '#483e50', roughness: 0.62, metalness: 0.28,
+      emissive: '#38146b', emissiveIntensity: 0.06,
     });
 
     // 1. Grand Circular Polished Dark Basalt Floor (y = 0, walkable, with Fractals & Circuit Schematics)
@@ -1530,24 +1513,15 @@ export class CorridorBuilder {
     root.add(platformDisc);
     walkableMeshes.push(platformDisc);
 
-    const outerRim = new THREE.Mesh(
-      new THREE.TorusGeometry(15.0, 0.24, 12, 64),
-      goldHeroMat
-    );
-    outerRim.rotation.x = Math.PI * 0.5;
-    outerRim.position.set(0, 0.08, 0);
-    root.add(outerRim);
-
-    // Concentric glowing fractal & circuit rings on the polished dark stone floor
-    [4.2, 8.8, 13.6].forEach((r, idx) => {
+    // One dim wayfinding trace in the floor; no bright circuit-board pattern.
+    [8.8].forEach((r) => {
       const floorRing = new THREE.Mesh(
-        new THREE.RingGeometry(r, r + 0.09, 64),
+        new THREE.RingGeometry(r, r + 0.025, 64),
         new THREE.MeshBasicMaterial({
-          color:
-            idx === 0 ? '#e5c158' : idx === 1 ? '#4ea8de' : '#9d4edd',
+          color: '#625b55',
           side: THREE.DoubleSide,
           transparent: true,
-          opacity: 0.62,
+          opacity: 0.12,
         })
       );
       floorRing.rotation.x = -Math.PI * 0.5;
@@ -1581,28 +1555,21 @@ export class CorridorBuilder {
     pedestalGroup.name = 'onboarding_pedestal';
     pedestalGroup.position.set(0, 0, 1.2);
 
-    const pedBase = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.52, 0.68, 1.05, 8),
-      gothicBasaltMat
-    );
-    pedBase.position.y = 0.525;
-    pedestalGroup.add(pedBase);
-
-    const pedTrimRing = new THREE.Mesh(
-      new THREE.TorusGeometry(0.54, 0.04, 12, 32),
-      goldHeroMat
-    );
-    pedTrimRing.rotation.x = Math.PI * 0.5;
-    pedTrimRing.position.y = 1.05;
-    pedestalGroup.add(pedTrimRing);
-
-    const pedCrystal = new THREE.Mesh(
-      new THREE.OctahedronGeometry(0.32, 0),
-      goldHeroMat
-    );
-    pedCrystal.name = 'onboarding_pedestal_crystal';
-    pedCrystal.position.y = 1.45;
-    pedestalGroup.add(pedCrystal);
+    pedestalGroup.name = 'gallery_kinetic_threshold';
+    pedestalGroup.position.set(0, 0, 1.2);
+    pedestalGroup.userData.galleryMotion = { kind: 'rings', phase: 0, baseY: 2.15 };
+    [
+      { radius: 0.9, tube: 0.034, x: 0, z: 0 },
+      { radius: 0.7, tube: 0.028, x: Math.PI * 0.5, z: 0.3 },
+      { radius: 0.48, tube: 0.022, x: 0.25, z: Math.PI * 0.5 },
+    ].forEach((ring) => {
+      const mesh = new THREE.Mesh(
+        new THREE.TorusGeometry(ring.radius, ring.tube, 8, 64), goldHeroMat
+      );
+      mesh.position.y = 0;
+      mesh.rotation.set(ring.x, 0, ring.z);
+      pedestalGroup.add(mesh);
+    });
 
     root.add(pedestalGroup);
     registerTarget(pedestalGroup, {
@@ -1736,9 +1703,9 @@ export class CorridorBuilder {
         plasmaHex: meta.plasmaHex,
         statusColorHex: meta.accentHex,
         plaqueTex,
-        plaqueWidth: 3.2,
-        plaqueHeight: 1.3,
-        cableSpread: 1.35,
+        plaqueWidth: 2.0,
+        plaqueHeight: 0.62,
+        cableSpread: 0.72,
         phaseSeed: idx * 2.1,
       });
 
@@ -1898,7 +1865,17 @@ export class CorridorBuilder {
     const high = THREE.MathUtils.clamp(audio.high ?? 0, 0, 1);
     const amplitude = THREE.MathUtils.clamp(audio.amplitude ?? 0, 0, 1);
     root.traverse((obj) => {
-      if (obj.name === 'plasma_vortex_core') {
+      const galleryMotion = obj.userData?.galleryMotion as
+        | { phase: number; baseY: number; kind: 'rings' | 'orbits' | 'flame' }
+        | undefined;
+      if (galleryMotion) {
+        obj.position.y = galleryMotion.baseY + (reducedMotion ? 0 : Math.sin(timeSec * 0.42 + galleryMotion.phase) * 0.055);
+        if (!reducedMotion) {
+          obj.rotation.y = timeSec * 0.075 + galleryMotion.phase;
+          if (galleryMotion.kind === 'rings') obj.rotation.x = Math.sin(timeSec * 0.12) * 0.08;
+          if (galleryMotion.kind === 'flame') obj.rotation.z = Math.sin(timeSec * 0.16) * 0.025;
+        }
+      } else if (obj.name === 'plasma_vortex_core') {
         const mesh = obj as THREE.Mesh;
         const mat = mesh.material as THREE.MeshBasicMaterial;
         const seed = (mesh.userData?.phaseSeed as number) ?? 0;
@@ -1973,9 +1950,9 @@ export class CorridorBuilder {
         const mat = mesh.material as THREE.MeshBasicMaterial;
         const seed = (mesh.userData?.phaseSeed as number) ?? 0;
         if (reducedMotion) {
-          mat.opacity = 0.78;
+    mat.opacity = 0.34;
         } else {
-          mat.opacity = 0.62 + Math.sin(timeSec * 1.5 + seed) * 0.1 + beat * 0.12 + amplitude * 0.08;
+          mat.opacity = 0.27 + Math.sin(timeSec * 0.6 + seed) * 0.04 + beat * 0.035 + amplitude * 0.02;
         }
       } else if (obj.name === 'portal_vortex_aperture') {
         const mesh = obj as THREE.Mesh;
@@ -2068,31 +2045,15 @@ export class CorridorBuilder {
     const halfW = width * 0.5;
     const halfD = depth * 0.5;
 
-    const floorTex = createCosmicFloorTexture(
-      segment === 1
-        ? 'rgba(229, 193, 88, 0.28)'
-        : segment === 2
-        ? 'rgba(78, 168, 222, 0.28)'
-        : 'rgba(179, 136, 255, 0.28)',
-      4,
-      7
-    );
     const gothicBasaltMat = new THREE.MeshStandardMaterial({
-      color: '#0e1320',
-      roughness: 0.42,
-      metalness: 0.32,
+      color: '#101117', roughness: 0.82, metalness: 0.08,
     });
     const floorMat = new THREE.MeshStandardMaterial({
-      map: floorTex,
-      roughness: 0.16,
-      metalness: 0.58,
+      color: '#080a10', roughness: 0.9, metalness: 0.04,
     });
     const heroTrimMat = new THREE.MeshStandardMaterial({
-      color: accentHex,
-      roughness: 0.2,
-      metalness: 0.85,
-      emissive: rimHex,
-      emissiveIntensity: 0.28,
+      color: '#302b31', roughness: 0.62, metalness: 0.28,
+      emissive: rimHex, emissiveIntensity: 0.045,
     });
 
     // 1. Walkable Polished Dark Basalt Floor (y = 0, with Fractals & Circuit Schematics)
@@ -2106,22 +2067,6 @@ export class CorridorBuilder {
 
 
     // Open sky above the sector platform; no ceiling ribs.
-
-    // Central Fractal Medallion directly beneath the Celestial Oculus
-    const centerBasinRim = new THREE.Mesh(
-      new THREE.RingGeometry(1.6, 3.3, 48),
-      new THREE.MeshStandardMaterial({
-        color: skyRig.palette[1] ?? accentHex,
-        roughness: 0.14,
-        metalness: 0.85,
-        emissive: skyRig.palette[0] ?? '#143852',
-        emissiveIntensity: 0.32,
-        side: THREE.DoubleSide,
-      })
-    );
-    centerBasinRim.rotation.x = -Math.PI * 0.5;
-    centerBasinRim.position.set(0, 0.016, -2.0);
-    root.add(centerBasinRim);
 
     // Portals are free-standing in the nebula; no enclosing walls or columns.
 
@@ -2184,9 +2129,9 @@ export class CorridorBuilder {
         plasmaHex: meta.plasmaHex,
         statusColorHex: statusColor,
         plaqueTex,
-        plaqueWidth: 2.22,
-        plaqueHeight: 1.05,
-        cableSpread: 0.92,
+        plaqueWidth: 1.5,
+        plaqueHeight: 0.48,
+        cableSpread: 0.42,
         phaseSeed: index * 0.85,
       });
 
@@ -2230,9 +2175,9 @@ export class CorridorBuilder {
         plasmaHex: targetMeta.plasmaHex,
         statusColorHex: targetMeta.accentHex,
         plaqueTex: nPlaqueTex,
-        plaqueWidth: 2.5,
-        plaqueHeight: 1.12,
-        cableSpread: 1.1,
+        plaqueWidth: 1.85,
+        plaqueHeight: 0.52,
+        cableSpread: 0.56,
         phaseSeed: (idx + 1) * 3.1,
       });
 
