@@ -209,11 +209,7 @@ export class NebulaSkySystem {
     return tex;
   }
 
-  /**
-   * Builds a high-fidelity feathered curved-cap texture (1024x1024) for a specific Nebula entry,
-   * loading the local NASA/ESA/JWST image (`nebula.image`, `assets/space/neb_XXXX.jpg`),
-   * verifying its SHA-256 against `nebula.sha256`, and applying radial alpha feathering (TZ.md §3.1 & §3.4.2).
-   */
+/** Creates an aspect-preserving 1536x1152 nebula cap so source detail survives headset rendering. */
   private createFeatheredNebulaCapTexture(
     nebula: NebulaRegistryEntry,
     mirrorX = false
@@ -224,62 +220,45 @@ export class NebulaSkySystem {
       return tex as unknown as THREE.CanvasTexture;
     }
 
+    const width = 1536;
+    const height = 1152;
+    const centerX = width * 0.5;
+    const centerY = height * 0.5;
     const canvas = document.createElement('canvas');
-    canvas.width = 1024;
-    canvas.height = 1024;
+    canvas.width = width;
+    canvas.height = height;
     const ctx = canvas.getContext('2d')!;
-
     const [c0, c1, c2] = nebula.palette;
     const seed = deterministicRoomSeed(nebula.id);
 
-    ctx.clearRect(0, 0, 1024, 1024);
+    const background = ctx.createRadialGradient(centerX, centerY, 80, centerX, centerY, height * 0.72);
+    background.addColorStop(0, `${c1}aa`);
+    background.addColorStop(0.52, `${c0}72`);
+    background.addColorStop(1, '#030611');
+    ctx.fillStyle = background;
+    ctx.fillRect(0, 0, width, height);
 
-    // Multi-lobe astronomical filament composition inside radial feather mask while local image decodes
-    const lobes = 7;
-    for (let i = 0; i < lobes; i++) {
+    // Subtle palette clouds sit behind the real image while assets load and in their letterboxed edges.
+    for (let i = 0; i < 7; i++) {
       const angle = ((seed + i * 97) % 360) * (Math.PI / 180);
-      const dist = 60 + ((seed + i * 53) % 160);
-      const lx = 512 + Math.cos(angle) * dist * (mirrorX ? -1 : 1);
-      const ly = 512 + Math.sin(angle) * dist * 0.78;
-      const lr = 240 + ((i * 67) % 180);
-
-      const g = ctx.createRadialGradient(lx, ly, 12, lx, ly, lr);
+      const dist = 75 + ((seed + i * 53) % 210);
+      const lx = centerX + Math.cos(angle) * dist * (mirrorX ? -1 : 1);
+      const ly = centerY + Math.sin(angle) * dist * 0.78;
+      const radius = 330 + ((i * 67) % 220);
+      const cloud = ctx.createRadialGradient(lx, ly, 18, lx, ly, radius);
       const col = i % 3 === 0 ? c0 : i % 3 === 1 ? c1 : c2;
-      g.addColorStop(0, `${col}dd`);
-      g.addColorStop(0.45, `${col}66`);
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, 1024, 1024);
+      cloud.addColorStop(0, `${col}70`);
+      cloud.addColorStop(0.45, `${col}35`);
+      cloud.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = cloud;
+      ctx.fillRect(0, 0, width, height);
     }
-
-    // Embedded young stellar cluster knots inside the nebula cap
-    for (let s = 0; s < 140; s++) {
-      const a = ((s * 137.5) % 360) * (Math.PI / 180);
-      const r = Math.sqrt(s / 140) * 340;
-      const sx = 512 + Math.cos(a) * r;
-      const sy = 512 + Math.sin(a) * r * 0.82;
-      ctx.fillStyle = s % 3 === 0 ? c2 : '#ffffff';
-      ctx.beginPath();
-      ctx.arc(sx, sy, s % 7 === 0 ? 2.1 : 1.1, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Radial alpha feather mask around the cap perimeter so edges blend seamlessly into L0 Starfield (TZ.md §3.1)
-    ctx.globalCompositeOperation = 'destination-in';
-    const feather = ctx.createRadialGradient(512, 512, 180, 512, 512, 495);
-    feather.addColorStop(0, 'rgba(255,255,255,1)');
-    feather.addColorStop(0.68, 'rgba(255,255,255,0.85)');
-    feather.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = feather;
-    ctx.fillRect(0, 0, 1024, 1024);
-    ctx.globalCompositeOperation = 'source-over';
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.generateMipmaps = true;
     tex.minFilter = THREE.LinearMipmapLinearFilter;
     tex.colorSpace = THREE.SRGBColorSpace;
 
-    // Load local hosted NASA/ESA astronomical image (`nebula.image`) after SHA-256 verification
     const localImagePath = nebula.image || nebula.remoteImageUrl;
     if (localImagePath && typeof Image !== 'undefined') {
       void this.verifyAssetBytesSha256(localImagePath, nebula.sha256).then(
@@ -287,26 +266,34 @@ export class NebulaSkySystem {
           if (!valid || !blobUrl) return;
           const img = new Image();
           img.onload = () => {
-            ctx.clearRect(0, 0, 1024, 1024);
             ctx.save();
             if (mirrorX) {
-              ctx.translate(1024, 0);
+              ctx.translate(width, 0);
               ctx.scale(-1, 1);
             }
-            ctx.drawImage(img, 0, 0, 1024, 1024);
+            const fit = Math.min(width / img.width, height / img.height);
+            const drawWidth = img.width * fit;
+            const drawHeight = img.height * fit;
+            ctx.drawImage(img, (width - drawWidth) * 0.5, (height - drawHeight) * 0.5, drawWidth, drawHeight);
             ctx.restore();
 
-            // Apply radial alpha feather mask (TZ.md §3.1 & §3.4.2)
+            // Elliptical feather blends the curved image cap into the all-sky star map.
             ctx.globalCompositeOperation = 'destination-in';
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.scale(width * 0.5, height * 0.5);
+            const feather = ctx.createRadialGradient(0, 0, 0.39, 0, 0, 0.99);
+            feather.addColorStop(0, 'rgba(255,255,255,1)');
+            feather.addColorStop(0.72, 'rgba(255,255,255,0.92)');
+            feather.addColorStop(1, 'rgba(255,255,255,0)');
             ctx.fillStyle = feather;
-            ctx.fillRect(0, 0, 1024, 1024);
+            ctx.fillRect(-1, -1, 2, 2);
+            ctx.restore();
             ctx.globalCompositeOperation = 'source-over';
             tex.needsUpdate = true;
             URL.revokeObjectURL(blobUrl);
           };
-          img.onerror = () => {
-            URL.revokeObjectURL(blobUrl);
-          };
+          img.onerror = () => URL.revokeObjectURL(blobUrl);
           img.src = blobUrl;
         }
       );
@@ -314,7 +301,6 @@ export class NebulaSkySystem {
 
     return tex;
   }
-
   /**
    * Generates a low-resolution (64x64 per face) environment cubemap from the room's nebula palette
    * in < 1.5 ms at mount time for hero surfaces (mirror, reflective pools, art frames, TZ.md §4.2).
@@ -520,8 +506,8 @@ export class NebulaSkySystem {
       map: nebTex,
       side: THREE.BackSide,
       transparent: true,
-      opacity: 0.15, // Crossfades to `intensity` over <= 1.2s (TZ.md §3.7)
-      blending: THREE.AdditiveBlending,
+      opacity: 0.08, // Crossfades gently to preserve color and detail.
+      blending: THREE.NormalBlending,
       depthWrite: false,
     });
 
@@ -694,7 +680,7 @@ export class NebulaSkySystem {
       const t01 = this.crossfadeElapsed / 1.2;
       const mat = this.activeNebulaMesh.material as THREE.MeshBasicMaterial;
       mat.opacity =
-        0.15 + (this.activeRigState.intensity * 0.85) * t01;
+        0.08 + (this.activeRigState.intensity * 0.62) * t01;
     }
 
     // Vection guard (TZ.md §3.1): Sky rotation is strictly OFF in Reduced Motion and Seated mode

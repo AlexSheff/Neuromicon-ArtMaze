@@ -191,43 +191,6 @@ function createPolishedFloorTexture(
   return tex;
 }
 
-function createCofferedCeilingTexture(
-  baseColor: string,
-  accentColor: string
-): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d')!;
-
-  ctx.fillStyle = baseColor;
-  ctx.fillRect(0, 0, 512, 512);
-
-  const cells = 4;
-  const s = 512 / cells;
-  for (let x = 0; x < cells; x++) {
-    for (let y = 0; y < cells; y++) {
-      const cx = x * s;
-      const cy = y * s;
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
-      ctx.lineWidth = 8;
-      ctx.strokeRect(cx + 6, cy + 6, s - 12, s - 12);
-
-      ctx.strokeStyle = accentColor;
-      ctx.globalAlpha = 0.32;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(cx + 16, cy + 16, s - 32, s - 32);
-      ctx.globalAlpha = 1;
-    }
-  }
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(3, 3);
-  return tex;
-}
-
 function createPaintingArtworkTexture(
   painting: PaintingDefinition,
   motifIndex: number,
@@ -760,7 +723,7 @@ export class ThreeLabyrinthEngine {
       metalness: 0.26,
     });
 
-    // Central Inlaid Brass & Obsidian Floor Medallion directly under the Skylight Oculus
+    // Central Inlaid Brass & Obsidian Floor Medallion in the floor center
     const medallionGroup = new THREE.Group();
     medallionGroup.position.set(0, 0.006, 0);
     [1.1, 1.85, 2.65].forEach((radius, idx) => {
@@ -773,51 +736,7 @@ export class ThreeLabyrinthEngine {
     });
     this.roomGroup.add(medallionGroup);
 
-    // 3. Coffered Vault Ceiling at y = height + 3D Structural Cross-Beams + Skylight Oculus
-    const ceilTex = createCofferedCeilingTexture(
-      palette.ceiling,
-      palette.accent
-    );
-    const ceilMat = new THREE.MeshStandardMaterial({
-      map: ceilTex,
-      roughness: 0.68,
-      metalness: 0.12,
-    });
-    const ceilMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, depth),
-      ceilMat
-    );
-    ceilMesh.rotation.x = Math.PI * 0.5;
-    ceilMesh.position.set(0, height, 0);
-    this.roomGroup.add(ceilMesh);
-
-    // 3D Coffered Ceiling Ribs
-    [-depth * 0.26, depth * 0.26].forEach((rz) => {
-      const beam = new THREE.Mesh(
-        new THREE.BoxGeometry(width, 0.28, 0.42),
-        plinthMat
-      );
-      beam.position.set(0, height - 0.14, rz);
-      this.roomGroup.add(beam);
-    });
-    [-width * 0.26, width * 0.26].forEach((rx) => {
-      const beam = new THREE.Mesh(
-        new THREE.BoxGeometry(0.42, 0.28, depth),
-        plinthMat
-      );
-      beam.position.set(rx, height - 0.14, 0);
-      this.roomGroup.add(beam);
-    });
-
-    // Recessed Skylight Oculus & Volumetric Sunbeam Cone
-    const oculusRim = new THREE.Mesh(
-      new THREE.RingGeometry(1.15, 1.65, 40),
-      accentTrimMat
-    );
-    oculusRim.rotation.x = Math.PI * 0.5;
-    oculusRim.position.set(0, height - 0.02, 0);
-    this.roomGroup.add(oculusRim);
-
+    // 3. Open roofline: no coffered ceiling, cross-beams, or central skylight fixture.
 
     // 4. Outer Architectural Walls + Base Plinth Dado + Upper Entablature Cornice
     const wallTex = createAshlarWallTexture(palette.wall, palette.accent);

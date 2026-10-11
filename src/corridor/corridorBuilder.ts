@@ -1053,10 +1053,10 @@ export function buildQuartzPlasmaColumn(opts: {
 }
 
 /**
- * Reusable Builder: High Gothic Cathedral Ribbed Vaults (`высокие нервюрные своды`)
- * converging from the perimeter plasma columns up to the open Celestial Oculus (`небесное окно`).
+ * Retained for room-builder compatibility. The gallery is intentionally open to the sky:
+ * no central ring, overhead ribs, or ceiling fixtures should obstruct the nebula view.
  */
-export function buildGothicRibbedVaultsAndOculus(opts: {
+export function buildGothicRibbedVaultsAndOculus(_opts: {
   root: THREE.Group;
   oculusRadius: number;
   spanRadiusX: number;
@@ -1069,76 +1069,7 @@ export function buildGothicRibbedVaultsAndOculus(opts: {
   innerGlowHex: string;
   centerZ?: number;
 }): void {
-  const {
-    root,
-    oculusRadius,
-    spanRadiusX,
-    spanRadiusZ,
-    wallHeight,
-    vaultApexY,
-    ribAnglesDeg,
-    basaltMat,
-    trimMat,
-    innerGlowHex,
-    centerZ = 0,
-  } = opts;
-
-  const vaultGroup = new THREE.Group();
-  vaultGroup.position.set(0, 0, centerZ);
-
-  // 1. Open Celestial Oculus Ring (Dark Gothic Basalt Outer Crown + Backlit Plasma/Amber Inner Rim)
-  const oculusOuter = new THREE.Mesh(
-    new THREE.TorusGeometry(oculusRadius, 0.36, 12, 56),
-    basaltMat
-  );
-  oculusOuter.rotation.x = Math.PI * 0.5;
-  oculusOuter.position.y = vaultApexY;
-  vaultGroup.add(oculusOuter);
-
-  // Backlit inner Oculus rim (`обрамленное краями окулуса и подсвеченное изнутри, создавая ощущение глубины`)
-  const oculusInnerGlow = new THREE.Mesh(
-    new THREE.TorusGeometry(oculusRadius - 0.38, 0.11, 10, 56),
-    new THREE.MeshBasicMaterial({
-      color: innerGlowHex,
-      transparent: true,
-      opacity: 0.9,
-    })
-  );
-  oculusInnerGlow.rotation.x = Math.PI * 0.5;
-  oculusInnerGlow.position.y = vaultApexY - 0.12;
-  vaultGroup.add(oculusInnerGlow);
-
-  // 2. High Gothic Ribbed Vault Struts (`высокие нервюрные своды, уходящие в темноту`)
-  ribAnglesDeg.forEach((deg) => {
-    const rad = THREE.MathUtils.degToRad(deg);
-    const startX = Math.sin(rad) * spanRadiusX;
-    const startZ = -Math.cos(rad) * spanRadiusZ;
-    const endX = Math.sin(rad) * oculusRadius;
-    const endZ = -Math.cos(rad) * oculusRadius;
-
-    const dx = endX - startX;
-    const dy = vaultApexY - wallHeight;
-    const dz = endZ - startZ;
-    const length = Math.hypot(dx, dy, dz);
-
-    const ribPivot = new THREE.Group();
-    ribPivot.position.set(
-      (startX + endX) * 0.5,
-      (wallHeight + vaultApexY) * 0.5,
-      (startZ + endZ) * 0.5
-    );
-    ribPivot.lookAt(endX, vaultApexY, endZ);
-
-    const stoneRib = new THREE.Mesh(
-      new THREE.BoxGeometry(0.32, 0.42, length),
-      trimMat
-    );
-    ribPivot.add(stoneRib);
-
-    vaultGroup.add(ribPivot);
-  });
-
-  root.add(vaultGroup);
+  // Deliberately empty. Architectural detailing remains at the perimeter and floor.
 }
 
 /**
@@ -1736,7 +1667,7 @@ export class CorridorBuilder {
       goldHex: '#e5c158',
     });
 
-    // 2. High Gothic Cathedral Ribbed Vaults & Open Celestial Oculus (y = 14.6m)
+    // 2. Open overhead view; the sky is unobstructed by a central fixture or vault.
     const columnAnglesDeg = [-68, -42, 42, 68, -118, 118, -152, 152];
     buildGothicRibbedVaultsAndOculus({
       root,
@@ -2387,7 +2318,7 @@ export class CorridorBuilder {
       goldHex: '#e5c158',
     });
 
-    // 2. High Gothic Ribbed Vaults & Open Celestial Oculus overhead
+    // 2. Open overhead view; keep the nebula unobstructed.
     buildGothicRibbedVaultsAndOculus({
       root,
       oculusRadius: 5.8,
@@ -2694,4 +2625,3 @@ export class CorridorBuilder {
     });
   }
 }
-
