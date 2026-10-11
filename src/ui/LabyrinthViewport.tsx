@@ -524,7 +524,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-screen min-h-[640px] bg-[#070605] overflow-hidden select-none"
+      className="relative h-[100dvh] min-h-[360px] w-full overflow-hidden select-none bg-[#070605]"
     >
       <canvas
         ref={canvasRef}
@@ -638,7 +638,21 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
       )}
 
       {/* Contextual Discovery & VR Wrist / Palm Non-Keyboard Controls (§2.5 & TZ.md §5.2, §6.1) */}
-      <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+      <div className="pointer-events-none absolute inset-x-4 top-4 z-10 flex items-start justify-between gap-3 sm:inset-x-6 sm:top-6">
+        <div className="hidden items-center gap-2.5 rounded-xl border border-white/10 bg-[#080b12]/70 px-3 py-2.5 text-left shadow-[0_8px_30px_rgba(0,0,0,0.22)] backdrop-blur-xl sm:flex">
+          <span className="grid size-8 place-items-center rounded-full border border-[#d8bd80]/40 text-sm text-[#e3d0a0]">◈</span>
+          <span>
+            <span className="block font-mono text-[10px] font-semibold tracking-[0.18em] text-[#f1ece2]">NEUROMICON</span>
+            <span className="mt-0.5 block font-mono text-[9px] tracking-[0.14em] text-[#aeb5c0]">
+              {hubState.location === 'threshold'
+                ? 'COSMIC NEXUS'
+                : hubState.location === 'corridor'
+                ? `SECTOR ${hubState.segmentIndex}`
+                : hubState.currentRoomId || 'UNKNOWN SPACE'}
+            </span>
+          </span>
+        </div>
+        <div className="pointer-events-auto flex max-w-[calc(100vw-2rem)] flex-wrap items-center justify-end gap-1.5 rounded-2xl border border-white/10 bg-[#080b12]/70 p-2 shadow-[0_8px_36px_rgba(0,0,0,0.32)] backdrop-blur-xl sm:max-w-[calc(100vw-3rem)] sm:gap-2 sm:p-2.5">
         {vrSupported && (
           <button
             onClick={() => {
@@ -770,6 +784,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
         >
           ❖ {!xrActive && 'R'}
         </button>
+        </div>
       </div>
 
       {/* Desktop & Non-Blocking Pause Overlay (Mirrors the 3D World-Locked VR Pause Panel, TZ.md §6.1–§6.3) */}
