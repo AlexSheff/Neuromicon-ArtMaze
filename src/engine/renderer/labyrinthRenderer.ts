@@ -233,9 +233,8 @@ function createPaintingArtworkTexture(
   mutated: boolean
 ): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
-  const aspectRatio = Math.max(0.65, Math.min(2.2, painting.aspectRatio ?? 1.45));
   canvas.width = 768;
-  canvas.height = Math.round(768 / aspectRatio);
+  canvas.height = 768;
   const ctx = canvas.getContext('2d')!;
 
   const grad = ctx.createRadialGradient(384, canvas.height * 0.45, 30, 384, canvas.height * 0.5, canvas.height * 0.8);
@@ -250,10 +249,10 @@ function createPaintingArtworkTexture(
   }
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  // Keep the art and lettering proportional on landscape, square, and portrait canvases.
+  // Keep the artwork centered inside the required square display format.
   ctx.save();
-  ctx.translate(384, canvas.height * 0.5);
-  ctx.scale(Math.min(1, (canvas.height - 80) / 512), Math.min(1, (canvas.height - 80) / 512));
+  ctx.translate(384, 384);
+  ctx.scale(1, 1);
   ctx.translate(-384, -256);
 
   ctx.strokeStyle = mutated ? '#7da2c4' : '#c8a464';
@@ -299,14 +298,14 @@ function createPaintingArtworkTexture(
   ctx.fillStyle = 'rgba(243, 237, 226, 0.9)';
   ctx.font = '600 30px "Cinzel", Georgia, serif';
   ctx.textAlign = 'center';
-  ctx.fillText(painting.metadata.title, 384, 455, 700);
+  ctx.fillText(painting.metadata.title, 384, 583, 700);
 
   ctx.fillStyle = 'rgba(200, 164, 100, 0.78)';
   ctx.font = '500 21px system-ui, sans-serif';
   ctx.fillText(
     `${painting.metadata.author} · ${painting.metadata.license}`,
     384,
-    482,
+    610,
     700
   );
 
@@ -1085,7 +1084,7 @@ export class ThreeLabyrinthEngine {
       });
     });
 
-    // 7. Framed Paintings Mounted Flush on Walls (with 3D Frames & Museum Light)
+    // 7. Large square framed paintings; source aspect ratios remain in manifest metadata.
     const activeObjs = getActiveRoomObjects(manifest, playerState);
 
     (manifest.paintings ?? []).forEach((painting, pIdx) => {
@@ -1098,7 +1097,7 @@ export class ThreeLabyrinthEngine {
       );
       const scale = painting.scale ?? 1.65;
       const pw = 1.8 * scale;
-      const ph = pw / Math.max(0.65, Math.min(2.2, painting.aspectRatio ?? 1.45));
+      const ph = pw;
 
       const pGroup = new THREE.Group();
       pGroup.position.set(anchor.cx, anchor.cy, anchor.cz);

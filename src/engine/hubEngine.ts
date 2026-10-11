@@ -102,6 +102,8 @@ export class HubEngine {
   private pauseListeners: Set<(paused: boolean) => void> = new Set();
 
   private snapCooldown = 0;
+  private readonly locomotionVelocity = new THREE.Vector2();
+  private readonly locomotionTarget = new THREE.Vector2();
   private builtSceneKey = '';
   private fovZoom = false;
 
@@ -1088,7 +1090,11 @@ export class HubEngine {
 
       const isMovingStick = Math.hypot(forward, strafe) > 0.15;
 
-      if (isMovingStick) {
+      if (isXR && state.comfort.locomotion === 'teleport') {
+        // Aiming plus trigger performs teleportation; stick drift must never move the player.
+        this.locomotionVelocity.set(0, 0);
+        this.comfort.setTargetVignette(0);
+      } else if (isMovingStick) {
         const len = Math.min(1, Math.hypot(forward, strafe));
         const normF = forward / Math.max(1, Math.hypot(forward, strafe));
         const normS = strafe / Math.max(1, Math.hypot(forward, strafe));
@@ -1100,12 +1106,34 @@ export class HubEngine {
         const rx = Math.cos(moveYaw);
         const rz = -Math.sin(moveYaw);
 
-        const nx = this.pose.x + (fx * normF + rx * normS) * speed * gameDt;
-        const nz = this.pose.z + (fz * normF + rz * normS) * speed * gameDt;
+        this.locomotionTarget.set(
+          (fx * normF + rx * normS) * speed,
+          (fz * normF + rz * normS) * speed
+        );
+        this.locomotionVelocity.lerp(
+          this.locomotionTarget,
+          1 - Math.exp(-gameDt * 8)
+        );
+        const nx = this.pose.x + this.locomotionVelocity.x * gameDt;
+        const nz = this.pose.z + this.locomotionVelocity.y * gameDt;
         this.clampPositionDirect(nx, nz, state);
 
         this.comfort.setTargetVignette(len * state.comfort.vignette);
       } else {
+        this.locomotionTarget.set(0, 0);
+        this.locomotionVelocity.lerp(
+          this.locomotionTarget,
+          1 - Math.exp(-gameDt * 8)
+        );
+        if (this.locomotionVelocity.lengthSq() > 0.0001) {
+          this.clampPositionDirect(
+            this.pose.x + this.locomotionVelocity.x * gameDt,
+            this.pose.z + this.locomotionVelocity.y * gameDt,
+            state
+          );
+        } else {
+          this.locomotionVelocity.set(0, 0);
+        }
         this.comfort.setTargetVignette(0);
       }
     }

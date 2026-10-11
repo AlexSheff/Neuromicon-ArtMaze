@@ -85,7 +85,7 @@ export interface PaintingDefinition {
   position: Vec3;
   rotation: Vec3;
   scale?: number;
-  /** Width divided by height; wider and portrait canvases are both supported. */
+  /** Original artwork width divided by height; display frames remain square. */
   aspectRatio?: number;
   metadata: PaintingMetadata;
   interaction?: {

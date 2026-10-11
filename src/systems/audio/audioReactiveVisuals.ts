@@ -14,6 +14,7 @@ export class AudioReactiveVisuals {
   private readonly particleLayers: Array<{
     points: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>;
     band: keyof Pick<AudioReactiveLevels, 'low' | 'mid' | 'high'>;
+    baseY: Float32Array;
   }> = [];
   private readonly bubbles: THREE.InstancedMesh;
   private readonly bubbleColor = new THREE.Color();
@@ -21,6 +22,7 @@ export class AudioReactiveVisuals {
   private readonly bubblePosition = new THREE.Vector3();
   private readonly bubbleScale = new THREE.Vector3();
   private readonly bubbleQuaternion = new THREE.Quaternion();
+  private lastTimeSec = 0;
 
   constructor() {
     this.root.name = 'audio_reactive_room_ambience';
@@ -33,11 +35,13 @@ export class AudioReactiveVisuals {
     ];
     for (const layer of layers) {
       const positions = new Float32Array(32 * 3);
+      const baseY = new Float32Array(32);
       for (let i = 0; i < 32; i++) {
         const angle = (i / 32) * Math.PI * 2 + layer.seed;
         const radius = 1.25 + ((i * 17) % 11) * 0.14;
         positions[i * 3] = Math.cos(angle) * radius;
         positions[i * 3 + 1] = 0.75 + ((i * 13) % 19) * 0.11;
+        baseY[i] = positions[i * 3 + 1];
         positions[i * 3 + 2] = Math.sin(angle) * radius - 0.35;
       }
       const geometry = new THREE.BufferGeometry();
@@ -52,7 +56,7 @@ export class AudioReactiveVisuals {
       });
       const points = new THREE.Points(geometry, material);
       this.root.add(points);
-      this.particleLayers.push({ points, band: layer.band });
+      this.particleLayers.push({ points, band: layer.band, baseY });
     }
 
     const bubbleGeometry = new THREE.SphereGeometry(0.075, 10, 8);
@@ -87,12 +91,33 @@ export class AudioReactiveVisuals {
     this.root.visible = active;
     if (!active) return;
 
+    const dt = Math.max(0, Math.min(0.05, timeSec - this.lastTimeSec));
+    this.lastTimeSec = timeSec;
     const energy = Math.min(1, levels.beat * 0.58 + levels.low * 0.9);
     for (const layer of this.particleLayers) {
       const amount = levels[layer.band];
       layer.points.material.opacity = 0.12 + amount * 0.62 + levels.beat * 0.24;
       layer.points.material.size = 0.035 + amount * 0.09;
-      layer.points.rotation.y = timeSec * (layer.band === 'high' ? -0.045 : 0.025);
+      layer.points.rotation.y +=
+        dt *
+        (layer.band === 'high' ? -1 : 1) *
+        (0.08 + amount * 0.7 + levels.beat * 0.9);
+      const position = layer.points.geometry.getAttribute('position') as THREE.BufferAttribute;
+      for (let i = 0; i < layer.baseY.length; i++) {
+        position.setY(
+          i,
+          layer.baseY[i] +
+            Math.sin(timeSec * (0.7 + amount * 2.2) + i * 0.83) *
+              (0.025 + amount * 0.12 + levels.beat * 0.14)
+        );
+      }
+      position.needsUpdate = true;
+      layer.points.material.color.setHSL(
+        (layer.band === 'low' ? 0.04 : layer.band === 'mid' ? 0.48 : 0.72) +
+          amount * 0.12 + levels.beat * 0.08,
+        0.82,
+        0.52 + amount * 0.22 + levels.highPeak * 0.12
+      );
     }
 
     const material = this.bubbles.material as THREE.MeshPhysicalMaterial;
