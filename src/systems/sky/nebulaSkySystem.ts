@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import nebulaeData from '../../../content/space/nebulae.json';
 import starfieldData from '../../../content/space/starfield.json';
+import { createSoftParticleTexture } from './softParticleTexture';
 import {
   deterministicRoomSeed,
   NebulaRegistryEntry,
@@ -557,7 +558,9 @@ export class NebulaSkySystem {
     const dustMat = new THREE.PointsMaterial({
       size: 0.085,
       vertexColors: true,
+      map: createSoftParticleTexture(),
       transparent: true,
+      alphaTest: 0.025,
       opacity: 0.56,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
@@ -586,7 +589,9 @@ export class NebulaSkySystem {
       const twMat = new THREE.PointsMaterial({
         color: nebula.palette[2] ?? '#ffffff',
         size: 0.42,
+        map: createSoftParticleTexture(),
         transparent: true,
+        alphaTest: 0.025,
         opacity: 0.75,
         blending: THREE.AdditiveBlending,
         depthWrite: false,

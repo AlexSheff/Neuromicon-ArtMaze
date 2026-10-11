@@ -1014,7 +1014,6 @@ export class RoomStreamer {
       basaltMat: stoneTrimMat,
       trimMat,
       innerGlowHex: accentHex,
-      veilHex: rimHex,
     });
 
     // Central Fractal Floor Medallion directly beneath the Celestial Oculus

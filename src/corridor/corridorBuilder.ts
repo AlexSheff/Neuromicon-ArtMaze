@@ -889,34 +889,6 @@ export function createDoorLeafTexture(
 }
 
 /**
- * Soft 2D Radial + Vertical Falloff Alpha Texture for Oculus & Plasma Veils (§3.3 & TZ.md §4.4).
- * Ensures light beams dissolve smoothly without sharp cone edges.
- */
-export function createLightShaftAlphaTexture(
-  accentHex = '#e5c158'
-): THREE.CanvasTexture {
-  if (typeof document === 'undefined') {
-    const tex = new THREE.DataTexture(new Uint8Array(8 * 8 * 4), 8, 8);
-    tex.needsUpdate = true;
-    return tex as unknown as THREE.CanvasTexture;
-  }
-  const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 256;
-  const ctx = canvas.getContext('2d')!;
-  const grad = ctx.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0, `${accentHex}58`);
-  grad.addColorStop(0.38, '#9d4edd28');
-  grad.addColorStop(0.78, `${accentHex}0c`);
-  grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 128, 256);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.generateMipmaps = true;
-  return tex;
-}
-
-/**
  * Reusable Builder: Tall Transparent Quartz Glass Plasma Column with Swirling Living Plasma,
  * Soft Pulsating Diffused Floor Pool, and Periodic Branching Electric Lightning Arcs!
  */
@@ -1095,7 +1067,6 @@ export function buildGothicRibbedVaultsAndOculus(opts: {
   basaltMat: THREE.Material;
   trimMat: THREE.Material;
   innerGlowHex: string;
-  veilHex: string;
   centerZ?: number;
 }): void {
   const {
@@ -1109,7 +1080,6 @@ export function buildGothicRibbedVaultsAndOculus(opts: {
     basaltMat,
     trimMat,
     innerGlowHex,
-    veilHex,
     centerZ = 0,
   } = opts;
 
@@ -1167,28 +1137,6 @@ export function buildGothicRibbedVaultsAndOculus(opts: {
 
     vaultGroup.add(ribPivot);
   });
-
-  // 3. Soft Celestial Light Veil descending from the open Oculus
-  const shaftTex = createLightShaftAlphaTexture(veilHex);
-  const oculusVeil = new THREE.Mesh(
-    new THREE.CylinderGeometry(
-      oculusRadius * 0.48,
-      oculusRadius * 0.78,
-      vaultApexY,
-      32,
-      1,
-      true
-    ),
-    new THREE.MeshBasicMaterial({
-      map: shaftTex,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    })
-  );
-  oculusVeil.position.y = vaultApexY * 0.5;
-  vaultGroup.add(oculusVeil);
 
   root.add(vaultGroup);
 }
@@ -1801,37 +1749,7 @@ export class CorridorBuilder {
       basaltMat: gothicBasaltMat,
       trimMat: goldHeroMat,
       innerGlowHex: '#e5c158',
-      veilHex: skyRig.palette[2] ?? '#e5c158',
     });
-
-    // Suspended Celestial Astrolabe Rings inside the open Oculus
-    const astrolabeGroup = new THREE.Group();
-    astrolabeGroup.name = 'cosmic_astrolabe_rings';
-    astrolabeGroup.position.set(0, 13.8, 0);
-
-    const ring1 = new THREE.Mesh(
-      new THREE.TorusGeometry(5.6, 0.09, 14, 56),
-      goldHeroMat
-    );
-    ring1.rotation.x = Math.PI * 0.35;
-    astrolabeGroup.add(ring1);
-
-    const ring2 = new THREE.Mesh(
-      new THREE.TorusGeometry(7.6, 0.08, 14, 56),
-      cyanHeroMat
-    );
-    ring2.rotation.y = Math.PI * 0.25;
-    ring2.rotation.x = -Math.PI * 0.28;
-    astrolabeGroup.add(ring2);
-
-    const ring3 = new THREE.Mesh(
-      new THREE.TorusGeometry(9.1, 0.08, 14, 56),
-      violetHeroMat
-    );
-    ring3.rotation.z = Math.PI * 0.2;
-    astrolabeGroup.add(ring3);
-
-    root.add(astrolabeGroup);
 
     // 3. Tall Transparent Quartz Glass Plasma Columns with Swirling Plasma & Periodic Branching Lightning!
     // Strictly flanking the 3 North Sector Portals and East/West wings — never blocking sightlines!
@@ -2324,10 +2242,7 @@ export class CorridorBuilder {
     });
   }
 
-  /**
-   * Animates the Grand Cosmic Starting Room's celestial astrolabe rings and onboarding beacons
-   * only when game clock is NOT paused (`dt > 0`).
-   */
+  /** Animates onboarding beacons only when the game clock is running. */
   public static updateThresholdOnboardingVisuals(
     root: THREE.Group,
     visual: OnboardingVisualState,
@@ -2347,12 +2262,6 @@ export class CorridorBuilder {
     if (pedCrystal && !reducedMotion) {
       pedCrystal.rotation.y = timeSec * 0.85;
       pedCrystal.position.y = 1.45 + Math.sin(timeSec * 2.2) * 0.07;
-    }
-
-    const astrolabe = root.getObjectByName('cosmic_astrolabe_rings');
-    if (astrolabe && !reducedMotion) {
-      astrolabe.rotation.y = timeSec * 0.14;
-      astrolabe.rotation.z = Math.sin(timeSec * 0.25) * 0.12;
     }
 
     const postureMarks = root.getObjectByName('onboarding_posture_marks');
@@ -2490,7 +2399,6 @@ export class CorridorBuilder {
       basaltMat: gothicBasaltMat,
       trimMat: heroTrimMat,
       innerGlowHex: meta.accentHex,
-      veilHex: rimHex,
       centerZ: -2.0,
     });
 

@@ -13,6 +13,7 @@ import { evaluateDoor } from '../../systems/doors/doorSystem';
 import { observationSystem } from '../../systems/observation/observationSystem';
 import { getActiveRoomObjects } from '../../systems/rooms/roomStateSystem';
 import { getVoidDescriptor } from '../../world/void/voidSystem';
+import { createSoftParticleTexture } from '../../systems/sky/softParticleTexture';
 import { CameraPose } from '../locomotion/locomotionSystem';
 
 export interface RaycastTarget {
@@ -1502,7 +1503,9 @@ export class ThreeLabyrinthEngine {
     const pMat = new THREE.PointsMaterial({
       color: palette.accent,
       size: 0.042,
+      map: createSoftParticleTexture(),
       transparent: true,
+      alphaTest: 0.025,
       opacity: 0.55,
     });
     this.dustParticles = new THREE.Points(pGeo, pMat);
@@ -1566,7 +1569,14 @@ export class ThreeLabyrinthEngine {
       sGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       const stars = new THREE.Points(
         sGeo,
-        new THREE.PointsMaterial({ color: '#f3ede2', size: 0.14 })
+        new THREE.PointsMaterial({
+          color: '#f3ede2',
+          size: 0.14,
+          map: createSoftParticleTexture(),
+          transparent: true,
+          alphaTest: 0.025,
+          depthWrite: false,
+        })
       );
       vGroup.add(stars);
     }

@@ -802,6 +802,7 @@ export class HubEngine {
     roomStreamer.unmountCurrentRoom(this.roomApiRoot, this.scene);
     nebulaSkySystem.unmountSky(this.worldRoot, this.scene);
     disposeThreeHierarchy(this.worldRoot);
+    this.playerRig.remove(this.audioReactiveVisuals.root);
     disposeThreeHierarchy(this.audioReactiveVisuals.root);
     this.renderer.dispose();
   }
@@ -945,6 +946,8 @@ export class HubEngine {
     roomStreamer.unmountCurrentRoom(this.roomApiRoot, this.scene);
     nebulaSkySystem.unmountSky(this.worldRoot, this.scene);
     disposeThreeHierarchy(this.worldRoot);
+    this.playerRig.remove(this.audioReactiveVisuals.root);
+    disposeThreeHierarchy(this.audioReactiveVisuals.root);
     this.audioReactiveVisuals = new AudioReactiveVisuals();
 
     const registerTarget = (
@@ -1021,7 +1024,7 @@ export class HubEngine {
     }
 
     const ctx = this.buildRoomContext(roomId, state);
-    this.worldRoot.add(this.audioReactiveVisuals.root);
+    this.playerRig.add(this.audioReactiveVisuals.root);
     roomStreamer.mountRoom(
       roomId,
       this.worldRoot,
