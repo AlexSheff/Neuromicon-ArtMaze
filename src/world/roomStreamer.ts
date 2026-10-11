@@ -2,16 +2,12 @@ import * as THREE from 'three';
 import room073Json from '../../room-template/room.json';
 import templateRoomModule from '../../room-template/index';
 import {
-  buildArtmazeHeaderBanner,
   buildFloorElectricCircuitSparks,
-  buildGothicRibbedVaultsAndOculus,
   buildQuartzPlasmaColumn,
   buildVRExplorerScaleFigure,
   buildWiredSciFiGothicPortal,
   clearSignageTextureCache,
-  createArchitecturalWallTexture,
   createCosmicFloorTexture,
-  createDoorLeafTexture,
   createSignageTexture,
   getWorldNodes,
   SpatialInteractiveTarget,
@@ -924,7 +920,6 @@ export class RoomStreamer {
     );
 
     const width = 16;
-    const height = 7.6;
     const depth = 18;
     const halfW = width * 0.5;
     const halfD = depth * 0.5;
@@ -939,24 +934,6 @@ export class RoomStreamer {
       3,
       3
     );
-    const wallTex = createArchitecturalWallTexture(
-      '#060912',
-      accentHex,
-      plasmaHex,
-      4,
-      1
-    );
-    const doorLeafTex = createDoorLeafTexture(
-      '#070b16',
-      accentHex,
-      plasmaHex
-    );
-
-    const wallMat = new THREE.MeshStandardMaterial({
-      map: wallTex,
-      roughness: 0.5,
-      metalness: 0.24,
-    });
     const stoneTrimMat = new THREE.MeshStandardMaterial({
       color: '#0e1320',
       roughness: 0.4,
@@ -974,46 +951,34 @@ export class RoomStreamer {
       emissive: rimHex,
       emissiveIntensity: 0.28,
     });
-    const doorLeafMat = new THREE.MeshStandardMaterial({
-      map: doorLeafTex,
-      roughness: 0.22,
-      metalness: 0.72,
-      emissive: accentHex,
-      emissiveIntensity: 0.16,
-    });
     const warmLuminaireMat = new THREE.MeshBasicMaterial({
       color: '#ffe8a3',
     });
 
     // 2. Walkable Polished Dark Basalt Floor (y = 0, with Sacred Geometry, Fractals, Circuits & Travelling Electric Sparks!)
     const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, depth),
+      new THREE.CircleGeometry(Math.max(halfW, halfD) + 2.2, 96),
       floorMat
     );
     floor.rotation.x = -Math.PI * 0.5;
     root.add(floor);
     walkableMeshes.push(floor);
 
-    buildFloorElectricCircuitSparks({
-      root,
-      maxRadius: 7.4,
-      primaryHex: plasmaHex,
-      secondaryHex: '#4ea8de',
-      goldHex: '#e5c158',
-    });
-
-    // High Gothic Cathedral Ribbed Vaults & Open Celestial Oculus at (0, height + 2.2, 0)
-    buildGothicRibbedVaultsAndOculus({
-      root,
-      oculusRadius: 4.8,
-      spanRadiusX: halfW - 0.5,
-      spanRadiusZ: halfD - 0.5,
-      wallHeight: height,
-      vaultApexY: height + 2.2,
-      ribAnglesDeg: [-40, 40, -75, 75, -135, 135],
-      basaltMat: stoneTrimMat,
-      trimMat,
-      innerGlowHex: accentHex,
+    // Open observatory: the sky is the ceiling. Low orbital rails define the edge
+    // without enclosing the player or cutting off the nebula.
+    [9.8, 10.7].forEach((radius, index) => {
+      const orbit = new THREE.Mesh(
+        new THREE.TorusGeometry(radius, index === 0 ? 0.045 : 0.022, 6, 128),
+        new THREE.MeshBasicMaterial({
+          color: index === 0 ? accentHex : plasmaHex,
+          transparent: true,
+          opacity: index === 0 ? 0.3 : 0.16,
+          toneMapped: false,
+        })
+      );
+      orbit.rotation.x = Math.PI * 0.5;
+      orbit.position.y = 0.025 + index * 0.012;
+      root.add(orbit);
     });
 
     // Central Fractal Floor Medallion directly beneath the Celestial Oculus
@@ -1032,89 +997,7 @@ export class RoomStreamer {
     centerFloorMedallion.position.set(0, 0.015, 0);
     root.add(centerFloorMedallion);
 
-    // 4 Dark Basalt & Slate Gothic Cathedral Outer Walls
-    const nWall = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, height),
-      wallMat
-    );
-    nWall.position.set(0, height * 0.5, -halfD);
-    root.add(nWall);
-
-    const sWall = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, height),
-      wallMat
-    );
-    sWall.rotation.y = Math.PI;
-    sWall.position.set(0, height * 0.5, halfD);
-    root.add(sWall);
-
-    const wWall = new THREE.Mesh(
-      new THREE.PlaneGeometry(depth, height),
-      wallMat
-    );
-    wWall.rotation.y = Math.PI * 0.5;
-    wWall.position.set(-halfW, height * 0.5, 0);
-    root.add(wWall);
-
-    const eWall = new THREE.Mesh(
-      new THREE.PlaneGeometry(depth, height),
-      wallMat
-    );
-    eWall.rotation.y = -Math.PI * 0.5;
-    eWall.position.set(halfW, height * 0.5, 0);
-    root.add(eWall);
-
-    // Tall Transparent Quartz Glass Plasma Columns with Swirling Plasma & Periodic Branching Lightning!
-    // Placed at the 6 Gothic Vault Pier positions (strictly flanking doors & walls, never blocking sightlines!)
-    const roomPlasmaColumnCoords = [
-      { x: -6.3, z: -halfD + 0.65 },
-      { x: 6.3, z: -halfD + 0.65 },
-      { x: -halfW + 0.65, z: 3.8 },
-      { x: halfW - 0.65, z: 3.8 },
-      { x: -4.8, z: halfD - 0.65 },
-      { x: 4.8, z: halfD - 0.65 },
-    ];
-    roomPlasmaColumnCoords.forEach((pc, idx) => {
-      const plasmaCol = buildQuartzPlasmaColumn({
-        x: pc.x,
-        z: pc.z,
-        height: height - 0.15,
-        radius: 0.36,
-        primaryHex: plasmaHex,
-        secondaryHex: accentHex,
-        goldHex: '#e5c158',
-        basaltMat: stoneTrimMat,
-        trimMat,
-        phaseSeed: idx * 1.73 + 0.4,
-      });
-      root.add(plasmaCol);
-    });
-
-    // Scale Figure of a Player in a VR Headset (`фигура игрока в VR-шлеме`) anchoring the monumental scale of the room
-    root.add(
-      buildVRExplorerScaleFigure({
-        x: -5.2,
-        z: 1.8,
-        rotY: 0.32,
-        visorHex: accentHex,
-        trimHex: plasmaHex,
-      })
-    );
-
-    // Central Overhead Banner above the 3 North Portals: `ARTMAZE // NEUROMICON PROJECT` + GitHub Repo Link
-    root.add(
-      buildArtmazeHeaderBanner({
-        x: 0,
-        y: 5.75,
-        z: -halfD + 0.26,
-        width: 5.2,
-        height: 1.25,
-        accentHex,
-        plasmaHex,
-        repoUrl: node?.repo || 'github.com/AlexSheff/Neuromicon',
-        trimMat,
-      })
-    );
+    // Open panoramic space: no outer walls, vaulted ceiling, or tall columns.
 
     // 3. Monumental Framed Neuromicon Painting on West Sanctuary Wall (Grounded pedestal + Brass Gallery Picture Light!)
     if (manifest.artwork) {
@@ -1259,7 +1142,7 @@ export class RoomStreamer {
         width: 2.35,
         height: 3.65,
         frameMat: dMat,
-        vortexMat: doorLeafMat,
+        vortexMat: trimMat,
         accentHex: isRH ? '#f0d27a' : accentHex,
         plasmaHex: skyRig.palette[1] ?? '#9d4edd',
         statusColorHex: isPlanned ? '#888888' : isRH ? '#f0d27a' : '#66cc99',
@@ -1530,7 +1413,7 @@ export class RoomStreamer {
       width: 2.55,
       height: 3.7,
       frameMat: trimMat,
-      vortexMat: doorLeafMat,
+      vortexMat: trimMat,
       accentHex,
       plasmaHex: skyRig.palette[1] ?? '#9d4edd',
       statusColorHex: '#ffe8a3',
@@ -1647,18 +1530,6 @@ export class RoomStreamer {
       })
     );
 
-    const voidVortexTex = createDoorLeafTexture(
-      '#050915',
-      '#c8a464',
-      '#4ea8de'
-    );
-    const voidVortexMat = new THREE.MeshStandardMaterial({
-      map: voidVortexTex,
-      roughness: 0.2,
-      metalness: 0.75,
-      emissive: '#4ea8de',
-      emissiveIntensity: 0.22,
-    });
     const plaqueTex = createSignageTexture(
       '↺',
       roomId,
@@ -1675,7 +1546,7 @@ export class RoomStreamer {
       width: 2.6,
       height: 3.8,
       frameMat: trimMat,
-      vortexMat: voidVortexMat,
+      vortexMat: trimMat,
       accentHex: '#c8a464',
       plasmaHex: '#4ea8de',
       statusColorHex: '#7cc6f2',

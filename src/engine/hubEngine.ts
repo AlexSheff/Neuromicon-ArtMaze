@@ -1034,9 +1034,6 @@ export class HubEngine {
       this.walkableMeshes
     );
     this.pose = { x: 0, y: 0, z: 5.5, yaw: 0, pitch: 0 };
-    this.audioReactiveVisuals.root.position.set(this.pose.x - Math.sin(this.pose.yaw) * 1.65, 0, this.pose.z - Math.cos(this.pose.yaw) * 1.65);
-    this.audioReactiveVisuals.root.rotation.y = this.pose.yaw;
-    this.worldRoot.add(this.audioReactiveVisuals.root);
   }
 
   public stepAndRender(
@@ -1226,7 +1223,8 @@ export class HubEngine {
       CorridorBuilder.updateDynamicAtmosphere(
         this.worldRoot,
         this.gameTimeSec,
-        state.comfort.reducedMotion
+        state.comfort.reducedMotion,
+        spatialAudioSystem.getReactiveLevels()
       );
     }
     nebulaSkySystem.update(gameDt, this.gameTimeSec, {
@@ -1250,7 +1248,7 @@ export class HubEngine {
     this.audioReactiveVisuals.update(
       this.gameTimeSec,
       spatialAudioSystem.getReactiveLevels(),
-      state.location === 'room' && !this.paused
+      false
     );
     this.comfort.update(dt, state.vignetteEnabled || this.paused);
 

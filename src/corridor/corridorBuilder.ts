@@ -1317,185 +1317,82 @@ export function buildWiredSciFiGothicPortal(opts: {
   phaseSeed?: number;
 }): THREE.Group {
   const {
-    x,
-    z,
-    rotY = 0,
-    width = 2.6,
-    height = 3.9,
-    frameMat,
-    vortexMat,
-    statusColorHex,
-    accentHex,
-    plaqueTex,
-    plaqueWidth = width * 0.88,
-    plaqueHeight = 1.05,
-    cableSpread = 1.0,
-    phaseSeed = 0,
+    x, z, rotY = 0, width = 2.6, height = 3.9, frameMat,
+    accentHex, statusColorHex, plaqueTex,
+    plaqueWidth = width * 0.82, plaqueHeight = 0.54, phaseSeed = 0,
   } = opts;
 
   const group = new THREE.Group();
   group.position.set(x, 0, z);
   group.rotation.y = rotY;
+  group.name = 'oval_cosmic_portal';
 
-  const halfW = width * 0.5;
-  const partsFrameAndCables: THREE.BufferGeometry[] = [];
-  const partsNeonAndWireCores: THREE.BufferGeometry[] = [];
+  // A clean elliptical silhouette keeps the sky visible around every transition.
+  const outerRing = new THREE.Mesh(
+    new THREE.TorusGeometry(1, 0.065, 10, 72),
+    frameMat
+  );
+  outerRing.scale.set(width * 0.5, height * 0.5, 1);
+  outerRing.position.set(0, height * 0.5, 0.16);
+  group.add(outerRing);
 
-  // 1. Stepped Sci-Fi/Gothic Threshold Plinth
-  const plinth = new THREE.BoxGeometry(width * 1.16, 0.18, 0.62);
-  plinth.translate(0, 0.09, 0.18);
-  partsFrameAndCables.push(plinth);
-
-  // 2. Left & Right Chamfered Portal Pillars + Side Induction Coils + Floor Cable Junction Boxes
-  for (const side of [-1, 1]) {
-    const px = side * (halfW - 0.16);
-    const pillar = new THREE.BoxGeometry(0.32, height - 0.25, 0.42);
-    pillar.translate(px, (height - 0.25) * 0.5 + 0.14, 0.16);
-    partsFrameAndCables.push(pillar);
-
-    // Floor Power Cable Junction Manifold Box outside each pillar base
-    const jBox = new THREE.BoxGeometry(0.36, 0.34, 0.44);
-    jBox.translate(side * (halfW + 0.22), 0.17, 0.28);
-    partsFrameAndCables.push(jBox);
-
-    // Mid-height Electromagnetic Induction Coil Ring on each pillar
-    const coil = new THREE.CylinderGeometry(0.26, 0.26, 0.28, 8);
-    coil.translate(px, height * 0.52, 0.2);
-    partsFrameAndCables.push(coil);
-
-    // Vertical Neon Portal Contour Strip along inner jamb
-    const neonStrip = new THREE.BoxGeometry(0.055, height - 0.42, 0.08);
-    neonStrip.translate(side * (halfW - 0.31), height * 0.48, 0.36);
-    partsNeonAndWireCores.push(neonStrip);
-
-    // 3D Connected Power Cable #1: Heavy Armored Floor Feeder Cable snaking from floor power grid into base junction box
-    const floorCableCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(
-        side * (halfW + 0.85 * cableSpread),
-        0.04,
-        1.45 * cableSpread
-      ),
-      new THREE.Vector3(
-        side * (halfW + 0.52 * cableSpread),
-        0.05,
-        0.82 * cableSpread
-      ),
-      new THREE.Vector3(side * (halfW + 0.24), 0.18, 0.34),
-    ]);
-    partsFrameAndCables.push(
-      new THREE.TubeGeometry(floorCableCurve, 8, 0.052, 6, false)
-    );
-
-    // Glowing Plasma Wire Core #1 running along the floor feeder cable into the portal
-    const floorGlowCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(
-        side * (halfW + 0.85 * cableSpread),
-        0.095,
-        1.45 * cableSpread
-      ),
-      new THREE.Vector3(
-        side * (halfW + 0.52 * cableSpread),
-        0.105,
-        0.82 * cableSpread
-      ),
-      new THREE.Vector3(side * (halfW + 0.24), 0.24, 0.36),
-    ]);
-    partsNeonAndWireCores.push(
-      new THREE.TubeGeometry(floorGlowCurve, 8, 0.024, 5, false)
-    );
-
-    // 3D Connected Power Cable #2: High-Voltage Catenary Loop from Base Junction Box up into Mid-Height Induction Coil
-    const midLoopCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(side * (halfW + 0.24), 0.3, 0.28),
-      new THREE.Vector3(
-        side * (halfW + 0.58 * cableSpread),
-        height * 0.27,
-        0.42
-      ),
-      new THREE.Vector3(side * (halfW + 0.06), height * 0.52, 0.24),
-    ]);
-    partsFrameAndCables.push(
-      new THREE.TubeGeometry(midLoopCurve, 8, 0.044, 6, false)
-    );
-
-    // Glowing Plasma Wire Core #2 along the side catenary loop
-    const midGlowCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(side * (halfW + 0.24), 0.32, 0.33),
-      new THREE.Vector3(
-        side * (halfW + 0.62 * cableSpread),
-        height * 0.27,
-        0.46
-      ),
-      new THREE.Vector3(side * (halfW + 0.08), height * 0.52, 0.29),
-    ]);
-    partsNeonAndWireCores.push(
-      new THREE.TubeGeometry(midGlowCurve, 8, 0.02, 5, false)
-    );
-
-    // 3D Connected Power Cable #3: Upper Umbilical Conduit from Mid Coil into the Gothic Arch Lintel Crown
-    const upperCableCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(side * (halfW + 0.04), height * 0.58, 0.22),
-      new THREE.Vector3(
-        side * (halfW + 0.42 * cableSpread),
-        height * 0.78,
-        0.34
-      ),
-      new THREE.Vector3(side * (halfW - 0.15), height - 0.08, 0.24),
-    ]);
-    partsFrameAndCables.push(
-      new THREE.TubeGeometry(upperCableCurve, 7, 0.038, 6, false)
-    );
-  }
-
-  // 3. Upper Lintel Beam + Pointed Gothic Arch Crown
-  const lintel = new THREE.BoxGeometry(width * 1.12, 0.38, 0.48);
-  lintel.translate(0, height - 0.12, 0.18);
-  partsFrameAndCables.push(lintel);
-
-  const gothicCrown = new THREE.ConeGeometry(width * 0.36, 0.72, 4);
-  gothicCrown.rotateY(Math.PI * 0.25);
-  gothicCrown.translate(0, height + 0.38, 0.16);
-  partsFrameAndCables.push(gothicCrown);
-
-  // Upper Status Luminaire Bar under the portal lintel
-  const statusLamp = new THREE.BoxGeometry(width * 0.68, 0.08, 0.16);
-  statusLamp.translate(0, height - 0.32, 0.38);
-  partsNeonAndWireCores.push(statusLamp);
-
-  // Merge all frame & armored cable parts into Mesh #1 (1 draw call)
-  const mergedFrameGeo = mergeBufferGeometries(partsFrameAndCables);
-  const frameAndCablesMesh = new THREE.Mesh(mergedFrameGeo, frameMat);
-  group.add(frameAndCablesMesh);
-
-  // Merge all neon contours & glowing wire cores into Mesh #2 (1 draw call, animated pulse)
-  const mergedNeonGeo = mergeBufferGeometries(partsNeonAndWireCores);
-  const neonWireMat = new THREE.MeshBasicMaterial({
+  const haloMaterial = new THREE.MeshBasicMaterial({
     color: statusColorHex ?? accentHex,
     transparent: true,
-    opacity: 0.9,
+    opacity: 0.82,
+    toneMapped: false,
   });
-  const neonAndWiresMesh = new THREE.Mesh(mergedNeonGeo, neonWireMat);
-  neonAndWiresMesh.name = 'portal_wire_pulse';
-  neonAndWiresMesh.userData = { phaseSeed };
-  group.add(neonAndWiresMesh);
-
-  // Mesh #3: Dimensional Portal Vortex Aperture (1 draw call)
-  const vortexAperture = new THREE.Mesh(
-    new THREE.BoxGeometry(width - 0.56, height - 0.48, 0.14),
-    vortexMat
+  const halo = new THREE.Mesh(
+    new THREE.TorusGeometry(1, 0.022, 6, 72),
+    haloMaterial
   );
-  vortexAperture.name = 'portal_vortex_aperture';
-  vortexAperture.userData = { phaseSeed };
-  vortexAperture.position.set(0, 0.18 + (height - 0.48) * 0.5, 0.14);
-  group.add(vortexAperture);
+  halo.scale.set(width * 0.458, height * 0.458, 1);
+  halo.position.set(0, height * 0.5, 0.13);
+  halo.name = 'portal_wire_pulse';
+  halo.userData = { phaseSeed };
+  group.add(halo);
 
-  // Mesh #4: Built-in Sci-Fi/Gothic Telemetry Display Plaque above portal (1 draw call)
-  const plaqueMesh = new THREE.Mesh(
+  // Elliptical shape geometry, rather than a rectangular door leaf, lets the
+  // nebula show through while a restrained shader suggests depth and motion.
+  const apertureShape = new THREE.Shape();
+  apertureShape.absellipse(0, 0, width * 0.43, height * 0.43, 0, Math.PI * 2, false, 0);
+  const apertureMaterial = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    uniforms: {
+      uTime: { value: 0 },
+      uBeat: { value: 0 },
+      uLow: { value: 0 },
+      uMid: { value: 0 },
+      uHigh: { value: 0 },
+      uAmplitude: { value: 0 },
+      uColor: { value: new THREE.Color(accentHex) },
+      uPlasma: { value: new THREE.Color(opts.plasmaHex ?? '#77c9ff') },
+    },
+    vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+    fragmentShader: `uniform float uTime; uniform float uBeat; uniform float uLow; uniform float uMid; uniform float uHigh; uniform float uAmplitude; uniform vec3 uColor; uniform vec3 uPlasma; varying vec2 vUv; void main(){ vec2 p=(vUv-0.5)*2.0; float r=length(p); float swirl=0.5+0.5*sin(8.0*r-uTime*(0.22+uLow*0.18)+atan(p.y,p.x)*1.4); float rim=(1.0-smoothstep(0.72,1.0,r)); vec3 color=mix(uColor,uPlasma,clamp(swirl*0.34+uHigh*0.2,0.0,1.0)); color=mix(color,vec3(1.0,0.78,0.42),uLow*0.12); float alpha=rim*(0.06+0.1*(1.0-r)+uBeat*0.07+uMid*0.035+uAmplitude*0.045); gl_FragColor=vec4(color,alpha); }`,
+  });
+  const apertureGeometry = new THREE.ShapeGeometry(apertureShape, 48);
+  const aperturePositions = apertureGeometry.getAttribute('position');
+  const apertureUvs = new Float32Array(aperturePositions.count * 2);
+  for (let i = 0; i < aperturePositions.count; i++) {
+    apertureUvs[i * 2] = aperturePositions.getX(i) / (width * 0.86) + 0.5;
+    apertureUvs[i * 2 + 1] = aperturePositions.getY(i) / (height * 0.86) + 0.5;
+  }
+  apertureGeometry.setAttribute('uv', new THREE.BufferAttribute(apertureUvs, 2));
+  const aperture = new THREE.Mesh(apertureGeometry, apertureMaterial);
+  aperture.position.set(0, height * 0.5, 0.08);
+  aperture.name = 'portal_vortex_aperture';
+  aperture.userData = { phaseSeed };
+  group.add(aperture);
+
+  const plaque = new THREE.Mesh(
     new THREE.PlaneGeometry(plaqueWidth, plaqueHeight),
-    new THREE.MeshBasicMaterial({ map: plaqueTex })
+    new THREE.MeshBasicMaterial({ map: plaqueTex, transparent: true })
   );
-  plaqueMesh.position.set(0, height + 0.22 + plaqueHeight * 0.5, 0.28);
-  group.add(plaqueMesh);
+  plaque.position.set(0, height + plaqueHeight * 0.56, 0.18);
+  group.add(plaque);
 
   return group;
 }
@@ -1659,69 +1556,8 @@ export class CorridorBuilder {
     });
 
     // Travelling Electric Sparks (`перемещающиеся сполохи электричества`) along the floor circuits
-    buildFloorElectricCircuitSparks({
-      root,
-      maxRadius: 13.8,
-      primaryHex: '#9d4edd',
-      secondaryHex: '#4ea8de',
-      goldHex: '#e5c158',
-    });
 
-    // 2. Open overhead view; the sky is unobstructed by a central fixture or vault.
-    const columnAnglesDeg = [-68, -42, 42, 68, -118, 118, -152, 152];
-    buildGothicRibbedVaultsAndOculus({
-      root,
-      oculusRadius: 9.8,
-      spanRadiusX: 13.8,
-      spanRadiusZ: 13.8,
-      wallHeight: 9.8,
-      vaultApexY: 14.6,
-      ribAnglesDeg: columnAnglesDeg,
-      basaltMat: gothicBasaltMat,
-      trimMat: goldHeroMat,
-      innerGlowHex: '#e5c158',
-    });
-
-    // 3. Tall Transparent Quartz Glass Plasma Columns with Swirling Plasma & Periodic Branching Lightning!
-    // Strictly flanking the 3 North Sector Portals and East/West wings — never blocking sightlines!
-    columnAnglesDeg.forEach((deg, idx) => {
-      const rad = THREE.MathUtils.degToRad(deg);
-      const bx = Math.sin(rad) * 13.8;
-      const bz = -Math.cos(rad) * 13.8;
-
-      const plasmaCol = buildQuartzPlasmaColumn({
-        x: bx,
-        z: bz,
-        height: 9.8,
-        radius: 0.46,
-        primaryHex: idx % 2 === 0 ? '#9d4edd' : '#4ea8de',
-        secondaryHex: idx % 2 === 0 ? '#4ea8de' : '#b388ff',
-        goldHex: '#e5c158',
-        basaltMat: gothicBasaltMat,
-        trimMat: idx % 3 === 0 ? goldHeroMat : idx % 3 === 1 ? cyanHeroMat : violetHeroMat,
-        phaseSeed: idx * 1.618 + 0.5,
-      });
-      root.add(plasmaCol);
-    });
-
-    // 4. Scale Figures of Players in VR Headsets (`Фигуры людей в VR-шлемах масштабируют пространство`)
-    const explorerLeft = buildVRExplorerScaleFigure({
-      x: -4.4,
-      z: -3.2,
-      rotY: -0.18,
-      visorHex: '#4ea8de',
-      trimHex: '#e5c158',
-    });
-    root.add(explorerLeft);
-
-    const explorerRight = buildVRExplorerScaleFigure({
-      x: 4.4,
-      z: -3.2,
-      rotY: 0.18,
-      visorHex: '#b388ff',
-      trimHex: '#4ea8de',
-    });
-    root.add(explorerRight);
+    // The nebula is fully open above the atrium; no roof ribs or tall columns.
 
     // 5. Soft Pulsing Ring on Floor at z = 2.2m
     const moveRingGroup = new THREE.Group();
@@ -1847,20 +1683,6 @@ export class CorridorBuilder {
     atriumGroup.name = 'threshold_atrium_reveal_group';
     root.add(atriumGroup);
 
-    // Grand Overhead Banner above the Central Portal (`z = -8.0, y = 7.45`)
-    const centralHeaderBanner = buildArtmazeHeaderBanner({
-      x: 0,
-      y: 7.45,
-      z: -7.75,
-      width: 6.2,
-      height: 1.5,
-      accentHex: '#e5c158',
-      plasmaHex: '#9d4edd',
-      repoUrl: 'github.com/AlexSheff/Neuromicon',
-      trimMat: goldHeroMat,
-    });
-    atriumGroup.add(centralHeaderBanner);
-
     const cosmicDoorsSpec: Array<{
       segment: 1 | 2 | 3;
       x: number;
@@ -1893,18 +1715,6 @@ export class CorridorBuilder {
 
     cosmicDoorsSpec.forEach((spec, idx) => {
       const meta = SECTOR_HALL_META[spec.segment];
-      const vortexTex = createDoorLeafTexture(
-        '#050915',
-        meta.accentHex,
-        meta.plasmaHex
-      );
-      const vortexMat = new THREE.MeshStandardMaterial({
-        map: vortexTex,
-        roughness: 0.18,
-        metalness: 0.76,
-        emissive: meta.accentHex,
-        emissiveIntensity: 0.24,
-      });
       const plaqueTex = createSignageTexture(
         meta.symbol,
         meta.title,
@@ -1921,7 +1731,7 @@ export class CorridorBuilder {
         width: 3.4,
         height: 4.9,
         frameMat: spec.mat,
-        vortexMat,
+        vortexMat: spec.mat,
         accentHex: meta.accentHex,
         plasmaHex: meta.plasmaHex,
         statusColorHex: meta.accentHex,
@@ -2079,8 +1889,14 @@ export class CorridorBuilder {
   public static updateDynamicAtmosphere(
     root: THREE.Object3D,
     timeSec: number,
-    reducedMotion = false
+    reducedMotion = false,
+    audio: { low?: number; mid?: number; high?: number; amplitude?: number; beat?: number } = {}
   ): void {
+    const beat = THREE.MathUtils.clamp(audio.beat ?? 0, 0, 1);
+    const low = THREE.MathUtils.clamp(audio.low ?? 0, 0, 1);
+    const mid = THREE.MathUtils.clamp(audio.mid ?? 0, 0, 1);
+    const high = THREE.MathUtils.clamp(audio.high ?? 0, 0, 1);
+    const amplitude = THREE.MathUtils.clamp(audio.amplitude ?? 0, 0, 1);
     root.traverse((obj) => {
       if (obj.name === 'plasma_vortex_core') {
         const mesh = obj as THREE.Mesh;
@@ -2157,17 +1973,20 @@ export class CorridorBuilder {
         const mat = mesh.material as THREE.MeshBasicMaterial;
         const seed = (mesh.userData?.phaseSeed as number) ?? 0;
         if (reducedMotion) {
-          mat.opacity = 0.88;
+          mat.opacity = 0.78;
         } else {
-          mat.opacity = 0.62 + Math.sin(timeSec * 3.4 + seed) * 0.34;
+          mat.opacity = 0.62 + Math.sin(timeSec * 1.5 + seed) * 0.1 + beat * 0.12 + amplitude * 0.08;
         }
       } else if (obj.name === 'portal_vortex_aperture') {
         const mesh = obj as THREE.Mesh;
-        const mat = mesh.material as THREE.MeshStandardMaterial;
-        const seed = (mesh.userData?.phaseSeed as number) ?? 0;
-        if (mat && 'emissiveIntensity' in mat && !reducedMotion) {
-          mat.emissiveIntensity =
-            0.2 + Math.sin(timeSec * 2.2 + seed) * 0.08;
+        const mat = mesh.material as THREE.ShaderMaterial;
+        if (mat?.uniforms?.uTime) {
+          mat.uniforms.uTime.value = timeSec;
+          mat.uniforms.uBeat.value = reducedMotion ? 0 : beat;
+          mat.uniforms.uLow.value = low;
+          mat.uniforms.uMid.value = mid;
+          mat.uniforms.uHigh.value = high;
+          mat.uniforms.uAmplitude.value = amplitude;
         }
       }
     });
@@ -2258,31 +2077,6 @@ export class CorridorBuilder {
       4,
       7
     );
-    const sideWallTex = createArchitecturalWallTexture(
-      '#060912',
-      accentHex,
-      meta.plasmaHex,
-      6,
-      1
-    );
-    const endWallTex = createArchitecturalWallTexture(
-      '#060912',
-      accentHex,
-      meta.plasmaHex,
-      3,
-      1
-    );
-
-    const sideWallMat = new THREE.MeshStandardMaterial({
-      map: sideWallTex,
-      roughness: 0.5,
-      metalness: 0.24,
-    });
-    const endWallMat = new THREE.MeshStandardMaterial({
-      map: endWallTex,
-      roughness: 0.5,
-      metalness: 0.24,
-    });
     const gothicBasaltMat = new THREE.MeshStandardMaterial({
       color: '#0e1320',
       roughness: 0.42,
@@ -2303,35 +2097,15 @@ export class CorridorBuilder {
 
     // 1. Walkable Polished Dark Basalt Floor (y = 0, with Fractals & Circuit Schematics)
     const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, depth),
+      new THREE.CircleGeometry(Math.max(halfW, halfD), 96),
       floorMat
     );
     floor.rotation.x = -Math.PI * 0.5;
     root.add(floor);
     walkableMeshes.push(floor);
 
-    buildFloorElectricCircuitSparks({
-      root,
-      maxRadius: 9.2,
-      primaryHex: meta.plasmaHex,
-      secondaryHex: '#4ea8de',
-      goldHex: '#e5c158',
-    });
 
-    // 2. Open overhead view; keep the nebula unobstructed.
-    buildGothicRibbedVaultsAndOculus({
-      root,
-      oculusRadius: 5.8,
-      spanRadiusX: halfW - 0.4,
-      spanRadiusZ: halfD - 2.0,
-      wallHeight: height,
-      vaultApexY: height + 3.2,
-      ribAnglesDeg: [-70, -35, 35, 70, -110, -145, 110, 145],
-      basaltMat: gothicBasaltMat,
-      trimMat: heroTrimMat,
-      innerGlowHex: meta.accentHex,
-      centerZ: -2.0,
-    });
+    // Open sky above the sector platform; no ceiling ribs.
 
     // Central Fractal Medallion directly beneath the Celestial Oculus
     const centerBasinRim = new THREE.Mesh(
@@ -2349,121 +2123,10 @@ export class CorridorBuilder {
     centerBasinRim.position.set(0, 0.016, -2.0);
     root.add(centerBasinRim);
 
-    // 3. Dark Basalt Gothic Side & End Walls
-    [-halfW, halfW].forEach((wx) => {
-      const sideWall = new THREE.Mesh(
-        new THREE.PlaneGeometry(depth, height),
-        sideWallMat
-      );
-      sideWall.rotation.y = wx < 0 ? Math.PI * 0.5 : -Math.PI * 0.5;
-      sideWall.position.set(wx, height * 0.5, 0);
-      root.add(sideWall);
-
-      const cornice = new THREE.Mesh(
-        new THREE.BoxGeometry(0.65, 0.45, depth),
-        gothicBasaltMat
-      );
-      cornice.position.set(
-        wx < 0 ? wx + 0.32 : wx - 0.32,
-        height - 0.22,
-        0
-      );
-      root.add(cornice);
-    });
-
-    [-halfD, halfD].forEach((wz) => {
-      const endWall = new THREE.Mesh(
-        new THREE.PlaneGeometry(width, height),
-        endWallMat
-      );
-      endWall.rotation.y = wz < 0 ? 0 : Math.PI;
-      endWall.position.set(0, height * 0.5, wz);
-      root.add(endWall);
-
-      const endCornice = new THREE.Mesh(
-        new THREE.BoxGeometry(width, 0.45, 0.65),
-        gothicBasaltMat
-      );
-      endCornice.position.set(
-        0,
-        height - 0.22,
-        wz < 0 ? wz + 0.32 : wz - 0.32
-      );
-      root.add(endCornice);
-    });
-
-    // 4. Tall Transparent Quartz Glass Plasma Columns with Swirling Plasma & Lightning strictly BETWEEN the Door Bays!
-    const columnZPositions = [-15.0, -5.0, 5.0, 15.0];
-    let cSeed = 1;
-    for (const side of [-1, 1]) {
-      for (const pz of columnZPositions) {
-        const plasmaCol = buildQuartzPlasmaColumn({
-          x: side * (halfW - 0.68),
-          z: pz,
-          height: height - 0.2,
-          radius: 0.38,
-          primaryHex: meta.plasmaHex,
-          secondaryHex: meta.accentHex,
-          goldHex: '#e5c158',
-          basaltMat: gothicBasaltMat,
-          trimMat: heroTrimMat,
-          phaseSeed: cSeed * 1.37,
-        });
-        root.add(plasmaCol);
-        cSeed++;
-      }
-    }
-
-    // 5. VR Explorer Scale Figures admiring the Sector Cathedral
-    root.add(
-      buildVRExplorerScaleFigure({
-        x: -3.6,
-        z: -6.5,
-        rotY: 0.25,
-        visorHex: meta.accentHex,
-        trimHex: meta.plasmaHex,
-      })
-    );
-    root.add(
-      buildVRExplorerScaleFigure({
-        x: 3.6,
-        z: 4.5,
-        rotY: -0.35,
-        visorHex: '#e5c158',
-        trimHex: meta.accentHex,
-      })
-    );
-
-    // 6. Central Overhead Banner on the North Cathedral Wall: `ARTMAZE // NEUROMICON PROJECT`
-    root.add(
-      buildArtmazeHeaderBanner({
-        x: 0,
-        y: 6.85,
-        z: -halfD + 0.32,
-        width: 5.8,
-        height: 1.4,
-        accentHex: meta.accentHex,
-        plasmaHex: meta.plasmaHex,
-        repoUrl: 'github.com/AlexSheff/Neuromicon',
-        trimMat: heroTrimMat,
-      })
-    );
+    // Portals are free-standing in the nebula; no enclosing walls or columns.
 
     // 7. Futuristic Sci-Fi/Gothic Portals to every Artwork & Audio Room in this Sector
     const segmentNodes = getWorldNodes().filter((n) => n.segment === segment);
-    const doorLeafTex = createDoorLeafTexture(
-      '#070b16',
-      accentHex,
-      meta.plasmaHex
-    );
-    const doorLeafMat = new THREE.MeshStandardMaterial({
-      map: doorLeafTex,
-      roughness: 0.22,
-      metalness: 0.72,
-      emissive: accentHex,
-      emissiveIntensity: 0.16,
-    });
-
     const doorSlots: Array<{ x: number; z: number; rotY: number }> = [
       { x: -halfW + 0.1, z: -12.5, rotY: Math.PI * 0.5 },
       { x: halfW - 0.1, z: -12.5, rotY: -Math.PI * 0.5 },
@@ -2516,7 +2179,7 @@ export class CorridorBuilder {
         width: 2.48,
         height: 3.78,
         frameMat: heroTrimMat,
-        vortexMat: doorLeafMat,
+        vortexMat: heroTrimMat,
         accentHex,
         plasmaHex: meta.plasmaHex,
         statusColorHex: statusColor,
@@ -2562,7 +2225,7 @@ export class CorridorBuilder {
         width: 3.0,
         height: 4.1,
         frameMat: heroTrimMat,
-        vortexMat: doorLeafMat,
+        vortexMat: heroTrimMat,
         accentHex: targetMeta.accentHex,
         plasmaHex: targetMeta.plasmaHex,
         statusColorHex: targetMeta.accentHex,
@@ -2603,7 +2266,7 @@ export class CorridorBuilder {
       width: 3.1,
       height: 4.1,
       frameMat: heroTrimMat,
-      vortexMat: doorLeafMat,
+      vortexMat: heroTrimMat,
       accentHex,
       plasmaHex: meta.plasmaHex,
       statusColorHex: '#ffe8a3',

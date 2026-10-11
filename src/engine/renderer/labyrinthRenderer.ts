@@ -704,11 +704,12 @@ export class ThreeLabyrinthEngine {
       metalness: 0.16,
     });
     const floorMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, depth),
+      new THREE.CircleGeometry(Math.max(halfW, halfD) + 2.2, 96),
       floorMat
     );
     floorMesh.rotation.x = -Math.PI * 0.5;
     floorMesh.position.set(0, 0, 0);
+    floorMesh.receiveShadow = false;
     this.roomGroup.add(floorMesh);
 
     const accentTrimMat = new THREE.MeshStandardMaterial({
@@ -736,153 +737,23 @@ export class ThreeLabyrinthEngine {
     });
     this.roomGroup.add(medallionGroup);
 
-    // 3. Open roofline: no coffered ceiling, cross-beams, or central skylight fixture.
-
-    // 4. Outer Architectural Walls + Base Plinth Dado + Upper Entablature Cornice
-    const wallTex = createAshlarWallTexture(palette.wall, palette.accent);
-    const wallMat = new THREE.MeshStandardMaterial({
-      map: wallTex,
-      roughness: 0.74,
-      metalness: 0.08,
+    // Open-air observatory: a thin outer orbit replaces walls, columns and ceiling beams.
+    [Math.max(halfW, halfD) + 0.8, Math.max(halfW, halfD) + 1.7].forEach((radius, i) => {
+      const orbit = new THREE.Mesh(
+        new THREE.TorusGeometry(radius, i === 0 ? 0.035 : 0.018, 5, 128),
+        new THREE.MeshBasicMaterial({
+          color: palette.accent,
+          transparent: true,
+          opacity: i === 0 ? 0.32 : 0.14,
+          toneMapped: false,
+        })
+      );
+      orbit.rotation.x = Math.PI * 0.5;
+      orbit.position.y = 0.018 + i * 0.008;
+      this.roomGroup.add(orbit);
     });
 
-    // North Wall (-halfD)
-    const northWall = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, height),
-      wallMat
-    );
-    northWall.position.set(0, height * 0.5, -halfD);
-    this.roomGroup.add(northWall);
-
-    // South Wall (+halfD)
-    const southWall = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, height),
-      wallMat
-    );
-    southWall.rotation.y = Math.PI;
-    southWall.position.set(0, height * 0.5, halfD);
-    this.roomGroup.add(southWall);
-
-    // West Wall (-halfW)
-    const westWall = new THREE.Mesh(
-      new THREE.PlaneGeometry(depth, height),
-      wallMat
-    );
-    westWall.rotation.y = Math.PI * 0.5;
-    westWall.position.set(-halfW, height * 0.5, 0);
-    this.roomGroup.add(westWall);
-
-    // East Wall (+halfW)
-    const eastWall = new THREE.Mesh(
-      new THREE.PlaneGeometry(depth, height),
-      wallMat
-    );
-    eastWall.rotation.y = -Math.PI * 0.5;
-    eastWall.position.set(halfW, height * 0.5, 0);
-    this.roomGroup.add(eastWall);
-
-    // Grounded Baseboard Plinths & Upper Entablature Cornices along all 4 walls
-    const plinthH = 0.38;
-    const corniceY = height - 0.16;
-
-    [
-      { w: width, d: 0.18, x: 0, z: -halfD + 0.09 },
-      { w: width, d: 0.18, x: 0, z: halfD - 0.09 },
-      { w: 0.18, d: depth, x: -halfW + 0.09, z: 0 },
-      { w: 0.18, d: depth, x: halfW - 0.09, z: 0 },
-    ].forEach((seg) => {
-      const basePlinth = new THREE.Mesh(
-        new THREE.BoxGeometry(seg.w, plinthH, seg.d),
-        plinthMat
-      );
-      basePlinth.position.set(seg.x, plinthH * 0.5, seg.z);
-      this.roomGroup.add(basePlinth);
-
-      const upperCornice = new THREE.Mesh(
-        new THREE.BoxGeometry(seg.w, 0.32, seg.d * 1.4),
-        plinthMat
-      );
-      upperCornice.position.set(seg.x, corniceY, seg.z);
-      this.roomGroup.add(upperCornice);
-    });
-
-    // 5. Monumental Fluted Colonnade Pillars + Warm Alabaster Sconces (y = 0 to y = height)
-    const colX = Math.max(3.5, halfW - 2.6);
-    const colZ = Math.max(3.2, halfD - 3.6);
-    const pillarPositions: Array<[number, number]> = [
-      [-colX, -colZ],
-      [colX, -colZ],
-      [-colX, colZ],
-      [colX, colZ],
-    ];
-
-    const pillarMat = new THREE.MeshStandardMaterial({
-      color: '#2a2520',
-      roughness: 0.56,
-      metalness: 0.18,
-    });
-
-    const sconceMat = new THREE.MeshBasicMaterial({
-      color: '#ffdf9e',
-    });
-
-    pillarPositions.forEach(([px, pz]) => {
-      const pGroup = new THREE.Group();
-      pGroup.position.set(px, 0, pz);
-
-      // Stepped Base Plinth on Floor (y = 0 .. 0.38)
-      const base = new THREE.Mesh(
-        new THREE.BoxGeometry(1.02, 0.38, 1.02),
-        plinthMat
-      );
-      base.position.y = 0.19;
-      pGroup.add(base);
-
-      // Gold Astragal Trim Ring
-      const baseTrim = new THREE.Mesh(
-        new THREE.BoxGeometry(1.08, 0.05, 1.08),
-        accentTrimMat
-      );
-      baseTrim.position.y = 0.39;
-      pGroup.add(baseTrim);
-
-      // 16-Sided Fluted Column Shaft
-      const shaftH = height - 0.76;
-      const shaft = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.35, 0.4, shaftH, 16),
-        pillarMat
-      );
-      shaft.position.y = 0.38 + shaftH * 0.5;
-      pGroup.add(shaft);
-
-      // Necking Ring & Capital at Ceiling
-      const neckTrim = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.42, 0.42, 0.06, 16),
-        accentTrimMat
-      );
-      neckTrim.position.y = height - 0.42;
-      pGroup.add(neckTrim);
-
-      const cap = new THREE.Mesh(
-        new THREE.BoxGeometry(1.06, 0.38, 1.06),
-        plinthMat
-      );
-      cap.position.y = height - 0.19;
-      pGroup.add(cap);
-
-      // Warm Alabaster Wall/Pillar Sconce facing room center
-      const sconceDirX = px < 0 ? 0.39 : -0.39;
-      const sconce = new THREE.Mesh(
-        new THREE.BoxGeometry(0.12, 0.36, 0.18),
-        sconceMat
-      );
-      sconce.position.set(sconceDirX, 2.35, 0);
-      pGroup.add(sconce);
-
-      this.roomGroup.add(pGroup);
-    });
-
-    // 6. Monumental 3D Door Portals (Strictly Grounded on y = 0, Embedded in Wall)
+    // 3. Oval dimensional gates float in open space; no wall or door leaf blocks the sky.
     manifest.doors.forEach((door) => {
       const evalDoor = evaluateDoor(door, playerState, registry);
       if (!evalDoor.isVisible) return;
@@ -896,123 +767,58 @@ export class ThreeLabyrinthEngine {
       );
 
       const isRabbitHole = door.type === 'rabbit-hole' || door.id === 'RH';
-      const dw = isRabbitHole ? 1.65 : door.type === 'monumental' ? 2.25 : 1.95;
-      const dh = isRabbitHole ? 3.35 : door.type === 'monumental' ? 3.9 : 3.55;
+      const dw = isRabbitHole ? 2.25 : door.type === 'monumental' ? 2.75 : 2.45;
+      const dh = isRabbitHole ? 3.6 : door.type === 'monumental' ? 4.2 : 3.85;
 
       const doorGroup = new THREE.Group();
       doorGroup.position.set(anchor.cx, 0, anchor.cz);
       doorGroup.rotation.y = anchor.rotY;
 
-      const portalTrimMat = new THREE.MeshStandardMaterial({
-        color: isRabbitHole ? '#e5c158' : palette.accent,
-        roughness: 0.28,
-        metalness: 0.8,
+      const accent = isRabbitHole ? '#f3c96a' : palette.accent;
+      const portalTrimMat = new THREE.MeshBasicMaterial({
+        color: accent,
+        transparent: true,
+        opacity: 0.86,
+        toneMapped: false,
       });
+      const outerRing = new THREE.Mesh(new THREE.TorusGeometry(1, 0.045, 8, 64), portalTrimMat);
+      outerRing.scale.set(dw * 0.5, dh * 0.5, 1);
+      outerRing.position.set(0, dh * 0.5, 0.12);
+      doorGroup.add(outerRing);
 
-      const jambStoneMat = new THREE.MeshStandardMaterial({
-        color: '#2b251f',
-        roughness: 0.52,
-        metalness: 0.22,
+      const innerRing = new THREE.Mesh(
+        new THREE.TorusGeometry(1, 0.018, 6, 64),
+        new THREE.MeshBasicMaterial({ color: '#a9dcff', transparent: true, opacity: 0.54, toneMapped: false })
+      );
+      innerRing.scale.set(dw * 0.455, dh * 0.455, 1);
+      innerRing.position.set(0, dh * 0.5, 0.1);
+      doorGroup.add(innerRing);
+
+      const apertureShape = new THREE.Shape();
+      apertureShape.absellipse(0, 0, dw * 0.43, dh * 0.43, 0, Math.PI * 2, false, 0);
+      const apertureMaterial = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color(accent) } },
+        vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+        fragmentShader: `uniform float uTime; uniform vec3 uColor; varying vec2 vUv; void main(){ vec2 p=(vUv-0.5)*2.0; float r=length(p); float edge=(1.0-smoothstep(0.88,1.0,r)); float core=0.5+0.5*sin(10.0*r-uTime*0.45+atan(p.y,p.x)*2.0); vec3 c=mix(uColor,vec3(0.16,0.52,0.82),core*0.34); float alpha=edge*(0.10+0.20*(1.0-r)+core*0.06); gl_FragColor=vec4(c,alpha); }`,
       });
+      const apertureGeometry = new THREE.ShapeGeometry(apertureShape, 48);
+      const aperturePositions = apertureGeometry.getAttribute('position');
+      const apertureUvs = new Float32Array(aperturePositions.count * 2);
+      for (let i = 0; i < aperturePositions.count; i++) {
+        apertureUvs[i * 2] = aperturePositions.getX(i) / (dw * 0.86) + 0.5;
+        apertureUvs[i * 2 + 1] = aperturePositions.getY(i) / (dh * 0.86) + 0.5;
+      }
+      apertureGeometry.setAttribute('uv', new THREE.BufferAttribute(apertureUvs, 2));
+      const aperture = new THREE.Mesh(apertureGeometry, apertureMaterial);
+      aperture.name = 'room_portal_aperture';
+      aperture.userData.phaseSeed = Math.random() * Math.PI * 2;
+      aperture.position.set(0, dh * 0.5, 0.07);
+      doorGroup.add(aperture);
 
-      // A. Stepped Stone Threshold Slab resting directly on Floor (y = 0 .. 0.14)
-      const thresholdStep = new THREE.Mesh(
-        new THREE.BoxGeometry(dw + 0.72, 0.14, 0.56),
-        jambStoneMat
-      );
-      thresholdStep.position.set(0, 0.07, 0.22);
-      doorGroup.add(thresholdStep);
-
-      const brassSill = new THREE.Mesh(
-        new THREE.BoxGeometry(dw + 0.52, 0.03, 0.14),
-        portalTrimMat
-      );
-      brassSill.position.set(0, 0.15, 0.36);
-      doorGroup.add(brassSill);
-
-      // B. Left & Right 3D Stone Jamb Pillars (y = 0.14 .. dh)
-      const jambW = 0.26;
-      const jambD = 0.38;
-      [-dw * 0.5 - jambW * 0.4, dw * 0.5 + jambW * 0.4].forEach((jx) => {
-        const jamb = new THREE.Mesh(
-          new THREE.BoxGeometry(jambW, dh, jambD),
-          jambStoneMat
-        );
-        jamb.position.set(jx, dh * 0.5, 0.16);
-        doorGroup.add(jamb);
-
-        const jambTrim = new THREE.Mesh(
-          new THREE.BoxGeometry(0.05, dh - 0.2, jambD + 0.04),
-          portalTrimMat
-        );
-        jambTrim.position.set(
-          jx + (jx < 0 ? jambW * 0.45 : -jambW * 0.45),
-          dh * 0.5,
-          0.16
-        );
-        doorGroup.add(jambTrim);
-      });
-
-      // C. Carved Stone Entablature & Cornice Lintel (y = dh .. dh + 0.46)
-      const lintel = new THREE.Mesh(
-        new THREE.BoxGeometry(dw + 0.88, 0.46, 0.48),
-        jambStoneMat
-      );
-      lintel.position.set(0, dh + 0.23, 0.2);
-      doorGroup.add(lintel);
-
-      const lintelCrown = new THREE.Mesh(
-        new THREE.BoxGeometry(dw + 0.98, 0.08, 0.56),
-        portalTrimMat
-      );
-      lintelCrown.position.set(0, dh + 0.48, 0.22);
-      doorGroup.add(lintelCrown);
-
-      // D. Recessed Coffered Double Door Leaf / Void Aperture (y = 0.14 .. dh)
-      const isVoidOrPlanned =
-        door.status === 'void' || door.status === 'planned';
-      const leafColor = isRabbitHole
-        ? '#211530'
-        : isVoidOrPlanned
-        ? '#0c1624'
-        : '#1e1914';
-
-      const leafMat = new THREE.MeshStandardMaterial({
-        color: leafColor,
-        roughness: isVoidOrPlanned ? 0.14 : 0.4,
-        metalness: isVoidOrPlanned ? 0.65 : 0.48,
-        emissive: isRabbitHole
-          ? '#3b2454'
-          : isVoidOrPlanned
-          ? '#102238'
-          : '#000000',
-        emissiveIntensity: 0.65,
-      });
-
-      const doorLeaf = new THREE.Mesh(
-        new THREE.BoxGeometry(dw, dh - 0.14, 0.14),
-        leafMat
-      );
-      doorLeaf.position.set(0, 0.14 + (dh - 0.14) * 0.5, 0.1);
-      doorGroup.add(doorLeaf);
-
-      const centerSeam = new THREE.Mesh(
-        new THREE.BoxGeometry(0.04, dh - 0.2, 0.18),
-        portalTrimMat
-      );
-      centerSeam.position.set(0, 0.14 + (dh - 0.14) * 0.5, 0.1);
-      doorGroup.add(centerSeam);
-
-      [-0.14, 0.14].forEach((hx) => {
-        const handle = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.025, 0.025, 0.34, 10),
-          portalTrimMat
-        );
-        handle.position.set(hx, 1.45, 0.22);
-        doorGroup.add(handle);
-      });
-
-      // E. Architectural Nameplate Plaque on Lintel
+      // Floating label stays clear of the opening; the portal remains the focal point.
       const plaqueTex = createArchitecturalPlaqueTexture(
         door.symbol || door.id,
         `DOOR ${door.label || door.id}`,
@@ -1020,11 +826,8 @@ export class ThreeLabyrinthEngine {
           (door.destination ? `→ ${door.destination}` : '→ VOID'),
         isRabbitHole ? '#f0d27a' : palette.accent
       );
-      const plaqueMesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.78, 0.52),
-        new THREE.MeshBasicMaterial({ map: plaqueTex })
-      );
-      plaqueMesh.position.set(0, dh + 0.23, 0.45);
+      const plaqueMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.42, 0.34), new THREE.MeshBasicMaterial({ map: plaqueTex, transparent: true }));
+      plaqueMesh.position.set(0, dh + 0.27, 0.16);
       doorGroup.add(plaqueMesh);
 
       this.roomGroup.add(doorGroup);
