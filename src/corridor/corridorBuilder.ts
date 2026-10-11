@@ -1559,15 +1559,15 @@ export class CorridorBuilder {
     pedestalGroup.position.set(0, 0, 1.2);
     pedestalGroup.userData.galleryMotion = { kind: 'rings', phase: 0, baseY: 2.15 };
     [
-      { radius: 0.9, tube: 0.034, x: 0, z: 0 },
-      { radius: 0.7, tube: 0.028, x: Math.PI * 0.5, z: 0.3 },
-      { radius: 0.48, tube: 0.022, x: 0.25, z: Math.PI * 0.5 },
+      { radius: 0.9, tube: 0.034, y: 0, z: 0 },
+      { radius: 0.7, tube: 0.028, y: Math.PI * 0.5, z: 0.3 },
+      { radius: 0.48, tube: 0.022, y: 0.35, z: 0.8 },
     ].forEach((ring) => {
       const mesh = new THREE.Mesh(
         new THREE.TorusGeometry(ring.radius, ring.tube, 8, 64), goldHeroMat
       );
       mesh.position.y = 0;
-      mesh.rotation.set(ring.x, 0, ring.z);
+      mesh.rotation.set(0, ring.y, ring.z);
       pedestalGroup.add(mesh);
     });
 

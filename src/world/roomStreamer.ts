@@ -1137,8 +1137,8 @@ export class RoomStreamer {
     ringsPiece.userData.galleryMotion = { kind: 'rings', phase: 0.4, baseY: 2.25 };
     [
       { radius: 0.82, tube: 0.035, rotation: [0, 0, 0] as const },
-      { radius: 0.68, tube: 0.026, rotation: [Math.PI / 2, 0.25, 0] as const },
-      { radius: 0.5, tube: 0.022, rotation: [0.35, 0, Math.PI / 2] as const },
+      { radius: 0.68, tube: 0.026, rotation: [0, Math.PI / 2, 0.25] as const },
+      { radius: 0.5, tube: 0.022, rotation: [0.35, 0.8, 0.2] as const },
     ].forEach((ring) => {
       const mesh = new THREE.Mesh(
         new THREE.TorusGeometry(ring.radius, ring.tube, 8, 64), exhibitMetal
