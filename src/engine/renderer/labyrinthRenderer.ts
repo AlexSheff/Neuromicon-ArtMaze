@@ -313,6 +313,30 @@ function createPaintingArtworkTexture(
   return new THREE.CanvasTexture(canvas);
 }
 
+/** Square letterboxed texture that keeps the complete source image visible. */
+function createSquareSourceTexture(image: HTMLImageElement): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 768;
+  canvas.height = 768;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#080b12';
+  ctx.fillRect(0, 0, 768, 768);
+
+  const sourceWidth = image.naturalWidth || image.width;
+  const sourceHeight = image.naturalHeight || image.height;
+  if (sourceWidth > 0 && sourceHeight > 0) {
+    const scale = Math.min(720 / sourceWidth, 720 / sourceHeight);
+    const width = sourceWidth * scale;
+    const height = sourceHeight * scale;
+    ctx.drawImage(image, (768 - width) / 2, (768 - height) / 2, width, height);
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.generateMipmaps = true;
+  return texture;
+}
+
 function createArchitecturalPlaqueTexture(
   badge: string,
   title: string,
@@ -1139,6 +1163,31 @@ export class ThreeLabyrinthEngine {
       );
       artCanvas.position.set(0, 0, 0.11);
       pGroup.add(artCanvas);
+
+      if (painting.image && typeof document !== 'undefined') {
+        try {
+          const sourceUrl = new URL(painting.image, document.baseURI).href;
+          const loader = new THREE.TextureLoader();
+          loader.setCrossOrigin('anonymous');
+          loader.load(sourceUrl, (sourceTexture) => {
+            if (!this.roomGroup.getObjectById(pGroup.id)) {
+              sourceTexture.dispose();
+              return;
+            }
+            const fittedTexture = createSquareSourceTexture(
+              sourceTexture.image as HTMLImageElement
+            );
+            sourceTexture.dispose();
+            const artMaterial = artCanvas.material as THREE.MeshStandardMaterial;
+            const fallbackTexture = artMaterial.map;
+            artMaterial.map = fittedTexture;
+            artMaterial.needsUpdate = true;
+            fallbackTexture?.dispose();
+          });
+        } catch {
+          // Keep the procedural artwork when a manifest image URL is malformed.
+        }
+      }
 
       this.roomGroup.add(pGroup);
 

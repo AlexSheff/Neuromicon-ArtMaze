@@ -697,38 +697,70 @@ function createRoomPaintingFallbackTexture(
     return tex as unknown as THREE.CanvasTexture;
   }
   const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 512;
+  canvas.width = 768;
+  canvas.height = 768;
   const ctx = canvas.getContext('2d')!;
 
-  const grad = ctx.createRadialGradient(512, 256, 30, 512, 256, 480);
+  const grad = ctx.createRadialGradient(384, 384, 30, 384, 384, 360);
   grad.addColorStop(0, '#2a2115');
   grad.addColorStop(0.65, '#14110c');
   grad.addColorStop(1, '#080705');
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 1024, 512);
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   ctx.strokeStyle = accentHex;
   ctx.lineWidth = 4;
-  ctx.strokeRect(18, 18, 988, 476);
+  ctx.strokeRect(18, 18, 732, 732);
 
   ctx.fillStyle = accentHex;
-  ctx.font = '700 54px "Cinzel", Georgia, serif';
+  ctx.font = '700 48px "Cinzel", Georgia, serif';
   ctx.textAlign = 'center';
-  ctx.fillText(symbol, 512, 180);
+  ctx.fillText(symbol, 384, 280);
 
   ctx.fillStyle = '#f3ede2';
-  ctx.font = '600 32px "Cinzel", Georgia, serif';
-  ctx.fillText(title.slice(0, 42), 512, 265);
+  ctx.font = '600 30px "Cinzel", Georgia, serif';
+  ctx.fillText(title.slice(0, 32), 384, 390, 680);
 
   ctx.fillStyle = '#b5ab99';
-  ctx.font = '400 20px monospace';
-  ctx.fillText(sector, 512, 330);
+  ctx.font = '400 22px monospace';
+  ctx.fillText(sector, 384, 480, 680);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.generateMipmaps = true;
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
+}
+
+/** Fits the complete source artwork into a square texture without cropping it. */
+function createSquareFittedArtworkTexture(
+  image: HTMLImageElement
+): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 1024;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#080b12';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const sourceWidth = image.naturalWidth || image.width;
+  const sourceHeight = image.naturalHeight || image.height;
+  if (sourceWidth > 0 && sourceHeight > 0) {
+    const scale = Math.min(944 / sourceWidth, 944 / sourceHeight);
+    const width = sourceWidth * scale;
+    const height = sourceHeight * scale;
+    ctx.drawImage(
+      image,
+      (canvas.width - width) / 2,
+      (canvas.height - height) / 2,
+      width,
+      height
+    );
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.generateMipmaps = true;
+  return texture;
 }
 
 /**
@@ -1093,7 +1125,7 @@ export class RoomStreamer {
 
       // Grounded stone plinth beneath the painting
       const plinth = new THREE.Mesh(
-        new THREE.BoxGeometry(4.4, 0.38, 0.58),
+        new THREE.BoxGeometry(3.6, 0.38, 0.58),
         stoneTrimMat
       );
       plinth.position.set(0, 0.19, 0.18);
@@ -1101,26 +1133,11 @@ export class RoomStreamer {
 
       // Sculpted metallic frame
       const outerFrame = new THREE.Mesh(
-        new THREE.BoxGeometry(4.2, 2.9, 0.16),
+        new THREE.BoxGeometry(3.3, 3.3, 0.16),
         trimMat
       );
       outerFrame.position.set(0, 2.55, 0.08);
       artGroup.add(outerFrame);
-
-      // Physical Brass Gallery Picture Light Bar above the Painting
-      const galleryLightHood = new THREE.Mesh(
-        new THREE.BoxGeometry(2.8, 0.1, 0.32),
-        trimMat
-      );
-      galleryLightHood.position.set(0, 4.08, 0.26);
-      artGroup.add(galleryLightHood);
-
-      const galleryLightTube = new THREE.Mesh(
-        new THREE.BoxGeometry(2.6, 0.06, 0.14),
-        warmLuminaireMat
-      );
-      galleryLightTube.position.set(0, 4.02, 0.3);
-      artGroup.add(galleryLightTube);
 
       // Painting canvas with live TextureLoader from https://github.com/AlexSheff/Neuromicon
       const fallbackTex = createRoomPaintingFallbackTexture(
@@ -1139,16 +1156,18 @@ export class RoomStreamer {
             loadedTex.dispose();
             return;
           }
+          const fittedTex = createSquareFittedArtworkTexture(
+            loadedTex.image as HTMLImageElement
+          );
+          loadedTex.dispose();
           fallbackTex.dispose();
-          loadedTex.colorSpace = THREE.SRGBColorSpace;
-          loadedTex.generateMipmaps = true;
-          paintingMat.map = loadedTex;
+          paintingMat.map = fittedTex;
           paintingMat.needsUpdate = true;
         });
       }
 
       const canvasMesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(3.85, 2.55),
+        new THREE.PlaneGeometry(2.95, 2.95),
         paintingMat
       );
       canvasMesh.position.set(0, 2.55, 0.17);

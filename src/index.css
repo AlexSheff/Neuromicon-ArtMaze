@@ -26,3 +26,17 @@
     text-wrap: balance;
   }
 }
+
+/* Keep compact status labels readable on the desktop overlay and in VR. */
+@layer utilities {
+  .text-xs {
+    font-size: 0.875rem;
+    line-height: 1.35;
+  }
+
+  .text-\[10px\],
+  .text-\[11px\] {
+    font-size: 0.8125rem;
+    line-height: 1.35;
+  }
+}
