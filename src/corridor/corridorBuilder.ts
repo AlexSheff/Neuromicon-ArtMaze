@@ -1474,7 +1474,7 @@ export class CorridorBuilder {
 
     // The gallery floor should absorb light; reflections are reserved for a few exhibits.
     const cosmicFloorMat = new THREE.MeshStandardMaterial({
-      color: '#080a10', roughness: 0.9, metalness: 0.04,
+      color: '#03050a', roughness: 0.92, metalness: 0.025,
     });
 
     const stoneWallTex = createArchitecturalWallTexture(
@@ -1506,10 +1506,11 @@ export class CorridorBuilder {
 
     // 1. Grand Circular Polished Dark Basalt Floor (y = 0, walkable, with Fractals & Circuit Schematics)
     const platformDisc = new THREE.Mesh(
-      new THREE.CylinderGeometry(15.2, 16.0, 0.6, 64),
+      new THREE.CircleGeometry(220, 128),
       cosmicFloorMat
     );
-    platformDisc.position.set(0, -0.3, 0);
+    platformDisc.rotation.x = -Math.PI * 0.5;
+    platformDisc.position.set(0, 0, 0);
     root.add(platformDisc);
     walkableMeshes.push(platformDisc);
 
@@ -2049,7 +2050,7 @@ export class CorridorBuilder {
       color: '#101117', roughness: 0.82, metalness: 0.08,
     });
     const floorMat = new THREE.MeshStandardMaterial({
-      color: '#080a10', roughness: 0.9, metalness: 0.04,
+      color: '#03050a', roughness: 0.92, metalness: 0.025,
     });
     const heroTrimMat = new THREE.MeshStandardMaterial({
       color: '#302b31', roughness: 0.62, metalness: 0.28,
@@ -2058,7 +2059,7 @@ export class CorridorBuilder {
 
     // 1. Walkable Polished Dark Basalt Floor (y = 0, with Fractals & Circuit Schematics)
     const floor = new THREE.Mesh(
-      new THREE.CircleGeometry(Math.max(halfW, halfD), 96),
+      new THREE.CircleGeometry(220, 128),
       floorMat
     );
     floor.rotation.x = -Math.PI * 0.5;

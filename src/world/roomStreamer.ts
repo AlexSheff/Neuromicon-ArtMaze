@@ -941,7 +941,7 @@ export class RoomStreamer {
       color: '#11131a', roughness: 0.82, metalness: 0.08,
     });
     const floorMat = new THREE.MeshStandardMaterial({
-      color: '#080a10', roughness: 0.88, metalness: 0.06,
+      color: '#03050a', roughness: 0.92, metalness: 0.025,
     });
     const trimMat = new THREE.MeshStandardMaterial({
       color: '#29242a', roughness: 0.62, metalness: 0.28,
@@ -950,7 +950,7 @@ export class RoomStreamer {
 
     // Matte charcoal floor keeps the room dark enough for the nebula and artwork to lead.
     const floor = new THREE.Mesh(
-      new THREE.CircleGeometry(Math.max(halfW, halfD) + 2.2, 96),
+      new THREE.CircleGeometry(220, 128),
       floorMat
     );
     floor.rotation.x = -Math.PI * 0.5;
