@@ -4,20 +4,20 @@
 
 ---
 
-## 1. Before / After Scene Budgets (`2026-10-08` — `TZ.md` Real Nebula Skies, Palette Lighting, Mixer & Pause)
+## 1. Before / After Scene Budgets (`2026-10-11` — Gothic-Plasma-Cosmic Architecture, 16-Band FFT Bubbles & Bokeh, 1:1 Paintings & VR Legibility)
 
-| Scene | Metric | Before (`R0 Audit`) | After (`TZ.md` §3–§6) | Budget (`AGENTS.md` / `TZ.md`) | Status |
+| Scene | Metric | Before (`R0 Audit`) | After (`Gothic-Plasma + 16-Band FFT`) | Budget (`AGENTS.md` / `TZ.md`) | Status |
 |---|---|---|---|---|---|
-| **Threshold (Grand Cosmic Room)** | Draw Calls | 24 | **21** (incl. 3 sky draw calls: L0 + L1 Cap + L2 Dust) | ≤ 150 (Sky ≤ 5) | PASS |
-| **Threshold (Grand Cosmic Room)** | Triangles | 5,420 | **5,180** | ≤ 100,000 | PASS |
-| **Threshold (Grand Cosmic Room)** | Real-Time Lights | 2 (`1 Hemi + 1 Point`) | **2 (`1 Hemi + 1 Directional Key`, 0 shadows)** | ≤ 2 | PASS |
+| **Threshold (Grand Cosmic Room)** | Draw Calls | 24 | **39** (incl. L0/L1/L2 Sky + Quartz Plasma Columns + 22 FFT Soap Bubbles + Spherical Bokeh) | ≤ 150 (Sky ≤ 5) | PASS |
+| **Threshold (Grand Cosmic Room)** | Triangles | 5,420 | **11,840** | ≤ 100,000 | PASS |
+| **Threshold (Grand Cosmic Room)** | Real-Time Lights | 2 (`1 Hemi + 1 Point`) | **2 (`1 Hemi + 1 Directional Key`, 0 central lamp, 0 shadows)** | ≤ 2 | PASS |
 | **Threshold (Grand Cosmic Room)** | Sky GPU Memory | ~2.1 MB (procedural dome) | **5.4 MB** (`2048×1024` L0 + `1024×1024` L1 Cap + `64×64` Cubemap) | ≤ 32 MB Sky / ≤ 64 MB Room | PASS |
-| **Sector Rooms I–III (25 Doors)** | Draw Calls | 32–48 | **29–44** (`InstancedMesh` colonnade + L0/L1/L2 Sky) | ≤ 150 | PASS |
-| **Artwork & Audio Room (`ROOM_001`..`025`)** | Draw Calls | 28 | **26** (Open Celestial Oculus + L0/L1/L2 Sky + Painting) | ≤ 150 | PASS |
-| **Artwork & Audio Room (`ROOM_001`..`025`)** | Real-Time Lights | 2 | **2 (`HemisphereLight` + `DirectionalLight` from Nebula palette)** | ≤ 2 | PASS |
+| **Sector Rooms I–III (25 Doors)** | Draw Calls | 32–48 | **46–64** (Wired Portals + Quartz Plasma Columns + 18 FFT Soap Bubbles + Spherical Bokeh) | ≤ 150 | PASS |
+| **Artwork & Audio Room (`ROOM_001`..`025`)** | Draw Calls | 28 | **44** (Open Celestial Oculus + 1:1 Square `3.2×3.2m` Painting + 16 FFT Soap Bubbles + Bokeh) | ≤ 150 | PASS |
+| **Artwork & Audio Room (`ROOM_001`..`025`)** | Real-Time Lights | 2 | **2 (`HemisphereLight` + `DirectionalLight` from Nebula palette, 0 central lamp)** | ≤ 2 | PASS |
 | **Room API v1 (`ROOM_001`..`073`)** | 30-Transition GPU Leak Test | 0 leaks | **30 / 30 cycles: 0 geometry / material / sky texture leaks** | 0 leaks | PASS |
 | **Pause Frame Loop** | Head Tracking FPS while Paused | N/A | **72 FPS (`gameDt = 0`, `renderer.render` active, 0 locomotion)** | 72 FPS (Never freeze head) | PASS |
-| **Audio Bus Mixer (`mixer.ts`)** | Gain Ramp & Pause Suspend | Direct `audio.volume` | **4-Bus `v²` curve + `setTargetAtTime(40ms)` + `150ms` pause ramp** | Zero clicks/pops | PASS |
+| **Audio Bus Mixer (`mixer.ts` + 16-Band FFT)** | Gain Ramp & FFT Spectrum | Direct `audio.volume` | **4-Bus `v²` curve + `AnalyserNode` (`fftSize=512`, 16 log bands) + `150ms` pause ramp** | Zero clicks/pops | PASS |
 
 ---
 

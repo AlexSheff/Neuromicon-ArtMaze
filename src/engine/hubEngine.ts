@@ -14,7 +14,6 @@ import {
   RoomContext,
 } from '../room-sdk';
 import { spatialAudioSystem } from '../systems/audio/spatialAudioSystem';
-import { AudioReactiveVisuals } from '../systems/audio/audioReactiveVisuals';
 import { nebulaSkySystem } from '../systems/sky/nebulaSkySystem';
 import { HubPlayerState, hubPlayerState } from '../state/playerState';
 import { getRoomV1Manifest, roomStreamer } from '../world/roomStreamer';
@@ -48,59 +47,6 @@ export interface HubHoveredResult {
   distance: number;
 }
 
-function estimateSceneTextureMemoryMB(scene: THREE.Scene): number {
-  const textures = new Set<THREE.Texture>();
-  scene.traverse((object) => {
-    const mesh = object as THREE.Mesh;
-    if (!mesh.material) return;
-    const materials = Array.isArray(mesh.material)
-      ? mesh.material
-      : [mesh.material];
-    for (const material of materials) {
-      for (const value of Object.values(material)) {
-        if (value instanceof THREE.Texture) textures.add(value);
-      }
-    }
-  });
-
-  let bytes = 0;
-  const countImageBytes = (image: unknown, bytesPerPixel: number): number => {
-    if (Array.isArray(image)) {
-      return image.reduce(
-        (sum, face) => sum + countImageBytes(face, bytesPerPixel),
-        0
-      );
-    }
-    if (!image || typeof image !== 'object') return 0;
-    const size = image as {
-      width?: number;
-      height?: number;
-      naturalWidth?: number;
-      naturalHeight?: number;
-      videoWidth?: number;
-      videoHeight?: number;
-    };
-    const width = size.naturalWidth || size.videoWidth || size.width || 0;
-    const height = size.naturalHeight || size.videoHeight || size.height || 0;
-    return width * height * bytesPerPixel;
-  };
-
-  textures.forEach((texture) => {
-    const bytesPerPixel =
-      texture.format === THREE.RedFormat || texture.format === THREE.AlphaFormat
-        ? 1
-        : texture.format === THREE.RGFormat
-        ? 2
-        : texture.format === THREE.RGBFormat
-        ? 3
-        : 4;
-    const mipFactor = texture.generateMipmaps ? 4 / 3 : 1;
-    bytes += countImageBytes(texture.image, bytesPerPixel) * mipFactor;
-  });
-
-  return Number((bytes / (1024 * 1024)).toFixed(1));
-}
-
 /**
  * Universal WebXR + Desktop 3D Engine for Neuromicon Artmaze (EXPERIENCE_PROTOCOL.md & TZ.md).
  * - Zero per-frame allocations (pre-allocated scratch vectors).
@@ -117,7 +63,6 @@ export class HubEngine {
   public readonly comfort: ComfortSystem;
 
   private worldRoot: THREE.Group;
-  private audioReactiveVisuals: AudioReactiveVisuals;
   private roomApiRoot: THREE.Group;
   private pausePanelRoot: THREE.Group;
   private raycaster: THREE.Raycaster;
@@ -155,8 +100,7 @@ export class HubEngine {
   private pauseListeners: Set<(paused: boolean) => void> = new Set();
 
   private snapCooldown = 0;
-  private readonly locomotionVelocity = new THREE.Vector2();
-  private readonly locomotionTarget = new THREE.Vector2();
+  private teleportStickCooldown = 0;
   private builtSceneKey = '';
   private fovZoom = false;
 
@@ -165,8 +109,6 @@ export class HubEngine {
   private rollingFrameMs = 11.2;
   private resolutionScale = 1.0;
   private scalerCheckTimer = 0;
-  private textureEstimateTimer = 0;
-  private estimatedTextureMemoryMB = 0;
 
   // Contextual Discovery Timers (§2.5)
   private distantGazeTimer = 0;
@@ -215,7 +157,6 @@ export class HubEngine {
 
     this.worldRoot = new THREE.Group();
     this.scene.add(this.worldRoot);
-    this.audioReactiveVisuals = new AudioReactiveVisuals();
 
     this.roomApiRoot = new THREE.Group();
     this.scene.add(this.roomApiRoot);
@@ -675,32 +616,6 @@ export class HubEngine {
     }, speed);
   }
 
-  /** Moves between the threshold and a sector through the same guarded fade pipeline as room doors. */
-  public transitionToThresholdBranch(branch: CorridorBranch): void {
-    if (this.paused || this.transitionInProgress) return;
-    this.transitionInProgress = true;
-    this.comfort.triggerFadeTransition(() => {
-      try {
-        hubPlayerState.chooseBranchFromThreshold(branch);
-      } finally {
-        this.transitionInProgress = false;
-      }
-    });
-  }
-
-  /** Changes sector halls without allowing overlapping click, gaze, or controller activations. */
-  public transitionToCorridorSegment(branch: CorridorBranch, segment: 1 | 2 | 3): void {
-    if (this.paused || this.transitionInProgress) return;
-    this.transitionInProgress = true;
-    this.comfort.triggerFadeTransition(() => {
-      try {
-        hubPlayerState.setCorridorSegment(branch, segment);
-      } finally {
-        this.transitionInProgress = false;
-      }
-    });
-  }
-
   /**
    * Single authoritative transition pipeline for all portals, RoomContext doors, and return portals.
    * Eliminates duplicated transition code, prevents overlapping double-transitions, and enforces
@@ -827,9 +742,7 @@ export class HubEngine {
     this.unmountWorldLockedPausePanel();
     roomStreamer.unmountCurrentRoom(this.roomApiRoot, this.scene);
     nebulaSkySystem.unmountSky(this.worldRoot, this.scene);
-    this.worldRoot.remove(this.audioReactiveVisuals.root);
     disposeThreeHierarchy(this.worldRoot);
-    disposeThreeHierarchy(this.audioReactiveVisuals.root);
     this.renderer.dispose();
   }
 
@@ -971,11 +884,7 @@ export class HubEngine {
     this.segmentDwellTimer = 0;
     roomStreamer.unmountCurrentRoom(this.roomApiRoot, this.scene);
     nebulaSkySystem.unmountSky(this.worldRoot, this.scene);
-    this.worldRoot.remove(this.audioReactiveVisuals.root);
     disposeThreeHierarchy(this.worldRoot);
-    disposeThreeHierarchy(this.audioReactiveVisuals.root);
-    this.audioReactiveVisuals = new AudioReactiveVisuals();
-    this.worldRoot.add(this.audioReactiveVisuals.root);
 
     const registerTarget = (
       mesh: THREE.Object3D,
@@ -1080,28 +989,19 @@ export class HubEngine {
       this.smoothedFps * 0.92 + (1 / Math.max(0.001, dt)) * 0.08;
 
     // Pausable Game Clock: when paused, gameDt is strictly 0 and gameTimeSec is frozen (TZ.md §6.2 & §6.4)
-    const gameDt = this.paused ? 0 : dt;
+    const smoothDt = Math.min(0.04, Math.max(0.001, dt));
+    const gameDt = this.paused ? 0 : smoothDt;
     this.lastGameDt = gameDt;
     this.gameTimeSec += gameDt;
 
-    // Dynamic Resolution Scaler (§6: 13.9 ms Quest 2 72Hz target)
+    // Track telemetry resolution scale without reallocating desktop canvas backbuffer mid-frame (prevents 1Hz hitch)
     this.scalerCheckTimer += dt;
     if (this.scalerCheckTimer >= 1.0) {
       this.scalerCheckTimer = 0;
       if (this.rollingFrameMs > 13.9 && this.resolutionScale > 0.75) {
-        this.resolutionScale = Math.max(0.75, this.resolutionScale - 0.08);
-        if (!this.renderer.xr.isPresenting) {
-          this.renderer.setPixelRatio(
-            Math.min(window.devicePixelRatio || 1, 2) * this.resolutionScale
-          );
-        }
+        this.resolutionScale = Math.max(0.75, this.resolutionScale - 0.05);
       } else if (this.rollingFrameMs < 11.5 && this.resolutionScale < 1.0) {
         this.resolutionScale = Math.min(1.0, this.resolutionScale + 0.05);
-        if (!this.renderer.xr.isPresenting) {
-          this.renderer.setPixelRatio(
-            Math.min(window.devicePixelRatio || 1, 2) * this.resolutionScale
-          );
-        }
       }
     }
 
@@ -1153,18 +1053,22 @@ export class HubEngine {
       const stickTurn = xrInput.turnX;
 
       if (this.snapCooldown <= 0) {
-        if (stickTurn > 0.55 || desktopInput.turnRight) {
-          this.snapCooldown = 0.3;
+        if (stickTurn > 0.52 || desktopInput.turnRight) {
+          this.snapCooldown = 0.28;
           this.pose.yaw -= snapRad;
           this.recordSnapTurnForComfortReveal();
-        } else if (stickTurn < -0.55 || desktopInput.turnLeft) {
-          this.snapCooldown = 0.3;
+        } else if (stickTurn < -0.52 || desktopInput.turnLeft) {
+          this.snapCooldown = 0.28;
           this.pose.yaw += snapRad;
           this.recordSnapTurnForComfortReveal();
         }
       }
 
-      // 2. LOCOMOTION
+      // Sync rig yaw before reading HMD / controller heading so snap turn applies on the same frame
+      this.playerRig.rotation.set(0, this.pose.yaw, 0);
+      this.playerRig.updateMatrixWorld(true);
+
+      // 2. LOCOMOTION (Standard VR Dual-Stick + Point-and-Teleport Hybrid)
       let forward = -xrInput.moveZ;
       let strafe = xrInput.moveX;
       if (desktopInput.forward) forward += 1;
@@ -1172,16 +1076,33 @@ export class HubEngine {
       if (desktopInput.right) strafe += 1;
       if (desktopInput.left) strafe -= 1;
 
-      const isMovingStick = Math.hypot(forward, strafe) > 0.15;
+      const stickMag = Math.hypot(forward, strafe);
+      const isMovingStick = stickMag > 0.08;
 
-      if (isXR && state.comfort.locomotion === 'teleport') {
-        // Aiming plus trigger performs teleportation; stick drift must never move the player.
-        this.locomotionVelocity.set(0, 0);
-        this.comfort.setTargetVignette(0);
+      if (this.teleportStickCooldown > 0) {
+        this.teleportStickCooldown = Math.max(
+          0,
+          this.teleportStickCooldown - gameDt
+        );
+      }
+
+      if (
+        isXR &&
+        xrInput.teleportStickJustTriggered &&
+        this.teleportStickCooldown <= 0
+      ) {
+        // Right Thumbstick Forward flick performs comfort-fade teleport step
+        this.teleportStickCooldown = 0.42;
+        const moveYaw = this.getActiveHeadingYaw();
+        const stepDist = 2.4;
+        const nx = this.pose.x - Math.sin(moveYaw) * stepDist;
+        const nz = this.pose.z - Math.cos(moveYaw) * stepDist;
+        this.clampAndApplyPosition(nx, nz, state);
       } else if (isMovingStick) {
-        const len = Math.min(1, Math.hypot(forward, strafe));
-        const normF = forward / Math.max(1, Math.hypot(forward, strafe));
-        const normS = strafe / Math.max(1, Math.hypot(forward, strafe));
+        // Left Thumbstick (VR) or WASD/Arrows (Desktop) performs 360° omni-directional glide with comfort vignette
+        const len = Math.min(1, stickMag);
+        const normF = (forward / Math.max(1e-4, stickMag)) * len;
+        const normS = (strafe / Math.max(1e-4, stickMag)) * len;
         const speed = 3.8;
 
         const moveYaw = isXR ? this.getActiveHeadingYaw() : this.pose.yaw;
@@ -1190,34 +1111,12 @@ export class HubEngine {
         const rx = Math.cos(moveYaw);
         const rz = -Math.sin(moveYaw);
 
-        this.locomotionTarget.set(
-          (fx * normF + rx * normS) * speed,
-          (fz * normF + rz * normS) * speed
-        );
-        this.locomotionVelocity.lerp(
-          this.locomotionTarget,
-          1 - Math.exp(-gameDt * 8)
-        );
-        const nx = this.pose.x + this.locomotionVelocity.x * gameDt;
-        const nz = this.pose.z + this.locomotionVelocity.y * gameDt;
+        const nx = this.pose.x + (fx * normF + rx * normS) * speed * gameDt;
+        const nz = this.pose.z + (fz * normF + rz * normS) * speed * gameDt;
         this.clampPositionDirect(nx, nz, state);
 
         this.comfort.setTargetVignette(len * state.comfort.vignette);
       } else {
-        this.locomotionTarget.set(0, 0);
-        this.locomotionVelocity.lerp(
-          this.locomotionTarget,
-          1 - Math.exp(-gameDt * 8)
-        );
-        if (this.locomotionVelocity.lengthSq() > 0.0001) {
-          this.clampPositionDirect(
-            this.pose.x + this.locomotionVelocity.x * gameDt,
-            this.pose.z + this.locomotionVelocity.y * gameDt,
-            state
-          );
-        } else {
-          this.locomotionVelocity.set(0, 0);
-        }
         this.comfort.setTargetVignette(0);
       }
     }
@@ -1250,8 +1149,7 @@ export class HubEngine {
       CorridorBuilder.updateDynamicAtmosphere(
         this.worldRoot,
         this.gameTimeSec,
-        state.comfort.reducedMotion,
-        spatialAudioSystem.getReactiveLevels()
+        state.comfort.reducedMotion
       );
     }
     nebulaSkySystem.update(gameDt, this.gameTimeSec, {
@@ -1272,11 +1170,6 @@ export class HubEngine {
     this.playerRig.updateMatrixWorld(true);
 
     roomStreamer.updateCurrentRoom(gameDt);
-    this.audioReactiveVisuals.update(
-      this.gameTimeSec,
-      spatialAudioSystem.getReactiveLevels(),
-      true
-    );
     this.comfort.update(dt, state.vignetteEnabled || this.paused);
 
     // 6. RAYCAST & PRELOAD / CONTEXTUAL DISCOVERY
@@ -1322,11 +1215,7 @@ export class HubEngine {
     this.renderer.render(this.scene, this.camera);
 
     const info = this.renderer.info;
-    this.textureEstimateTimer += dt;
-    if (this.textureEstimateTimer >= 1) {
-      this.estimatedTextureMemoryMB = estimateSceneTextureMemoryMB(this.scene);
-      this.textureEstimateTimer %= 1;
-    }
+    const estTexMB = Number((info.memory.textures * 0.85).toFixed(1));
     const skyState = nebulaSkySystem.getCurrentSkyState();
 
     return {
@@ -1338,7 +1227,7 @@ export class HubEngine {
         triangles: info.render.triangles,
         geometries: info.memory.geometries,
         textures: info.memory.textures,
-        textureMemoryMB: this.estimatedTextureMemoryMB,
+        textureMemoryMB: estTexMB,
         resolutionScale: Number(this.resolutionScale.toFixed(2)),
         nebulaId: skyState.nebulaId,
         nebulaName: skyState.nebulaName,

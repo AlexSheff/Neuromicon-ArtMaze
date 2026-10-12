@@ -3,6 +3,7 @@ import worldGraphData from '../../content/world.graph.json';
 import { t } from '../i18n/strings';
 import { OnboardingVisualState } from '../onboarding/types';
 import { CorridorBranch } from '../room-sdk';
+import { spatialAudioSystem } from '../systems/audio/spatialAudioSystem';
 import { nebulaSkySystem } from '../systems/sky/nebulaSkySystem';
 import { HubPlayerState } from '../state/playerState';
 
@@ -71,10 +72,13 @@ export function getWorldNodes(): WorldGraphNode[] {
 }
 
 const signageTextureCache = new Map<string, THREE.CanvasTexture>();
-const MAX_SIGNAGE_CACHE_ENTRIES = 96;
+const MAX_SIGNAGE_CACHE_ENTRIES = 512;
 
 export function clearSignageTextureCache(): void {
   for (const tex of signageTextureCache.values()) {
+    if (tex.userData) {
+      tex.userData.cachedSignage = false;
+    }
     tex.dispose();
   }
   signageTextureCache.clear();
@@ -96,7 +100,12 @@ function storeCachedSignageTexture(
     if (oldestKey !== undefined) {
       const oldestTex = signageTextureCache.get(oldestKey);
       signageTextureCache.delete(oldestKey);
-      oldestTex?.dispose();
+      if (oldestTex) {
+        if (oldestTex.userData) {
+          oldestTex.userData.cachedSignage = false;
+        }
+        oldestTex.dispose();
+      }
     }
   }
   signageTextureCache.set(cacheKey, tex);
@@ -104,9 +113,10 @@ function storeCachedSignageTexture(
 }
 
 /**
- * Power-of-Two (512x256) Sci-Fi / Gothic Portal Display & Plaque Texture (EXPERIENCE_PROTOCOL.md §3.4 & TZ.md §4.4).
- * Dark forged basalt & gunmetal casing with glowing neon contours and built-in telemetry readout.
- * Cached by parameter key so scene rebuilds reuse existing CanvasTexture instances.
+ * Power-of-Two (1024x512) High-Contrast VR & Desktop Legible Sci-Fi / Gothic Portal Display Texture
+ * (EXPERIENCE_PROTOCOL.md §3.4 & TZ.md §4.4).
+ * Uses 1024x512 resolution, 4x anisotropy, deep obsidian backing, and high-contrast sans-serif
+ * typography with thick dark halo outline strokes so text is effortless to read in VR headsets and on desktop.
  */
 export function createSignageTexture(
   symbol: string,
@@ -116,7 +126,7 @@ export function createSignageTexture(
   accentHex: string,
   badgeHex: string
 ): THREE.CanvasTexture {
-  const cacheKey = `SIGN|${symbol}|${title}|${subtitle}|${statusBadge}|${accentHex}|${badgeHex}`;
+  const cacheKey = `SIGN_V2|${symbol}|${title}|${subtitle}|${statusBadge}|${accentHex}|${badgeHex}`;
   const cached = signageTextureCache.get(cacheKey);
   if (cached) {
     signageTextureCache.delete(cacheKey);
@@ -134,122 +144,185 @@ export function createSignageTexture(
     return storeCachedSignageTexture(cacheKey, tex);
   }
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 256;
+  canvas.width = 1024;
+  canvas.height = 512;
   const ctx = canvas.getContext('2d')!;
 
-  // Dark basalt & forged gunmetal Sci-Fi/Gothic display backing
-  const bgGrad = ctx.createLinearGradient(0, 0, 0, 256);
-  bgGrad.addColorStop(0, '#090d18');
-  bgGrad.addColorStop(0.5, '#050811');
-  bgGrad.addColorStop(1, '#04060c');
+  // High-contrast deep obsidian backing (zero noisy scanlines over text!)
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, 512);
+  bgGrad.addColorStop(0, '#050814');
+  bgGrad.addColorStop(0.5, '#03050c');
+  bgGrad.addColorStop(1, '#020308');
   ctx.fillStyle = bgGrad;
-  ctx.fillRect(0, 0, 512, 256);
+  ctx.fillRect(0, 0, 1024, 512);
 
-  // Subtle plasma/neon backlight glow inside the display
-  const topWash = ctx.createRadialGradient(256, 24, 8, 256, 48, 280);
-  topWash.addColorStop(0, `${accentHex}44`);
-  topWash.addColorStop(0.55, '#7b2cbf22');
+  // Soft ambient edge glow keeping center text zone dark & high-contrast
+  const topWash = ctx.createRadialGradient(512, 36, 16, 512, 80, 520);
+  topWash.addColorStop(0, `${accentHex}38`);
+  topWash.addColorStop(0.6, 'rgba(15, 23, 42, 0.15)');
   topWash.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = topWash;
-  ctx.fillRect(0, 0, 512, 256);
+  ctx.fillRect(0, 0, 1024, 512);
 
-  // Subtle horizontal scanlines for built-in portal display feel
-  ctx.fillStyle = 'rgba(140, 200, 255, 0.03)';
-  for (let y = 10; y < 246; y += 6) {
-    ctx.fillRect(10, y, 492, 2);
-  }
-
-  // Sci-Fi / Gothic chamfered neon contour frame
+  // Bold Sci-Fi / Gothic double neon frame
   ctx.strokeStyle = accentHex;
-  ctx.lineWidth = 3.5;
-  ctx.strokeRect(6, 6, 500, 244);
-  ctx.strokeStyle = 'rgba(180, 140, 255, 0.35)';
-  ctx.lineWidth = 1.2;
-  ctx.strokeRect(13, 13, 486, 230);
+  ctx.lineWidth = 7;
+  ctx.strokeRect(10, 10, 1004, 492);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+  ctx.lineWidth = 2.5;
+  ctx.strokeRect(24, 24, 976, 464);
 
-  // Gothic-tech corner brackets
+  // Corner luminous brackets
   ctx.fillStyle = accentHex;
   [
-    [6, 6],
-    [492, 6],
-    [6, 236],
-    [492, 236],
+    [10, 10],
+    [986, 10],
+    [10, 474],
+    [986, 474],
   ].forEach(([cx, cy]) => {
-    ctx.fillRect(cx, cy, 14, 14);
+    ctx.fillRect(cx, cy, 28, 28);
   });
 
-  // Left symbol glyph core display
-  ctx.fillStyle = 'rgba(123, 44, 191, 0.14)';
-  ctx.fillRect(24, 26, 114, 204);
+  // Left symbol glyph badge box
+  ctx.fillStyle = '#070d1e';
+  ctx.fillRect(42, 46, 224, 420);
   ctx.strokeStyle = accentHex;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(24, 26, 114, 204);
+  ctx.lineWidth = 4;
+  ctx.strokeRect(42, 46, 224, 420);
 
   // Pointed gothic inner arch motif inside glyph box
-  ctx.strokeStyle = `${accentHex}77`;
-  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = `${accentHex}99`;
+  ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.moveTo(32, 220);
-  ctx.lineTo(32, 86);
-  ctx.quadraticCurveTo(32, 42, 81, 34);
-  ctx.quadraticCurveTo(130, 42, 130, 86);
-  ctx.lineTo(130, 220);
+  ctx.moveTo(58, 444);
+  ctx.lineTo(58, 164);
+  ctx.quadraticCurveTo(58, 76, 154, 62);
+  ctx.quadraticCurveTo(250, 76, 250, 164);
+  ctx.lineTo(250, 444);
   ctx.stroke();
 
-  ctx.fillStyle = accentHex;
-  ctx.font = '700 32px "Cinzel", Georgia, serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(symbol.slice(0, 6), 81, 142);
+  const drawCrispText = (
+    text: string,
+    x: number,
+    y: number,
+    font: string,
+    fill: string,
+    align: CanvasTextAlign = 'left',
+    strokeWidth = 8,
+    maxWidth?: number
+  ) => {
+    ctx.save();
+    ctx.font = font;
+    ctx.textAlign = align;
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.miterLimit = 2;
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = strokeWidth;
+    if (maxWidth) {
+      ctx.strokeText(text, x, y, maxWidth);
+      ctx.fillStyle = fill;
+      ctx.fillText(text, x, y, maxWidth);
+    } else {
+      ctx.strokeText(text, x, y);
+      ctx.fillStyle = fill;
+      ctx.fillText(text, x, y);
+    }
+    ctx.restore();
+  };
 
-  // Portal Title, Subtitle & Telemetry Status on right
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#fff8ea';
-  ctx.font = '700 30px "Cinzel", Georgia, serif';
-  ctx.fillText(title.slice(0, 25), 154, 94, 332);
+  // Large high-contrast symbol glyph
+  drawCrispText(
+    symbol.slice(0, 5),
+    154,
+    262,
+    '800 78px system-ui, -apple-system, "Segoe UI", sans-serif',
+    '#ffffff',
+    'center',
+    10,
+    196
+  );
 
-  ctx.fillStyle = '#e0e8f2';
-  ctx.font = '600 23px system-ui, sans-serif';
-  ctx.fillText(subtitle.slice(0, 34), 154, 140, 332);
+  // Main Title (Pure crisp white with black halo stroke, auto-fitted to 670px)
+  const cleanTitle = title.slice(0, 32);
+  const titleSize = cleanTitle.length > 22 ? 44 : 52;
+  drawCrispText(
+    cleanTitle,
+    296,
+    138,
+    `800 ${titleSize}px system-ui, -apple-system, "Segoe UI", sans-serif`,
+    '#ffffff',
+    'left',
+    9,
+    676
+  );
 
-  // Built-in display circuit divider
-  ctx.strokeStyle = `${accentHex}66`;
-  ctx.lineWidth = 1.5;
+  // Subtitle (High-contrast luminous ice-white)
+  drawCrispText(
+    subtitle.slice(0, 42),
+    296,
+    244,
+    '600 34px system-ui, -apple-system, "Segoe UI", sans-serif',
+    '#eaf4ff',
+    'left',
+    7,
+    676
+  );
+
+  // High-contrast divider line
+  ctx.strokeStyle = accentHex;
+  ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.moveTo(154, 156);
-  ctx.lineTo(486, 156);
+  ctx.moveTo(296, 312);
+  ctx.lineTo(972, 312);
   ctx.stroke();
 
-  ctx.fillStyle = badgeHex;
-  ctx.font = '700 19px monospace';
-  ctx.fillText(`◈ ${statusBadge}`, 154, 194, 270);
+  // High-contrast status badge container
+  ctx.fillStyle = '#081126';
+  ctx.fillRect(296, 344, 520, 88);
+  ctx.strokeStyle = badgeHex;
+  ctx.lineWidth = 3.5;
+  ctx.strokeRect(296, 344, 520, 88);
 
-  // Mini telemetry spectrum bars on bottom right
-  const barCols = ['#4ea8de', '#9d4edd', '#e5c158'];
+  drawCrispText(
+    `◈ ${statusBadge.slice(0, 26)}`,
+    320,
+    388,
+    '700 32px "JetBrains Mono", monospace',
+    '#ffffff',
+    'left',
+    7,
+    476
+  );
+
+  // Spectrum indicator bars on bottom right
+  const barCols = ['#4ea8de', '#e5c158', '#b388ff', '#66cc99'];
   for (let b = 0; b < 6; b++) {
     ctx.fillStyle = barCols[b % barCols.length];
-    const bh = 8 + ((b * 7) % 16);
-    ctx.fillRect(420 + b * 10, 196 - bh, 6, bh);
+    const bh = 24 + ((b * 15) % 44);
+    ctx.fillRect(844 + b * 20, 430 - bh, 12, bh);
   }
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.generateMipmaps = true;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.anisotropy = 4;
   tex.colorSpace = THREE.SRGBColorSpace;
   return storeCachedSignageTexture(cacheKey, tex);
 }
 
 /**
- * Power-of-Two (1024x256) Central Portal Overhead Banner Texture:
+ * Power-of-Two (1024x384) Central Portal Overhead Banner Texture:
  * Displays `ARTMAZE // NEUROMICON PROJECT` and `github.com/AlexSheff/Neuromicon`
- * with Gothic/Sci-Fi dark metal framing and neon plasma contours.
+ * with ultra-crisp VR-legible high-contrast outlined typography.
  */
 export function createArtmazeHeaderSignTexture(
   accentHex = '#e5c158',
   plasmaHex = '#9d4edd',
   repoUrl = 'github.com/AlexSheff/Neuromicon'
 ): THREE.CanvasTexture {
-  const cacheKey = `HEADER_SIGN|${accentHex}|${plasmaHex}|${repoUrl}`;
+  const cacheKey = `HEADER_SIGN_V2|${accentHex}|${plasmaHex}|${repoUrl}`;
   const cached = signageTextureCache.get(cacheKey);
   if (cached) {
     signageTextureCache.delete(cacheKey);
@@ -269,80 +342,95 @@ export function createArtmazeHeaderSignTexture(
 
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
-  canvas.height = 256;
+  canvas.height = 384;
   const ctx = canvas.getContext('2d')!;
 
-  // Deep obsidian & dark gunmetal background
-  const bg = ctx.createLinearGradient(0, 0, 1024, 256);
-  bg.addColorStop(0, '#060913');
-  bg.addColorStop(0.5, '#0b1022');
-  bg.addColorStop(1, '#060913');
+  // High-contrast deep obsidian backing
+  const bg = ctx.createLinearGradient(0, 0, 1024, 384);
+  bg.addColorStop(0, '#040711');
+  bg.addColorStop(0.5, '#070d1e');
+  bg.addColorStop(1, '#040711');
   ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, 1024, 256);
+  ctx.fillRect(0, 0, 1024, 384);
 
-  // Dual plasma & gold radial glow behind text
-  const glow = ctx.createRadialGradient(512, 128, 16, 512, 128, 480);
-  glow.addColorStop(0, `${plasmaHex}48`);
-  glow.addColorStop(0.55, `${accentHex}28`);
+  // Subtle radial glow behind text
+  const glow = ctx.createRadialGradient(512, 192, 20, 512, 192, 480);
+  glow.addColorStop(0, `${plasmaHex}40`);
+  glow.addColorStop(0.6, `${accentHex}22`);
   glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, 1024, 256);
+  ctx.fillRect(0, 0, 1024, 384);
 
-  // Outer neon contour frame & inner gothic filigree border
+  // Bold neon contour frame
   ctx.strokeStyle = accentHex;
-  ctx.lineWidth = 4;
-  ctx.strokeRect(8, 8, 1008, 240);
+  ctx.lineWidth = 7;
+  ctx.strokeRect(10, 10, 1004, 364);
 
-  ctx.strokeStyle = '#4ea8de';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(18, 18, 988, 220);
+  ctx.strokeStyle = '#6ad2ff';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(24, 24, 976, 336);
 
-  // Circuit trace lines on left and right flanks
-  ctx.strokeStyle = `${plasmaHex}aa`;
-  ctx.lineWidth = 2;
-  [44, 980].forEach((xSide, idx) => {
-    const dir = idx === 0 ? 1 : -1;
-    ctx.beginPath();
-    ctx.moveTo(xSide, 48);
-    ctx.lineTo(xSide + dir * 68, 48);
-    ctx.lineTo(xSide + dir * 92, 76);
-    ctx.moveTo(xSide, 208);
-    ctx.lineTo(xSide + dir * 68, 208);
-    ctx.lineTo(xSide + dir * 92, 180);
-    ctx.stroke();
-  });
+  const drawOutlinedCenter = (
+    text: string,
+    y: number,
+    font: string,
+    fill: string,
+    strokeW = 9
+  ) => {
+    ctx.save();
+    ctx.font = font;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.miterLimit = 2;
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = strokeW;
+    ctx.strokeText(text, 512, y, 930);
+    ctx.fillStyle = fill;
+    ctx.fillText(text, 512, y, 930);
+    ctx.restore();
+  };
 
   // Main Headline: ARTMAZE // NEUROMICON PROJECT
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#f8f2e4';
-  ctx.font = '700 40px "Cinzel", Georgia, serif';
-  ctx.fillText('ARTMAZE // NEUROMICON PROJECT', 512, 114);
+  drawOutlinedCenter(
+    'ARTMAZE // NEUROMICON PROJECT',
+    118,
+    '800 52px system-ui, -apple-system, "Segoe UI", sans-serif',
+    '#ffffff',
+    10
+  );
 
-  // Glowing separator line with central diamond
+  // Glowing separator line
   ctx.strokeStyle = accentHex;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 3.5;
   ctx.beginPath();
-  ctx.moveTo(190, 140);
-  ctx.lineTo(834, 140);
+  ctx.moveTo(140, 184);
+  ctx.lineTo(884, 184);
   ctx.stroke();
 
   // GitHub Repository Link
-  ctx.fillStyle = '#6ad2ff';
-  ctx.font = '600 24px monospace';
-  ctx.fillText(`◈ https://${repoUrl.replace(/^https?:\/\//, '')} ◈`, 512, 186);
+  drawOutlinedCenter(
+    `◈ https://${repoUrl.replace(/^https?:\/\//, '')} ◈`,
+    246,
+    '700 36px "JetBrains Mono", monospace',
+    '#80e5ff',
+    8
+  );
 
   // Subtitle telemetry
-  ctx.fillStyle = accentHex;
-  ctx.font = '500 15px monospace';
-  ctx.fillText(
+  drawOutlinedCenter(
     'GOTHIC CATHEDRAL · QUARTZ PLASMA · 1149 MULTIDIMENSIONAL ROOMS',
-    512,
-    222
+    322,
+    '700 24px "JetBrains Mono", monospace',
+    '#ffe484',
+    7
   );
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.generateMipmaps = true;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.anisotropy = 4;
   tex.colorSpace = THREE.SRGBColorSpace;
   return storeCachedSignageTexture(cacheKey, tex);
 }
@@ -889,6 +977,34 @@ export function createDoorLeafTexture(
 }
 
 /**
+ * Soft 2D Radial + Vertical Falloff Alpha Texture for Oculus & Plasma Veils (§3.3 & TZ.md §4.4).
+ * Ensures light beams dissolve smoothly without sharp cone edges.
+ */
+export function createLightShaftAlphaTexture(
+  accentHex = '#e5c158'
+): THREE.CanvasTexture {
+  if (typeof document === 'undefined') {
+    const tex = new THREE.DataTexture(new Uint8Array(8 * 8 * 4), 8, 8);
+    tex.needsUpdate = true;
+    return tex as unknown as THREE.CanvasTexture;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+  const grad = ctx.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, `${accentHex}58`);
+  grad.addColorStop(0.38, '#9d4edd28');
+  grad.addColorStop(0.78, `${accentHex}0c`);
+  grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 128, 256);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.generateMipmaps = true;
+  return tex;
+}
+
+/**
  * Reusable Builder: Tall Transparent Quartz Glass Plasma Column with Swirling Living Plasma,
  * Soft Pulsating Diffused Floor Pool, and Periodic Branching Electric Lightning Arcs!
  */
@@ -1053,10 +1169,12 @@ export function buildQuartzPlasmaColumn(opts: {
 }
 
 /**
- * Retained for room-builder compatibility. The gallery is intentionally open to the sky:
- * no central ring, overhead ribs, or ceiling fixtures should obstruct the nebula view.
+ * Reusable Builder: High Gothic Cathedral Ribbed Vaults (`высокие нервюрные своды`),
+ * Carved Keystone Bosses, and Perimeter Flying Buttresses converging up to the open Celestial Oculus (`небесное окно`).
+ * Note: The central light cone / chandelier has been removed so real astronomical galaxies & nebulae
+ * shine directly through the unobstructed Oculus!
  */
-export function buildGothicRibbedVaultsAndOculus(_opts: {
+export function buildGothicRibbedVaultsAndOculus(opts: {
   root: THREE.Group;
   oculusRadius: number;
   spanRadiusX: number;
@@ -1067,9 +1185,501 @@ export function buildGothicRibbedVaultsAndOculus(_opts: {
   basaltMat: THREE.Material;
   trimMat: THREE.Material;
   innerGlowHex: string;
+  veilHex?: string;
   centerZ?: number;
 }): void {
-  // Deliberately empty. Architectural detailing remains at the perimeter and floor.
+  const {
+    root,
+    oculusRadius,
+    spanRadiusX,
+    spanRadiusZ,
+    wallHeight,
+    vaultApexY,
+    ribAnglesDeg,
+    basaltMat,
+    trimMat,
+    innerGlowHex,
+    centerZ = 0,
+  } = opts;
+
+  const vaultGroup = new THREE.Group();
+  vaultGroup.position.set(0, 0, centerZ);
+
+  // 1. Open Celestial Oculus Ring + Outer Gothic Clerestory Gallery Ring (Merged into 1 basalt mesh)
+  const basaltParts: THREE.BufferGeometry[] = [];
+  const oculusOuter = new THREE.TorusGeometry(oculusRadius, 0.38, 12, 56);
+  oculusOuter.rotateX(Math.PI * 0.5);
+  oculusOuter.translate(0, vaultApexY, 0);
+  basaltParts.push(oculusOuter);
+
+  const galleryRing = new THREE.TorusGeometry(
+    Math.min(spanRadiusX, spanRadiusZ) * 0.96,
+    0.26,
+    10,
+    48
+  );
+  galleryRing.rotateX(Math.PI * 0.5);
+  galleryRing.translate(0, wallHeight - 0.18, 0);
+  basaltParts.push(galleryRing);
+
+  // 2. High Gothic Ribbed Vault Struts + Carved Oculus Keystone Bosses + Flying Buttress Brackets (Merged into 1 trim mesh)
+  const trimParts: THREE.BufferGeometry[] = [];
+
+  ribAnglesDeg.forEach((deg) => {
+    const rad = THREE.MathUtils.degToRad(deg);
+    const startX = Math.sin(rad) * spanRadiusX;
+    const startZ = -Math.cos(rad) * spanRadiusZ;
+    const endX = Math.sin(rad) * oculusRadius;
+    const endZ = -Math.cos(rad) * oculusRadius;
+
+    const dx = endX - startX;
+    const dy = vaultApexY - wallHeight;
+    const dz = endZ - startZ;
+    const length = Math.hypot(dx, dy, dz);
+
+    // Main diagonal vault rib
+    const stoneRib = new THREE.BoxGeometry(0.32, 0.44, length);
+    const lookMat = new THREE.Matrix4();
+    const midPos = new THREE.Vector3(
+      (startX + endX) * 0.5,
+      (wallHeight + vaultApexY) * 0.5,
+      (startZ + endZ) * 0.5
+    );
+    lookMat.lookAt(midPos, new THREE.Vector3(endX, vaultApexY, endZ), new THREE.Vector3(0, 1, 0));
+    lookMat.setPosition(midPos);
+    stoneRib.applyMatrix4(lookMat);
+    trimParts.push(stoneRib);
+
+    // Carved Gothic Octahedral Keystone Boss where the rib meets the Oculus rim
+    const boss = new THREE.OctahedronGeometry(0.46, 0);
+    boss.translate(endX, vaultApexY - 0.08, endZ);
+    trimParts.push(boss);
+
+    // Perimeter Flying Buttress Spandrel Bracket at the upper wall springer
+    const spandrel = new THREE.BoxGeometry(0.42, 1.45, 0.52);
+    spandrel.rotateY(-rad);
+    spandrel.translate(startX * 0.97, wallHeight - 0.65, startZ * 0.97);
+    basaltParts.push(spandrel);
+  });
+
+  vaultGroup.add(new THREE.Mesh(mergeBufferGeometries(basaltParts), basaltMat));
+  vaultGroup.add(new THREE.Mesh(mergeBufferGeometries(trimParts), trimMat));
+
+  // 3. Backlit inner Oculus rim (`обрамленное краями окулуса и подсвеченное изнутри, создавая ощущение глубины`)
+  const oculusInnerGlow = new THREE.Mesh(
+    new THREE.TorusGeometry(oculusRadius - 0.36, 0.12, 10, 56),
+    new THREE.MeshBasicMaterial({
+      color: innerGlowHex,
+      transparent: true,
+      opacity: 0.92,
+    })
+  );
+  oculusInnerGlow.rotation.x = Math.PI * 0.5;
+  oculusInnerGlow.position.y = vaultApexY - 0.12;
+  vaultGroup.add(oculusInnerGlow);
+
+  root.add(vaultGroup);
+}
+
+/**
+ * Power-of-Two (512x512) Thin-Film Interference Iridescent Soap Bubble Texture (`мыльные шары`):
+ * Creates swirling rainbow interference fringes (cyan, magenta, gold, emerald, violet)
+ * with a bright Fresnel rim and twin curved window specular highlights.
+ */
+export function createIridescentSoapBubbleTexture(): THREE.CanvasTexture {
+  const cacheKey = 'IRIDESCENT_SOAP_BUBBLE_SKIN_V1';
+  const cached = signageTextureCache.get(cacheKey);
+  if (cached) {
+    signageTextureCache.delete(cacheKey);
+    signageTextureCache.set(cacheKey, cached);
+    return cached;
+  }
+
+  if (typeof document === 'undefined') {
+    const tex = new THREE.DataTexture(
+      new Uint8Array(16 * 16 * 4),
+      16,
+      16
+    ) as unknown as THREE.CanvasTexture;
+    tex.needsUpdate = true;
+    return storeCachedSignageTexture(cacheKey, tex);
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+  ctx.clearRect(0, 0, 512, 512);
+
+  // Swirling thin-film interference rainbow bands across the spherical UV map
+  const bands = [
+    { y: 0.0, col: 'rgba(0, 245, 212, 0.36)' },
+    { y: 0.16, col: 'rgba(255, 78, 205, 0.42)' },
+    { y: 0.32, col: 'rgba(255, 209, 102, 0.38)' },
+    { y: 0.48, col: 'rgba(0, 187, 249, 0.34)' },
+    { y: 0.64, col: 'rgba(155, 93, 229, 0.44)' },
+    { y: 0.82, col: 'rgba(102, 252, 241, 0.38)' },
+    { y: 1.0, col: 'rgba(255, 112, 166, 0.36)' },
+  ];
+  const filmGrad = ctx.createLinearGradient(0, 0, 512, 512);
+  bands.forEach((b) => filmGrad.addColorStop(b.y, b.col));
+  ctx.fillStyle = filmGrad;
+  ctx.fillRect(0, 0, 512, 512);
+
+  // Wavy thin-film interference rings
+  const ringColors = ['#00f5d4', '#ff4ecd', '#ffd166', '#9b5de5', '#00bbf9'];
+  for (let i = 0; i < 14; i++) {
+    ctx.strokeStyle = `${ringColors[i % ringColors.length]}66`;
+    ctx.lineWidth = 6 + (i % 3) * 4;
+    ctx.beginPath();
+    for (let x = 0; x <= 512; x += 16) {
+      const y =
+        32 +
+        i * 34 +
+        Math.sin((x / 512) * Math.PI * 4 + i * 0.9) * 18 +
+        Math.cos((x / 512) * Math.PI * 2 - i) * 10;
+      if (x === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  // Primary & secondary specular window highlights on the soap film
+  const spec1 = ctx.createRadialGradient(168, 148, 4, 168, 148, 72);
+  spec1.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+  spec1.addColorStop(0.35, 'rgba(210, 245, 255, 0.55)');
+  spec1.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = spec1;
+  ctx.fillRect(0, 0, 512, 512);
+
+  const spec2 = ctx.createRadialGradient(362, 368, 2, 362, 368, 46);
+  spec2.addColorStop(0, 'rgba(255, 230, 255, 0.78)');
+  spec2.addColorStop(0.5, 'rgba(140, 220, 255, 0.32)');
+  spec2.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = spec2;
+  ctx.fillRect(0, 0, 512, 512);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return storeCachedSignageTexture(cacheKey, tex);
+}
+
+/**
+ * Reusable Builder: 16-Band Audio-Reactive Iridescent Soap Bubbles (`мыльные шары`)
+ * and Multi-Scale, Multi-Archetype Soft Spherical Chromatic Particles (`разноцветные не кубические частички`).
+ * Features:
+ * - 3 distinct soap-bubble scale tiers (Micro Satellites 0.11–0.18m, Mesoscale Harmonic Spheres 0.24–0.36m,
+ *   and Macro Cathedral Orbs 0.46–0.64m) with 3D Lissajous currents & bubble-to-bubble elastic dipole interactions.
+ * - 4 particle behavioral archetypes (Giant Bokeh Orbs, Double-Helix Vortex Streamers, Bubble-Orbiting Satellites,
+ *   and Flocking Stardust Constellations) spanning a 10x size range with smooth velocity-integrated physics.
+ */
+export function buildAudioReactiveBubblesAndParticles(opts: {
+  root: THREE.Group;
+  radiusX: number;
+  radiusZ: number;
+  minY?: number;
+  maxY?: number;
+  bubbleCount?: number;
+  particleCount?: number;
+  centerZ?: number;
+}): void {
+  const {
+    root,
+    radiusX,
+    radiusZ,
+    minY = 1.65,
+    maxY = 7.4,
+    bubbleCount = 16,
+    particleCount = 192,
+    centerZ = 0,
+  } = opts;
+
+  const group = new THREE.Group();
+  group.name = 'audio_reactive_atmosphere_group';
+
+  // 1. Multi-Scale Iridescent Soap Bubbles — 16 frequency bands across 3 distinct size & motion tiers
+  const bubbleTex = createIridescentSoapBubbleTexture();
+  const count = Math.min(20, Math.max(8, bubbleCount));
+
+  for (let i = 0; i < count; i++) {
+    const bandIndex = i % 16;
+    const baseHue = bandIndex / 16;
+    const angle = (i / count) * Math.PI * 2 + 0.38;
+    const radialFactor = 0.48 + ((i * 7) % 5) * 0.095;
+    const bx = Math.sin(angle) * (radiusX * radialFactor);
+    const bz = centerZ - Math.cos(angle) * (radiusZ * radialFactor);
+    const by = minY + ((i * 0.6180339) % 1) * (maxY - minY);
+
+    // 3 distinct size tiers: Macro Cathedral Orbs (0..3), Mesoscale Harmonic (4..9), Micro Satellites (10..15)
+    let sizeTier: 'macro' | 'meso' | 'micro' = 'meso';
+    let baseRadius = 0.28;
+    if (i % 4 === 0) {
+      sizeTier = 'macro';
+      baseRadius = 0.46 + (i % 3) * 0.08; // 0.46m – 0.62m giant slow-drifting orbs
+    } else if (i % 3 === 1) {
+      sizeTier = 'micro';
+      baseRadius = 0.11 + (i % 4) * 0.022; // 0.11m – 0.176m nimble satellite bubbles
+    } else {
+      sizeTier = 'meso';
+      baseRadius = 0.23 + (i % 5) * 0.032; // 0.23m – 0.358m expressive harmonic bubbles
+    }
+
+    const initColor = new THREE.Color().setHSL(baseHue, 0.92, 0.64);
+    const initEmissive = new THREE.Color().setHSL(
+      (baseHue + 0.16) % 1,
+      0.96,
+      0.42
+    );
+
+    const bubbleMat = new THREE.MeshStandardMaterial({
+      color: initColor,
+      map: bubbleTex,
+      emissive: initEmissive,
+      emissiveMap: bubbleTex,
+      emissiveIntensity: 0.62,
+      roughness: 0.04,
+      metalness: 0.92,
+      transparent: true,
+      opacity: sizeTier === 'macro' ? 0.64 : sizeTier === 'micro' ? 0.82 : 0.72,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+
+    const bubbleMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 22, 16),
+      bubbleMat
+    );
+    bubbleMesh.name = 'audio_soap_bubble';
+    bubbleMesh.scale.setScalar(baseRadius);
+    bubbleMesh.position.set(bx, by, bz);
+
+    // Distinct 3D Lissajous frequency ratios per bubble so trajectories never look uniform
+    const speedMult =
+      sizeTier === 'macro' ? 0.22 : sizeTier === 'micro' ? 0.58 : 0.36;
+    bubbleMesh.userData = {
+      bandIndex,
+      baseHue,
+      baseX: bx,
+      baseY: by,
+      baseZ: bz,
+      curX: bx,
+      curY: by,
+      curZ: bz,
+      vx: 0,
+      vy: 0,
+      vz: 0,
+      baseRadius,
+      sizeTier,
+      phaseSeed: i * 1.37 + 0.25,
+      freqX: (0.42 + (i % 5) * 0.11) * speedMult,
+      freqY: (0.53 + (i % 7) * 0.09) * speedMult,
+      freqZ: (0.37 + (i % 4) * 0.13) * speedMult,
+      orbitRx:
+        sizeTier === 'macro'
+          ? 0.45
+          : sizeTier === 'micro'
+          ? 0.95
+          : 0.68,
+      orbitRy:
+        sizeTier === 'macro'
+          ? 0.35
+          : sizeTier === 'micro'
+          ? 0.62
+          : 0.48,
+      orbitRz:
+        sizeTier === 'macro'
+          ? 0.45
+          : sizeTier === 'micro'
+          ? 0.95
+          : 0.68,
+      spinY: i * 0.8,
+      spinZ: 0,
+      smoothBand: 0,
+      sympatheticHueShift: 0,
+      interactionSquash: 0,
+    };
+    group.add(bubbleMesh);
+  }
+
+  // 2. Multi-Scale, Multi-Archetype Soft Spherical Particle Cloud (4 behavioral species + per-particle sizes)
+  const positions = new Float32Array(particleCount * 3);
+  const basePositions = new Float32Array(particleCount * 3);
+  const velocities = new Float32Array(particleCount * 3);
+  const colors = new Float32Array(particleCount * 3);
+  const baseSizes = new Float32Array(particleCount);
+  const sizeScales = new Float32Array(particleCount);
+  const archetypes = new Uint8Array(particleCount);
+  const phases = new Float32Array(particleCount);
+  const smoothBands = new Float32Array(particleCount);
+  const tempColor = new THREE.Color();
+
+  // Separate macro-bokeh companion cloud for giant translucent atmospheric orbs (48 orbs)
+  const bokehCount = Math.max(24, Math.floor(particleCount * 0.22));
+  const bokehPositions = new Float32Array(bokehCount * 3);
+  const bokehBasePositions = new Float32Array(bokehCount * 3);
+  const bokehVelocities = new Float32Array(bokehCount * 3);
+  const bokehColors = new Float32Array(bokehCount * 3);
+  const bokehPhases = new Float32Array(bokehCount);
+
+  for (let i = 0; i < particleCount; i++) {
+    const bandIndex = i % 16;
+    const hue = bandIndex / 16;
+    const a = i * 2.3999632; // Golden angle spiral distribution
+    const rNorm = 0.2 + ((i * 73) % 100) / 128;
+    const px = Math.cos(a) * radiusX * rNorm;
+    const pz = centerZ + Math.sin(a) * radiusZ * rNorm;
+    const py = 0.85 + (((i * 47) % 100) / 100) * (maxY + 0.9);
+
+    positions[i * 3] = px;
+    positions[i * 3 + 1] = py;
+    positions[i * 3 + 2] = pz;
+
+    basePositions[i * 3] = px;
+    basePositions[i * 3 + 1] = py;
+    basePositions[i * 3 + 2] = pz;
+
+    phases[i] = i * 0.6180339 * Math.PI * 2;
+
+    // Assign 1 of 4 behavioral archetypes and a wide log-normal size distribution (0.20x to 2.45x):
+    // 0: Giant Bokeh Drifters (15%)
+    // 1: Double-Helix Curl Vortex Streamers (35%)
+    // 2: Bubble-Seeker Orbital Satellites (30%)
+    // 3: Flocking Stardust Micro-Sparks (20%)
+    const mod20 = i % 20;
+    let arch = 1;
+    let bSize = 1.0;
+    if (mod20 < 3) {
+      arch = 0;
+      bSize = 1.65 + (i % 5) * 0.18; // 1.65x – 2.37x large luminous orbs
+    } else if (mod20 < 10) {
+      arch = 1;
+      bSize = 0.72 + (i % 6) * 0.11; // 0.72x – 1.27x medium vortex streamers
+    } else if (mod20 < 16) {
+      arch = 2;
+      bSize = 0.44 + (i % 5) * 0.09; // 0.44x – 0.80x nimble bubble-orbiting satellites
+    } else {
+      arch = 3;
+      bSize = 0.2 + (i % 4) * 0.055; // 0.20x – 0.365x fine stardust micro-sparks
+    }
+
+    archetypes[i] = arch;
+    baseSizes[i] = bSize;
+    sizeScales[i] = bSize;
+
+    tempColor.setHSL(
+      hue,
+      arch === 3 ? 0.88 : 0.95,
+      arch === 0 ? 0.58 : arch === 3 ? 0.76 : 0.64
+    );
+    colors[i * 3] = tempColor.r;
+    colors[i * 3 + 1] = tempColor.g;
+    colors[i * 3 + 2] = tempColor.b;
+  }
+
+  const pGeo = new THREE.BufferGeometry();
+  pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  pGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  pGeo.setAttribute('aSizeScale', new THREE.BufferAttribute(sizeScales, 1));
+
+  const softCircleTex = nebulaSkySystem.getSharedSoftParticleTexture();
+  const pMat = new THREE.PointsMaterial({
+    size: 0.25,
+    map: softCircleTex,
+    alphaTest: 0.01,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.88,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+
+  // Inject per-vertex size multiplier (`aSizeScale`) into Three.js PointsMaterial vertex shader
+  pMat.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        '#include <common>\nattribute float aSizeScale;'
+      )
+      .replace('gl_PointSize = size;', 'gl_PointSize = size * aSizeScale;');
+  };
+
+  const points = new THREE.Points(pGeo, pMat);
+  points.name = 'audio_chromatic_particles';
+  points.userData = {
+    basePositions,
+    velocities,
+    baseSizes,
+    sizeScales,
+    archetypes,
+    phases,
+    smoothBands,
+    particleCount,
+    radiusX,
+    radiusZ,
+    minY: 0.6,
+    maxY: maxY + 1.2,
+    centerZ,
+  };
+  group.add(points);
+
+  // 3. Companion Macro-Bokeh Layer (`audio_macro_bokeh_particles`): Large soft glowing nebular orbs
+  for (let i = 0; i < bokehCount; i++) {
+    const bandIndex = (i * 3) % 16;
+    const hue = bandIndex / 16;
+    const a = i * 2.3999632 + 1.05;
+    const rNorm = 0.28 + ((i * 53) % 100) / 145;
+    const px = Math.cos(a) * radiusX * rNorm;
+    const pz = centerZ + Math.sin(a) * radiusZ * rNorm;
+    const py = 1.2 + (((i * 31) % 100) / 100) * (maxY + 0.4);
+
+    bokehPositions[i * 3] = px;
+    bokehPositions[i * 3 + 1] = py;
+    bokehPositions[i * 3 + 2] = pz;
+
+    bokehBasePositions[i * 3] = px;
+    bokehBasePositions[i * 3 + 1] = py;
+    bokehBasePositions[i * 3 + 2] = pz;
+    bokehPhases[i] = i * 1.17;
+
+    tempColor.setHSL(hue, 0.92, 0.56);
+    bokehColors[i * 3] = tempColor.r;
+    bokehColors[i * 3 + 1] = tempColor.g;
+    bokehColors[i * 3 + 2] = tempColor.b;
+  }
+
+  const bokehGeo = new THREE.BufferGeometry();
+  bokehGeo.setAttribute(
+    'position',
+    new THREE.BufferAttribute(bokehPositions, 3)
+  );
+  bokehGeo.setAttribute('color', new THREE.BufferAttribute(bokehColors, 3));
+
+  const bokehMat = new THREE.PointsMaterial({
+    size: 0.58,
+    map: softCircleTex,
+    alphaTest: 0.01,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.52,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+
+  const bokehPoints = new THREE.Points(bokehGeo, bokehMat);
+  bokehPoints.name = 'audio_macro_bokeh_particles';
+  bokehPoints.userData = {
+    basePositions: bokehBasePositions,
+    velocities: bokehVelocities,
+    phases: bokehPhases,
+    particleCount: bokehCount,
+  };
+  group.add(bokehPoints);
+
+  root.add(group);
 }
 
 /**
@@ -1317,82 +1927,185 @@ export function buildWiredSciFiGothicPortal(opts: {
   phaseSeed?: number;
 }): THREE.Group {
   const {
-    x, z, rotY = 0, width = 2.6, height = 3.9, frameMat,
-    accentHex, statusColorHex, plaqueTex,
-    plaqueWidth = width * 0.82, plaqueHeight = 0.54, phaseSeed = 0,
+    x,
+    z,
+    rotY = 0,
+    width = 2.6,
+    height = 3.9,
+    frameMat,
+    vortexMat,
+    statusColorHex,
+    accentHex,
+    plaqueTex,
+    plaqueWidth = width * 0.88,
+    plaqueHeight = 1.05,
+    cableSpread = 1.0,
+    phaseSeed = 0,
   } = opts;
 
   const group = new THREE.Group();
   group.position.set(x, 0, z);
   group.rotation.y = rotY;
-  group.name = 'oval_cosmic_portal';
 
-  // A clean elliptical silhouette keeps the sky visible around every transition.
-  const outerRing = new THREE.Mesh(
-    new THREE.TorusGeometry(1, 0.038, 8, 64),
-    frameMat
-  );
-  outerRing.scale.set(width * 0.5, height * 0.5, 1);
-  outerRing.position.set(0, height * 0.5, 0.16);
-  group.add(outerRing);
+  const halfW = width * 0.5;
+  const partsFrameAndCables: THREE.BufferGeometry[] = [];
+  const partsNeonAndWireCores: THREE.BufferGeometry[] = [];
 
-  const haloMaterial = new THREE.MeshBasicMaterial({
+  // 1. Stepped Sci-Fi/Gothic Threshold Plinth
+  const plinth = new THREE.BoxGeometry(width * 1.16, 0.18, 0.62);
+  plinth.translate(0, 0.09, 0.18);
+  partsFrameAndCables.push(plinth);
+
+  // 2. Left & Right Chamfered Portal Pillars + Side Induction Coils + Floor Cable Junction Boxes
+  for (const side of [-1, 1]) {
+    const px = side * (halfW - 0.16);
+    const pillar = new THREE.BoxGeometry(0.32, height - 0.25, 0.42);
+    pillar.translate(px, (height - 0.25) * 0.5 + 0.14, 0.16);
+    partsFrameAndCables.push(pillar);
+
+    // Floor Power Cable Junction Manifold Box outside each pillar base
+    const jBox = new THREE.BoxGeometry(0.36, 0.34, 0.44);
+    jBox.translate(side * (halfW + 0.22), 0.17, 0.28);
+    partsFrameAndCables.push(jBox);
+
+    // Mid-height Electromagnetic Induction Coil Ring on each pillar
+    const coil = new THREE.CylinderGeometry(0.26, 0.26, 0.28, 8);
+    coil.translate(px, height * 0.52, 0.2);
+    partsFrameAndCables.push(coil);
+
+    // Vertical Neon Portal Contour Strip along inner jamb
+    const neonStrip = new THREE.BoxGeometry(0.055, height - 0.42, 0.08);
+    neonStrip.translate(side * (halfW - 0.31), height * 0.48, 0.36);
+    partsNeonAndWireCores.push(neonStrip);
+
+    // 3D Connected Power Cable #1: Heavy Armored Floor Feeder Cable snaking from floor power grid into base junction box
+    const floorCableCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(
+        side * (halfW + 0.85 * cableSpread),
+        0.04,
+        1.45 * cableSpread
+      ),
+      new THREE.Vector3(
+        side * (halfW + 0.52 * cableSpread),
+        0.05,
+        0.82 * cableSpread
+      ),
+      new THREE.Vector3(side * (halfW + 0.24), 0.18, 0.34),
+    ]);
+    partsFrameAndCables.push(
+      new THREE.TubeGeometry(floorCableCurve, 8, 0.052, 6, false)
+    );
+
+    // Glowing Plasma Wire Core #1 running along the floor feeder cable into the portal
+    const floorGlowCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(
+        side * (halfW + 0.85 * cableSpread),
+        0.095,
+        1.45 * cableSpread
+      ),
+      new THREE.Vector3(
+        side * (halfW + 0.52 * cableSpread),
+        0.105,
+        0.82 * cableSpread
+      ),
+      new THREE.Vector3(side * (halfW + 0.24), 0.24, 0.36),
+    ]);
+    partsNeonAndWireCores.push(
+      new THREE.TubeGeometry(floorGlowCurve, 8, 0.024, 5, false)
+    );
+
+    // 3D Connected Power Cable #2: High-Voltage Catenary Loop from Base Junction Box up into Mid-Height Induction Coil
+    const midLoopCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(side * (halfW + 0.24), 0.3, 0.28),
+      new THREE.Vector3(
+        side * (halfW + 0.58 * cableSpread),
+        height * 0.27,
+        0.42
+      ),
+      new THREE.Vector3(side * (halfW + 0.06), height * 0.52, 0.24),
+    ]);
+    partsFrameAndCables.push(
+      new THREE.TubeGeometry(midLoopCurve, 8, 0.044, 6, false)
+    );
+
+    // Glowing Plasma Wire Core #2 along the side catenary loop
+    const midGlowCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(side * (halfW + 0.24), 0.32, 0.33),
+      new THREE.Vector3(
+        side * (halfW + 0.62 * cableSpread),
+        height * 0.27,
+        0.46
+      ),
+      new THREE.Vector3(side * (halfW + 0.08), height * 0.52, 0.29),
+    ]);
+    partsNeonAndWireCores.push(
+      new THREE.TubeGeometry(midGlowCurve, 8, 0.02, 5, false)
+    );
+
+    // 3D Connected Power Cable #3: Upper Umbilical Conduit from Mid Coil into the Gothic Arch Lintel Crown
+    const upperCableCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(side * (halfW + 0.04), height * 0.58, 0.22),
+      new THREE.Vector3(
+        side * (halfW + 0.42 * cableSpread),
+        height * 0.78,
+        0.34
+      ),
+      new THREE.Vector3(side * (halfW - 0.15), height - 0.08, 0.24),
+    ]);
+    partsFrameAndCables.push(
+      new THREE.TubeGeometry(upperCableCurve, 7, 0.038, 6, false)
+    );
+  }
+
+  // 3. Upper Lintel Beam + Pointed Gothic Arch Crown
+  const lintel = new THREE.BoxGeometry(width * 1.12, 0.38, 0.48);
+  lintel.translate(0, height - 0.12, 0.18);
+  partsFrameAndCables.push(lintel);
+
+  const gothicCrown = new THREE.ConeGeometry(width * 0.36, 0.72, 4);
+  gothicCrown.rotateY(Math.PI * 0.25);
+  gothicCrown.translate(0, height + 0.38, 0.16);
+  partsFrameAndCables.push(gothicCrown);
+
+  // Upper Status Luminaire Bar under the portal lintel
+  const statusLamp = new THREE.BoxGeometry(width * 0.68, 0.08, 0.16);
+  statusLamp.translate(0, height - 0.32, 0.38);
+  partsNeonAndWireCores.push(statusLamp);
+
+  // Merge all frame & armored cable parts into Mesh #1 (1 draw call)
+  const mergedFrameGeo = mergeBufferGeometries(partsFrameAndCables);
+  const frameAndCablesMesh = new THREE.Mesh(mergedFrameGeo, frameMat);
+  group.add(frameAndCablesMesh);
+
+  // Merge all neon contours & glowing wire cores into Mesh #2 (1 draw call, animated pulse)
+  const mergedNeonGeo = mergeBufferGeometries(partsNeonAndWireCores);
+  const neonWireMat = new THREE.MeshBasicMaterial({
     color: statusColorHex ?? accentHex,
     transparent: true,
-    opacity: 0.32,
-    toneMapped: false,
+    opacity: 0.9,
   });
-  const halo = new THREE.Mesh(
-    new THREE.TorusGeometry(1, 0.014, 5, 64),
-    haloMaterial
+  const neonAndWiresMesh = new THREE.Mesh(mergedNeonGeo, neonWireMat);
+  neonAndWiresMesh.name = 'portal_wire_pulse';
+  neonAndWiresMesh.userData = { phaseSeed };
+  group.add(neonAndWiresMesh);
+
+  // Mesh #3: Dimensional Portal Vortex Aperture (1 draw call)
+  const vortexAperture = new THREE.Mesh(
+    new THREE.BoxGeometry(width - 0.56, height - 0.48, 0.14),
+    vortexMat
   );
-  halo.scale.set(width * 0.458, height * 0.458, 1);
-  halo.position.set(0, height * 0.5, 0.13);
-  halo.name = 'portal_wire_pulse';
-  halo.userData = { phaseSeed };
-  group.add(halo);
+  vortexAperture.name = 'portal_vortex_aperture';
+  vortexAperture.userData = { phaseSeed };
+  vortexAperture.position.set(0, 0.18 + (height - 0.48) * 0.5, 0.14);
+  group.add(vortexAperture);
 
-  // Elliptical shape geometry, rather than a rectangular door leaf, lets the
-  // nebula show through while a restrained shader suggests depth and motion.
-  const apertureShape = new THREE.Shape();
-  apertureShape.absellipse(0, 0, width * 0.43, height * 0.43, 0, Math.PI * 2, false, 0);
-  const apertureMaterial = new THREE.ShaderMaterial({
-    transparent: true,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-    uniforms: {
-      uTime: { value: 0 },
-      uBeat: { value: 0 },
-      uLow: { value: 0 },
-      uMid: { value: 0 },
-      uHigh: { value: 0 },
-      uAmplitude: { value: 0 },
-      uColor: { value: new THREE.Color(accentHex) },
-      uPlasma: { value: new THREE.Color(opts.plasmaHex ?? '#77c9ff') },
-    },
-    vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
-    fragmentShader: `uniform float uTime; uniform float uBeat; uniform float uLow; uniform float uMid; uniform float uHigh; uniform float uAmplitude; uniform vec3 uColor; uniform vec3 uPlasma; varying vec2 vUv; void main(){ vec2 p=(vUv-0.5)*2.0; float r=length(p); float swirl=0.5+0.5*sin(8.0*r-uTime*(0.12+uLow*0.1)+atan(p.y,p.x)*1.4); float rim=(1.0-smoothstep(0.72,1.0,r)); float core=1.0-smoothstep(0.0,1.0,r); vec3 color=mix(uColor,uPlasma,clamp(swirl*0.3+uHigh*0.12,0.0,1.0)); color=mix(color,vec3(1.0,0.82,0.58),uLow*0.08); color=mix(color,vec3(0.76,0.9,1.0),core*0.08+uBeat*0.025); float alpha=rim*(0.055+0.065*(1.0-r)+uBeat*0.04+uMid*0.02+uAmplitude*0.025); gl_FragColor=vec4(color,alpha); }`,
-  });
-  const apertureGeometry = new THREE.ShapeGeometry(apertureShape, 48);
-  const aperturePositions = apertureGeometry.getAttribute('position');
-  const apertureUvs = new Float32Array(aperturePositions.count * 2);
-  for (let i = 0; i < aperturePositions.count; i++) {
-    apertureUvs[i * 2] = aperturePositions.getX(i) / (width * 0.86) + 0.5;
-    apertureUvs[i * 2 + 1] = aperturePositions.getY(i) / (height * 0.86) + 0.5;
-  }
-  apertureGeometry.setAttribute('uv', new THREE.BufferAttribute(apertureUvs, 2));
-  const aperture = new THREE.Mesh(apertureGeometry, apertureMaterial);
-  aperture.position.set(0, height * 0.5, 0.08);
-  aperture.name = 'portal_vortex_aperture';
-  aperture.userData = { phaseSeed };
-  group.add(aperture);
-
-  const plaque = new THREE.Mesh(
+  // Mesh #4: Built-in Sci-Fi/Gothic Telemetry Display Plaque above portal (1 draw call)
+  const plaqueMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(plaqueWidth, plaqueHeight),
-    new THREE.MeshBasicMaterial({ map: plaqueTex, transparent: true })
+    new THREE.MeshBasicMaterial({ map: plaqueTex })
   );
-  plaque.position.set(0, height + plaqueHeight * 0.56, 0.18);
-  group.add(plaque);
+  plaqueMesh.position.set(0, height + 0.22 + plaqueHeight * 0.5, 0.28);
+  group.add(plaqueMesh);
 
   return group;
 }
@@ -1472,9 +2185,17 @@ export class CorridorBuilder {
       }
     );
 
-    // The gallery floor should absorb light; reflections are reserved for a few exhibits.
+    const floorTex = createCosmicFloorTexture(
+      'rgba(229, 193, 88, 0.28)',
+      5,
+      5
+    );
+    // Polished dark basalt stone reflecting plasma columns and portals
     const cosmicFloorMat = new THREE.MeshStandardMaterial({
-      color: '#03050a', roughness: 0.92, metalness: 0.025,
+      color: '#0d1322',
+      map: floorTex,
+      roughness: 0.16,
+      metalness: 0.58,
     });
 
     const stoneWallTex = createArchitecturalWallTexture(
@@ -1492,37 +2213,54 @@ export class CorridorBuilder {
     });
 
     const goldHeroMat = new THREE.MeshStandardMaterial({
-      color: '#594b3c', roughness: 0.62, metalness: 0.3,
-      emissive: '#54380c', emissiveIntensity: 0.06,
+      color: '#e5c158',
+      roughness: 0.18,
+      metalness: 0.86,
+      emissive: '#54380c',
+      emissiveIntensity: 0.42,
     });
     const cyanHeroMat = new THREE.MeshStandardMaterial({
-      color: '#354750', roughness: 0.62, metalness: 0.28,
-      emissive: '#0e3b66', emissiveIntensity: 0.06,
+      color: '#4ea8de',
+      roughness: 0.18,
+      metalness: 0.86,
+      emissive: '#0e3b66',
+      emissiveIntensity: 0.48,
     });
     const violetHeroMat = new THREE.MeshStandardMaterial({
-      color: '#483e50', roughness: 0.62, metalness: 0.28,
-      emissive: '#38146b', emissiveIntensity: 0.06,
+      color: '#b388ff',
+      roughness: 0.18,
+      metalness: 0.86,
+      emissive: '#38146b',
+      emissiveIntensity: 0.48,
     });
 
     // 1. Grand Circular Polished Dark Basalt Floor (y = 0, walkable, with Fractals & Circuit Schematics)
     const platformDisc = new THREE.Mesh(
-      new THREE.CircleGeometry(220, 128),
+      new THREE.CylinderGeometry(15.2, 16.0, 0.6, 64),
       cosmicFloorMat
     );
-    platformDisc.rotation.x = -Math.PI * 0.5;
-    platformDisc.position.set(0, 0, 0);
+    platformDisc.position.set(0, -0.3, 0);
     root.add(platformDisc);
     walkableMeshes.push(platformDisc);
 
-    // One dim wayfinding trace in the floor; no bright circuit-board pattern.
-    [8.8].forEach((r) => {
+    const outerRim = new THREE.Mesh(
+      new THREE.TorusGeometry(15.0, 0.24, 12, 64),
+      goldHeroMat
+    );
+    outerRim.rotation.x = Math.PI * 0.5;
+    outerRim.position.set(0, 0.08, 0);
+    root.add(outerRim);
+
+    // Concentric glowing fractal & circuit rings on the polished dark stone floor
+    [4.2, 8.8, 13.6].forEach((r, idx) => {
       const floorRing = new THREE.Mesh(
-        new THREE.RingGeometry(r, r + 0.025, 64),
+        new THREE.RingGeometry(r, r + 0.09, 64),
         new THREE.MeshBasicMaterial({
-          color: '#625b55',
+          color:
+            idx === 0 ? '#e5c158' : idx === 1 ? '#4ea8de' : '#9d4edd',
           side: THREE.DoubleSide,
           transparent: true,
-          opacity: 0.12,
+          opacity: 0.62,
         })
       );
       floorRing.rotation.x = -Math.PI * 0.5;
@@ -1531,8 +2269,81 @@ export class CorridorBuilder {
     });
 
     // Travelling Electric Sparks (`перемещающиеся сполохи электричества`) along the floor circuits
+    buildFloorElectricCircuitSparks({
+      root,
+      maxRadius: 13.8,
+      primaryHex: '#9d4edd',
+      secondaryHex: '#4ea8de',
+      goldHex: '#e5c158',
+    });
 
-    // The nebula is fully open above the atrium; no roof ribs or tall columns.
+    // 2. High Gothic Cathedral Ribbed Vaults & Open Celestial Oculus (y = 14.6m, unobstructed view of Galaxies!)
+    const columnAnglesDeg = [-68, -42, 42, 68, -118, 118, -152, 152];
+    buildGothicRibbedVaultsAndOculus({
+      root,
+      oculusRadius: 9.8,
+      spanRadiusX: 13.8,
+      spanRadiusZ: 13.8,
+      wallHeight: 9.8,
+      vaultApexY: 14.6,
+      ribAnglesDeg: columnAnglesDeg,
+      basaltMat: gothicBasaltMat,
+      trimMat: goldHeroMat,
+      innerGlowHex: '#e5c158',
+      veilHex: skyRig.palette[2] ?? '#e5c158',
+    });
+
+    // 16-Band Audio-Reactive Iridescent Soap Bubbles & Soft Spherical Multi-Colored Particles
+    buildAudioReactiveBubblesAndParticles({
+      root,
+      radiusX: 12.2,
+      radiusZ: 12.2,
+      minY: 1.8,
+      maxY: 9.2,
+      bubbleCount: 16,
+      particleCount: 192,
+    });
+
+    // 3. Tall Transparent Quartz Glass Plasma Columns with Swirling Plasma & Periodic Branching Lightning!
+    // Strictly flanking the 3 North Sector Portals and East/West wings — never blocking sightlines!
+    columnAnglesDeg.forEach((deg, idx) => {
+      const rad = THREE.MathUtils.degToRad(deg);
+      const bx = Math.sin(rad) * 13.8;
+      const bz = -Math.cos(rad) * 13.8;
+
+      const plasmaCol = buildQuartzPlasmaColumn({
+        x: bx,
+        z: bz,
+        height: 9.8,
+        radius: 0.46,
+        primaryHex: idx % 2 === 0 ? '#9d4edd' : '#4ea8de',
+        secondaryHex: idx % 2 === 0 ? '#4ea8de' : '#b388ff',
+        goldHex: '#e5c158',
+        basaltMat: gothicBasaltMat,
+        trimMat: idx % 3 === 0 ? goldHeroMat : idx % 3 === 1 ? cyanHeroMat : violetHeroMat,
+        phaseSeed: idx * 1.618 + 0.5,
+      });
+      root.add(plasmaCol);
+    });
+
+    // 4. Scale Figures of Players in VR Headsets (`Фигуры людей в VR-шлемах масштабируют пространство`)
+    const explorerLeft = buildVRExplorerScaleFigure({
+      x: -4.4,
+      z: -3.2,
+      rotY: -0.18,
+      visorHex: '#4ea8de',
+      trimHex: '#e5c158',
+    });
+    root.add(explorerLeft);
+
+    const explorerRight = buildVRExplorerScaleFigure({
+      x: 4.4,
+      z: -3.2,
+      rotY: 0.18,
+      visorHex: '#b388ff',
+      trimHex: '#4ea8de',
+    });
+    root.add(explorerRight);
 
     // 5. Soft Pulsing Ring on Floor at z = 2.2m
     const moveRingGroup = new THREE.Group();
@@ -1556,21 +2367,28 @@ export class CorridorBuilder {
     pedestalGroup.name = 'onboarding_pedestal';
     pedestalGroup.position.set(0, 0, 1.2);
 
-    pedestalGroup.name = 'gallery_kinetic_threshold';
-    pedestalGroup.position.set(0, 0, 1.2);
-    pedestalGroup.userData.galleryMotion = { kind: 'rings', phase: 0, baseY: 2.15 };
-    [
-      { radius: 0.9, tube: 0.034, y: 0, z: 0 },
-      { radius: 0.7, tube: 0.028, y: Math.PI * 0.5, z: 0.3 },
-      { radius: 0.48, tube: 0.022, y: 0.35, z: 0.8 },
-    ].forEach((ring) => {
-      const mesh = new THREE.Mesh(
-        new THREE.TorusGeometry(ring.radius, ring.tube, 8, 64), goldHeroMat
-      );
-      mesh.position.y = 0;
-      mesh.rotation.set(0, ring.y, ring.z);
-      pedestalGroup.add(mesh);
-    });
+    const pedBase = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.52, 0.68, 1.05, 8),
+      gothicBasaltMat
+    );
+    pedBase.position.y = 0.525;
+    pedestalGroup.add(pedBase);
+
+    const pedTrimRing = new THREE.Mesh(
+      new THREE.TorusGeometry(0.54, 0.04, 12, 32),
+      goldHeroMat
+    );
+    pedTrimRing.rotation.x = Math.PI * 0.5;
+    pedTrimRing.position.y = 1.05;
+    pedestalGroup.add(pedTrimRing);
+
+    const pedCrystal = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.32, 0),
+      goldHeroMat
+    );
+    pedCrystal.name = 'onboarding_pedestal_crystal';
+    pedCrystal.position.y = 1.45;
+    pedestalGroup.add(pedCrystal);
 
     root.add(pedestalGroup);
     registerTarget(pedestalGroup, {
@@ -1651,6 +2469,20 @@ export class CorridorBuilder {
     atriumGroup.name = 'threshold_atrium_reveal_group';
     root.add(atriumGroup);
 
+    // Grand Overhead Banner above the Central Portal (`z = -8.0, y = 7.45`)
+    const centralHeaderBanner = buildArtmazeHeaderBanner({
+      x: 0,
+      y: 7.45,
+      z: -7.75,
+      width: 6.2,
+      height: 1.5,
+      accentHex: '#e5c158',
+      plasmaHex: '#9d4edd',
+      repoUrl: 'github.com/AlexSheff/Neuromicon',
+      trimMat: goldHeroMat,
+    });
+    atriumGroup.add(centralHeaderBanner);
+
     const cosmicDoorsSpec: Array<{
       segment: 1 | 2 | 3;
       x: number;
@@ -1683,6 +2515,18 @@ export class CorridorBuilder {
 
     cosmicDoorsSpec.forEach((spec, idx) => {
       const meta = SECTOR_HALL_META[spec.segment];
+      const vortexTex = createDoorLeafTexture(
+        '#050915',
+        meta.accentHex,
+        meta.plasmaHex
+      );
+      const vortexMat = new THREE.MeshStandardMaterial({
+        map: vortexTex,
+        roughness: 0.18,
+        metalness: 0.76,
+        emissive: meta.accentHex,
+        emissiveIntensity: 0.24,
+      });
       const plaqueTex = createSignageTexture(
         meta.symbol,
         meta.title,
@@ -1699,14 +2543,14 @@ export class CorridorBuilder {
         width: 3.4,
         height: 4.9,
         frameMat: spec.mat,
-        vortexMat: spec.mat,
+        vortexMat,
         accentHex: meta.accentHex,
         plasmaHex: meta.plasmaHex,
         statusColorHex: meta.accentHex,
         plaqueTex,
-        plaqueWidth: 2.0,
-        plaqueHeight: 0.62,
-        cableSpread: 0.72,
+        plaqueWidth: 3.2,
+        plaqueHeight: 1.3,
+        cableSpread: 1.35,
         phaseSeed: idx * 2.1,
       });
 
@@ -1850,54 +2694,71 @@ export class CorridorBuilder {
   }
 
   /**
-   * Animates Swirling Quartz Plasma Columns, Periodic Branching Lightning Flashes,
-   * Travelling Floor Circuit Electric Sparks, and VR Explorer Scale Figures across ALL rooms and halls!
+   * Animates Swirling Quartz Plasma Columns, Serene Plasma Filaments,
+   * Travelling Floor Circuit Electric Sparks, VR Explorer Scale Figures, and
+   * Multi-Scale Interactive Iridescent Soap Bubbles & 4-Archetype Chromatic Particles across ALL rooms and halls!
    * Strictly frozen when game clock is paused (`dt <= 0`).
+   * Uses stateful `dt` velocity integration (zero `timeSec * dynamicBand` phase jumps, zero epileptic strobing).
    */
+  private static readonly _scratchBubbleColor = new THREE.Color();
+  private static readonly _scratchBubbleEmissive = new THREE.Color();
+  private static readonly _scratchBubbles: THREE.Mesh[] = [];
+
   public static updateDynamicAtmosphere(
     root: THREE.Object3D,
     timeSec: number,
-    reducedMotion = false,
-    audio: { low?: number; mid?: number; high?: number; amplitude?: number; beat?: number } = {}
+    reducedMotion = false
   ): void {
-    const beat = THREE.MathUtils.clamp(audio.beat ?? 0, 0, 1);
-    const low = THREE.MathUtils.clamp(audio.low ?? 0, 0, 1);
-    const mid = THREE.MathUtils.clamp(audio.mid ?? 0, 0, 1);
-    const high = THREE.MathUtils.clamp(audio.high ?? 0, 0, 1);
-    const amplitude = THREE.MathUtils.clamp(audio.amplitude ?? 0, 0, 1);
+    const spectrum = spatialAudioSystem.getMultiBandSpectrum(timeSec);
+    const bands = spectrum.bands;
+    const beat = spectrum.beatPulse;
+    const centroid = spectrum.spectralCentroid;
+
+    // Compute smooth bounded frame delta `dt` from `timeSec` stored on `root.userData`
+    const prevTime =
+      typeof root.userData?.lastAtmosTimeSec === 'number'
+        ? (root.userData.lastAtmosTimeSec as number)
+        : timeSec - 0.016;
+    const rawDt = timeSec - prevTime;
+    const dt =
+      rawDt > 0 && rawDt < 0.25 ? Math.min(0.033, Math.max(0.001, rawDt)) : 0.016;
+    root.userData = root.userData || {};
+    root.userData.lastAtmosTimeSec = timeSec;
+
+    const bubbles = this._scratchBubbles;
+    bubbles.length = 0;
+
+    // Pass 1: Collect soap bubbles and update non-bubble elements with smooth incremental dt integration
     root.traverse((obj) => {
-      const galleryMotion = obj.userData?.galleryMotion as
-        | { phase: number; baseY: number; kind: 'rings' | 'orbits' | 'flame' }
-        | undefined;
-      if (galleryMotion) {
-        obj.position.y = galleryMotion.baseY + (reducedMotion ? 0 : Math.sin(timeSec * 0.42 + galleryMotion.phase) * 0.055);
-        if (!reducedMotion) {
-          obj.rotation.y = timeSec * 0.075 + galleryMotion.phase;
-          if (galleryMotion.kind === 'rings') obj.rotation.x = Math.sin(timeSec * 0.12) * 0.08;
-          if (galleryMotion.kind === 'flame') obj.rotation.z = Math.sin(timeSec * 0.16) * 0.025;
-        }
+      if (obj.name === 'audio_soap_bubble') {
+        bubbles.push(obj as THREE.Mesh);
       } else if (obj.name === 'plasma_vortex_core') {
         const mesh = obj as THREE.Mesh;
         const mat = mesh.material as THREE.MeshBasicMaterial;
         const seed = (mesh.userData?.phaseSeed as number) ?? 0;
+        const bandVal = bands[Math.floor(seed * 3) & 15] ?? 0;
         if (!reducedMotion) {
-          mesh.rotation.y = timeSec * 0.65 + seed;
-          mat.opacity = 0.72 + Math.sin(timeSec * 2.1 + seed) * 0.18;
+          // Incremental rotation prevents instantaneous angular jumps when bandVal changes
+          mesh.rotation.y += (0.38 + bandVal * 0.45) * dt;
+          mat.opacity =
+            0.7 + Math.sin(timeSec * 0.95 + seed) * 0.1 + bandVal * 0.14;
         } else {
-          mat.opacity = 0.8;
+          mat.opacity = 0.78;
         }
       } else if (obj.name === 'plasma_vortex_helix') {
         const mesh = obj as THREE.Mesh;
         const seed = (mesh.userData?.phaseSeed as number) ?? 0;
+        const bandVal = bands[Math.floor(seed * 5) & 15] ?? 0;
         if (!reducedMotion) {
-          mesh.rotation.y = -timeSec * 1.15 - seed;
+          mesh.rotation.y -= (0.52 + bandVal * 0.35) * dt;
         }
       } else if (obj.name === 'plasma_floor_pool') {
         const mesh = obj as THREE.Mesh;
         const mat = mesh.material as THREE.MeshBasicMaterial;
         const seed = (mesh.userData?.phaseSeed as number) ?? 0;
         if (!reducedMotion) {
-          mat.opacity = 0.18 + Math.sin(timeSec * 2.1 + seed) * 0.08;
+          mat.opacity =
+            0.16 + Math.sin(timeSec * 0.85 + seed) * 0.04 + beat * 0.08;
         }
       } else if (obj.name === 'plasma_lightning_arc') {
         const line = obj as THREE.LineSegments;
@@ -1906,18 +2767,13 @@ export class CorridorBuilder {
         if (reducedMotion) {
           mat.opacity = 0;
         } else {
-          // Rare branching lightning discharge inside the plasma column:
-          // Fires briefly when composite harmonic wave crosses threshold
-          const wave =
-            Math.sin(timeSec * 1.7 + seed * 3.1) *
-            Math.sin(timeSec * 4.3 + seed * 1.9) *
-            Math.cos(timeSec * 7.9 + seed);
-          if (wave > 0.62) {
-            mat.opacity = Math.min(1.0, (wave - 0.62) * 3.4);
-            line.rotation.y = Math.floor(timeSec * 14 + seed) * 1.047;
-          } else {
-            mat.opacity = 0;
-          }
+          // Serene, photosensitive-safe slow plasma filament wave (no 14Hz snapping or strobing!)
+          line.rotation.y += 0.22 * dt;
+          const slowWave =
+            Math.sin(timeSec * 0.55 + seed * 2.1) *
+            Math.cos(timeSec * 0.82 - seed * 1.3);
+          const env = Math.max(0, (slowWave - 0.35) / 0.65);
+          mat.opacity = Math.min(0.42, env * env * 0.36 + beat * 0.08);
         }
       } else if (obj.name === 'floor_electric_spark') {
         const spark = obj as THREE.Mesh;
@@ -1925,7 +2781,7 @@ export class CorridorBuilder {
         const {
           angle = 0,
           maxRadius = 8,
-          speed = 3.0,
+          speed = 2.8,
           phase = 0,
         } = (spark.userData as {
           angle?: number;
@@ -1934,43 +2790,584 @@ export class CorridorBuilder {
           phase?: number;
         }) ?? {};
         if (reducedMotion) {
-          mat.opacity = 0.35;
+          mat.opacity = 0.3;
         } else {
-          const dist =
-            1.4 + ((timeSec * speed + phase) % Math.max(2.0, maxRadius - 1.6));
+          // Smooth radial travel with sine bell-curve fade at both ends so wrapping is 100% invisible
+          const span = Math.max(2.5, maxRadius - 1.6);
+          const calmSpeed = speed * 0.38;
+          const progress = ((timeSec * calmSpeed + phase) % span) / span;
+          const dist = 1.4 + progress * span;
           spark.position.x = Math.sin(angle) * dist;
           spark.position.z = -Math.cos(angle) * dist;
-          mat.opacity = 0.45 + Math.sin(timeSec * 8.5 + phase) * 0.45;
+          const edgeEnvelope = Math.sin(progress * Math.PI);
+          mat.opacity = edgeEnvelope * (0.42 + beat * 0.16);
         }
       } else if (obj.name === 'vr_explorer_visor') {
         if (!reducedMotion) {
-          obj.rotation.y = Math.sin(timeSec * 0.55) * 0.14;
+          obj.rotation.y = Math.sin(timeSec * 0.45) * 0.12;
         }
       } else if (obj.name === 'portal_wire_pulse') {
         const mesh = obj as THREE.Mesh;
         const mat = mesh.material as THREE.MeshBasicMaterial;
         const seed = (mesh.userData?.phaseSeed as number) ?? 0;
         if (reducedMotion) {
-    mat.opacity = 0.34;
+          mat.opacity = 0.85;
         } else {
-          mat.opacity = 0.27 + Math.sin(timeSec * 0.6 + seed) * 0.04 + beat * 0.035 + amplitude * 0.02;
+          mat.opacity =
+            0.66 + Math.sin(timeSec * 1.25 + seed) * 0.14 + beat * 0.12;
         }
       } else if (obj.name === 'portal_vortex_aperture') {
         const mesh = obj as THREE.Mesh;
-        const mat = mesh.material as THREE.ShaderMaterial;
-        if (mat?.uniforms?.uTime) {
-          mat.uniforms.uTime.value = timeSec;
-          mat.uniforms.uBeat.value = reducedMotion ? 0 : beat;
-          mat.uniforms.uLow.value = low;
-          mat.uniforms.uMid.value = mid;
-          mat.uniforms.uHigh.value = high;
-          mat.uniforms.uAmplitude.value = amplitude;
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        const seed = (mesh.userData?.phaseSeed as number) ?? 0;
+        if (mat && 'emissiveIntensity' in mat && !reducedMotion) {
+          mat.emissiveIntensity =
+            0.2 + Math.sin(timeSec * 1.1 + seed) * 0.05 + beat * 0.1;
+        }
+      }
+    });
+
+    // Pass 2: Multi-Scale Soap Bubble 3D Lissajous Currents + Bubble-to-Bubble Elastic Dipole & Hue Resonance
+    const bubbleCount = bubbles.length;
+    for (let i = 0; i < bubbleCount; i++) {
+      const bA = bubbles[i];
+      const uA = bA.userData as {
+        bandIndex: number;
+        baseHue: number;
+        baseX: number;
+        baseY: number;
+        baseZ: number;
+        curX: number;
+        curY: number;
+        curZ: number;
+        vx: number;
+        vy: number;
+        vz: number;
+        baseRadius: number;
+        sizeTier: 'macro' | 'meso' | 'micro';
+        phaseSeed: number;
+        freqX: number;
+        freqY: number;
+        freqZ: number;
+        orbitRx: number;
+        orbitRy: number;
+        orbitRz: number;
+        spinY: number;
+        spinZ: number;
+        smoothBand: number;
+        sympatheticHueShift: number;
+        interactionSquash: number;
+      };
+
+      const rawBand = bands[uA.bandIndex & 15] ?? 0;
+      uA.smoothBand += (rawBand - uA.smoothBand) * Math.min(1, dt * 6.5);
+      const bandVal = uA.smoothBand;
+
+      if (typeof uA.curX !== 'number') {
+        uA.curX = uA.baseX ?? bA.position.x;
+        uA.curY = uA.baseY ?? bA.position.y;
+        uA.curZ = uA.baseZ ?? bA.position.z;
+        uA.vx = 0;
+        uA.vy = 0;
+        uA.vz = 0;
+        uA.spinY = uA.phaseSeed ?? 0;
+        uA.spinZ = 0;
+        uA.sympatheticHueShift = 0;
+        uA.interactionSquash = 0;
+      }
+
+      if (!reducedMotion) {
+        // 3D Lissajous & inclined figure-8 target trajectory unique to each bubble
+        const fx = uA.freqX ?? 0.32;
+        const fy = uA.freqY ?? 0.41;
+        const fz = uA.freqZ ?? 0.29;
+        const rx = (uA.orbitRx ?? 0.65) * (1 + bandVal * 0.35);
+        const ry = (uA.orbitRy ?? 0.45) * (1 + bandVal * 0.4);
+        const rz = (uA.orbitRz ?? 0.65) * (1 + bandVal * 0.35);
+        const seed = uA.phaseSeed ?? 0;
+
+        const targetX =
+          uA.baseX +
+          Math.sin(timeSec * fx + seed) * rx +
+          Math.cos(timeSec * (fx * 1.618) - seed) * (rx * 0.35);
+        const targetY =
+          uA.baseY +
+          Math.cos(timeSec * fy + seed * 1.3) * ry +
+          Math.sin(timeSec * (fy * 0.5) + seed) * 0.22 +
+          bandVal * 0.38;
+        const targetZ =
+          uA.baseZ +
+          Math.cos(timeSec * fz + seed * 0.7) * rz +
+          Math.sin(timeSec * (fz * 1.414) + seed) * (rz * 0.35);
+
+        // Smooth spring force toward target 3D Lissajous current
+        let ax = (targetX - uA.curX) * 2.4;
+        let ay = (targetY - uA.curY) * 2.4;
+        let az = (targetZ - uA.curZ) * 2.4;
+
+        let huePull = 0;
+        let squashTarget = 0;
+
+        // Bubble-to-Bubble Interactions: Mutual tangential orbital dance + soft elastic cushion + sympathetic hue blend
+        for (let j = 0; j < bubbleCount; j++) {
+          if (i === j) continue;
+          const bB = bubbles[j];
+          const uB = bB.userData;
+          const bx = (uB.curX as number) ?? bB.position.x;
+          const by = (uB.curY as number) ?? bB.position.y;
+          const bz = (uB.curZ as number) ?? bB.position.z;
+          const dx = uA.curX - bx;
+          const dy = uA.curY - by;
+          const dz = uA.curZ - bz;
+          const distSq = dx * dx + dy * dy + dz * dz;
+          const interactRadius = 3.2;
+
+          if (distSq > 0.0001 && distSq < interactRadius * interactRadius) {
+            const dist = Math.sqrt(distSq);
+            const closeness = 1 - dist / interactRadius;
+            const nx = dx / dist;
+            const ny = dy / dist;
+            const nz = dz / dist;
+
+            // Soft elastic repulsion when closer than 2.8x combined radii
+            const minSep = (uA.baseRadius + (uB.baseRadius ?? 0.28)) * 2.8;
+            if (dist < minSep) {
+              const repulse = ((minSep - dist) / minSep) * 3.2;
+              ax += nx * repulse;
+              ay += ny * repulse * 0.6;
+              az += nz * repulse;
+              squashTarget = Math.max(
+                squashTarget,
+                ((minSep - dist) / minSep) * 0.16
+              );
+            }
+
+            // Mutual tangential vortex swirl (bubbles gracefully waltz around each other on close approach)
+            const swirlStrength = closeness * closeness * 1.45;
+            ax += -nz * swirlStrength;
+            az += nx * swirlStrength;
+
+            // Sympathetic hue resonance between interacting bubbles
+            const otherHue = (uB.baseHue as number) ?? 0;
+            huePull += (otherHue - uA.baseHue) * closeness * 0.35;
+          }
+        }
+
+        const damping = Math.exp(-3.2 * dt);
+        uA.vx = (uA.vx + ax * dt) * damping;
+        uA.vy = (uA.vy + ay * dt) * damping;
+        uA.vz = (uA.vz + az * dt) * damping;
+
+        uA.curX += uA.vx * dt;
+        uA.curY += uA.vy * dt;
+        uA.curZ += uA.vz * dt;
+
+        bA.position.set(uA.curX, uA.curY, uA.curZ);
+
+        uA.sympatheticHueShift +=
+          (huePull - uA.sympatheticHueShift) * Math.min(1, dt * 4.0);
+        uA.interactionSquash +=
+          (squashTarget - uA.interactionSquash) * Math.min(1, dt * 7.0);
+
+        // Smooth incremental thin-film spin (never jumps when bandVal changes!)
+        const spinRate =
+          (uA.sizeTier === 'macro'
+            ? 0.28
+            : uA.sizeTier === 'micro'
+            ? 0.72
+            : 0.45) +
+          bandVal * 0.95;
+        uA.spinY += spinRate * dt;
+        uA.spinZ = Math.sin(timeSec * 0.95 + seed) * 0.28;
+        bA.rotation.y = uA.spinY;
+        bA.rotation.z = uA.spinZ;
+
+        // Smooth elastic breathing & interaction deformation
+        const s = uA.baseRadius * (1.0 + bandVal * 0.52 + beat * 0.16);
+        const wobble =
+          1.0 +
+          Math.sin(timeSec * 2.1 + seed) * 0.045 * (1 + bandVal * 0.6) +
+          uA.interactionSquash;
+        bA.scale.set(s * wobble, s / wobble, s * wobble);
+      } else {
+        bA.scale.setScalar(uA.baseRadius * (1.0 + bandVal * 0.2));
+      }
+
+      const mat = bA.material as THREE.MeshStandardMaterial;
+      const hue =
+        (uA.baseHue +
+          uA.sympatheticHueShift +
+          bandVal * 0.22 +
+          centroid * 0.12 +
+          timeSec * 0.025 +
+          1.0) %
+        1.0;
+
+      this._scratchBubbleColor.setHSL(
+        hue,
+        0.95,
+        Math.min(0.82, 0.54 + bandVal * 0.24)
+      );
+      this._scratchBubbleEmissive.setHSL(
+        (hue + 0.16) % 1.0,
+        0.98,
+        Math.min(0.72, 0.3 + bandVal * 0.36 + beat * 0.12)
+      );
+
+      mat.color.copy(this._scratchBubbleColor);
+      mat.emissive.copy(this._scratchBubbleEmissive);
+      mat.emissiveIntensity = 0.45 + bandVal * 1.15 + beat * 0.35;
+      mat.opacity =
+        (uA.sizeTier === 'macro' ? 0.54 : uA.sizeTier === 'micro' ? 0.72 : 0.62) +
+        bandVal * 0.26;
+    }
+
+    // Pass 3: Multi-Scale, 4-Archetype Chromatic Particles + Bubble Orbital Capture + Neighbor Flocking
+    root.traverse((obj) => {
+      if (obj.name === 'audio_chromatic_particles') {
+        const points = obj as THREE.Points;
+        const geo = points.geometry;
+        const posAttr = geo.getAttribute('position') as THREE.BufferAttribute;
+        const colAttr = geo.getAttribute('color') as THREE.BufferAttribute;
+        const sizeAttr = geo.getAttribute('aSizeScale') as
+          | THREE.BufferAttribute
+          | undefined;
+
+        const {
+          basePositions,
+          velocities,
+          baseSizes,
+          sizeScales,
+          archetypes,
+          phases,
+          smoothBands,
+          particleCount = 0,
+        } = (points.userData as {
+          basePositions?: Float32Array;
+          velocities?: Float32Array;
+          baseSizes?: Float32Array;
+          sizeScales?: Float32Array;
+          archetypes?: Uint8Array;
+          phases?: Float32Array;
+          smoothBands?: Float32Array;
+          particleCount?: number;
+        }) ?? {};
+
+        if (posAttr && colAttr && basePositions && particleCount > 0) {
+          const posArr = posAttr.array as Float32Array;
+          const colArr = colAttr.array as Float32Array;
+
+          for (let i = 0; i < particleCount; i++) {
+            const idx3 = i * 3;
+            const bandIdx = i & 15;
+            const rawB = bands[bandIdx] ?? 0;
+            const prevSmooth = smoothBands ? smoothBands[i] : rawB;
+            const bVal = prevSmooth + (rawB - prevSmooth) * Math.min(1, dt * 6.0);
+            if (smoothBands) smoothBands[i] = bVal;
+
+            const arch = archetypes ? archetypes[i] : i % 4;
+            const baseSz = baseSizes ? baseSizes[i] : 1.0;
+            const phase = phases ? phases[i] : i * 0.37;
+
+            let px = posArr[idx3];
+            let py = posArr[idx3 + 1];
+            let pz = posArr[idx3 + 2];
+
+            let capturedHueShift = 0;
+            let capturedSizeBoost = 0;
+
+            if (!reducedMotion && velocities) {
+              let vx = velocities[idx3];
+              let vy = velocities[idx3 + 1];
+              let vz = velocities[idx3 + 2];
+
+              const bx = basePositions[idx3];
+              const by = basePositions[idx3 + 1];
+              const bz = basePositions[idx3 + 2];
+
+              // 1. Archetype-specific 3D Curl-Vortex & Convection Flow Field
+              let fx = 0;
+              let fy = 0;
+              let fz = 0;
+
+              if (arch === 0) {
+                // Archetype 0: Giant Bokeh Orbs — slow, majestic toroidal convection plumes
+                const tSlow = timeSec * 0.28 + phase;
+                const targetX = bx + Math.sin(tSlow) * 0.75;
+                const targetY =
+                  by + Math.cos(tSlow * 0.8) * 0.55 + bVal * 0.45;
+                const targetZ = bz + Math.cos(tSlow) * 0.75;
+                fx = (targetX - px) * 1.4;
+                fy = (targetY - py) * 1.4;
+                fz = (targetZ - pz) * 1.4;
+              } else if (arch === 1) {
+                // Archetype 1: Double-Helix Curl Vortex Streamers — 3D divergence-free rotational eddies
+                const curlT = timeSec * 0.45;
+                const curlX =
+                  Math.sin(py * 0.65 + curlT + phase) -
+                  Math.cos(pz * 0.55 - curlT);
+                const curlY =
+                  Math.sin(pz * 0.55 + curlT) -
+                  Math.cos(px * 0.55 + phase * 0.5);
+                const curlZ =
+                  Math.sin(px * 0.55 - curlT + phase) -
+                  Math.cos(py * 0.65 + curlT);
+                const swirlGain = 0.85 + bVal * 1.15;
+                fx = curlX * swirlGain + (bx - px) * 0.65;
+                fy = curlY * 0.65 * swirlGain + (by + bVal * 0.5 - py) * 0.75;
+                fz = curlZ * swirlGain + (bz - pz) * 0.65;
+              } else if (arch === 2) {
+                // Archetype 2: Bubble-Seeker Satellites — roam along figure-8 currents seeking nearby soap bubbles
+                const tSeek = timeSec * 0.62 + phase;
+                const targetX = bx + Math.sin(tSeek) * 1.25;
+                const targetY =
+                  by + Math.sin(tSeek * 1.618) * 0.68 + bVal * 0.55;
+                const targetZ = bz + Math.cos(tSeek * 0.85) * 1.25;
+                fx = (targetX - px) * 1.6;
+                fy = (targetY - py) * 1.6;
+                fz = (targetZ - pz) * 1.6;
+              } else {
+                // Archetype 3: Fine Stardust Micro-Sparks — nimble harmonic figure-8 + neighbor flocking
+                const tSpark = timeSec * 0.78 + phase;
+                fx =
+                  Math.cos(tSpark + py * 0.9) * (0.9 + bVal * 1.3) +
+                  (bx - px) * 0.95;
+                fy =
+                  Math.sin(tSpark * 1.3 + px * 0.8) * (0.75 + bVal * 1.1) +
+                  (by + bVal * 0.45 - py) * 0.95;
+                fz =
+                  Math.sin(tSpark - pz * 0.9) * (0.9 + bVal * 1.3) +
+                  (bz - pz) * 0.95;
+              }
+
+              // 2. Particle-to-Bubble Gravitational & Tangential Vortex Capture!
+              // Particles near any Iridescent Soap Bubble get swept into a glowing orbital ring around the bubble
+              if (bubbleCount > 0) {
+                let nearestDistSq = 999;
+                let nearBubble: THREE.Mesh | null = null;
+                for (let b = 0; b < bubbleCount; b++) {
+                  const bm = bubbles[b];
+                  const dx = px - bm.position.x;
+                  const dy = py - bm.position.y;
+                  const dz = pz - bm.position.z;
+                  const d2 = dx * dx + dy * dy + dz * dz;
+                  if (d2 < nearestDistSq) {
+                    nearestDistSq = d2;
+                    nearBubble = bm;
+                  }
+                }
+
+                const captureRange = arch === 2 ? 3.2 : 2.3;
+                if (
+                  nearBubble &&
+                  nearestDistSq > 0.0001 &&
+                  nearestDistSq < captureRange * captureRange
+                ) {
+                  const dist = Math.sqrt(nearestDistSq);
+                  const bRad =
+                    (nearBubble.userData?.baseRadius as number) ?? 0.3;
+                  const bBand =
+                    (nearBubble.userData?.smoothBand as number) ?? bVal;
+                  const bHue = (nearBubble.userData?.baseHue as number) ?? 0;
+
+                  // Ideal orbital shell radius around the soap bubble
+                  const orbitShell = bRad * (1.85 + (i % 3) * 0.35);
+                  const rx = (px - nearBubble.position.x) / dist;
+                  const ry = (py - nearBubble.position.y) / dist;
+                  const rz = (pz - nearBubble.position.z) / dist;
+
+                  const influence = 1 - dist / captureRange;
+                  // Radial spring pulling particle onto the bubble's orbital shell (repels if inside shell, attracts if outside)
+                  const shellForce = (orbitShell - dist) * 3.8 * influence;
+                  fx += rx * shellForce;
+                  fy += ry * shellForce;
+                  fz += rz * shellForce;
+
+                  // Tangential cross-product swirl around the bubble's spin axis
+                  const orbitSpeed =
+                    (arch === 2 ? 3.4 : 2.1) * influence * (1 + bBand * 0.85);
+                  fx += -rz * orbitSpeed;
+                  fz += rx * orbitSpeed;
+                  fy += Math.sin(phase + timeSec * 1.8) * 0.55 * influence;
+
+                  capturedHueShift = (bHue - bandIdx / 16) * influence * 0.65;
+                  capturedSizeBoost = influence * (0.42 + bBand * 0.45);
+                }
+              }
+
+              // 3. Particle-to-Particle Neighbor Flocking (Alignment & Soft Dipole Repulsion)
+              const nIdx = ((i + 7) % particleCount) * 3;
+              const ndx = px - posArr[nIdx];
+              const ndy = py - posArr[nIdx + 1];
+              const ndz = pz - posArr[nIdx + 2];
+              const nDistSq = ndx * ndx + ndy * ndy + ndz * ndz;
+
+              if (nDistSq > 0.0001 && nDistSq < 3.24) {
+                const nDist = Math.sqrt(nDistSq);
+                if (nDist < 0.65) {
+                  // Soft close-range dipole repulsion so particles never clump
+                  const rep = ((0.65 - nDist) / 0.65) * 2.2;
+                  fx += (ndx / nDist) * rep;
+                  fy += (ndy / nDist) * rep;
+                  fz += (ndz / nDist) * rep;
+                } else {
+                  // Mid-range velocity alignment creating graceful flowing ribbons/murmurations
+                  const align = 0.42;
+                  fx += (velocities[nIdx] - vx) * align;
+                  fy += (velocities[nIdx + 1] - vy) * align;
+                  fz += (velocities[nIdx + 2] - vz) * align;
+                }
+              }
+
+              const pDamp = Math.exp(-(arch === 0 ? 3.4 : 2.6) * dt);
+              vx = (vx + fx * dt) * pDamp;
+              vy = (vy + fy * dt) * pDamp;
+              vz = (vz + fz * dt) * pDamp;
+
+              // Clamp velocity for absolute comfort
+              const maxV = arch === 0 ? 0.9 : arch === 3 ? 2.2 : 1.65;
+              const vSq = vx * vx + vy * vy + vz * vz;
+              if (vSq > maxV * maxV) {
+                const invV = maxV / Math.sqrt(vSq);
+                vx *= invV;
+                vy *= invV;
+                vz *= invV;
+              }
+
+              px += vx * dt;
+              py += vy * dt;
+              pz += vz * dt;
+
+              velocities[idx3] = vx;
+              velocities[idx3 + 1] = vy;
+              velocities[idx3 + 2] = vz;
+
+              posArr[idx3] = px;
+              posArr[idx3 + 1] = py;
+              posArr[idx3 + 2] = pz;
+            }
+
+            // Dynamic per-particle size modulation (multi-scale base size + harmonic swell + bubble capture aura)
+            if (sizeScales && sizeAttr) {
+              const breathe =
+                1.0 +
+                Math.sin(timeSec * (arch === 0 ? 0.9 : 1.7) + phase) * 0.16;
+              sizeScales[i] =
+                baseSz *
+                (breathe + bVal * (arch === 3 ? 0.85 : 0.55) + capturedSizeBoost);
+            }
+
+            // Smooth harmonic color evolution + sympathetic shift when orbiting a soap bubble
+            const pHue =
+              (bandIdx / 16 +
+                capturedHueShift +
+                bVal * 0.18 +
+                centroid * 0.1 +
+                timeSec * 0.02 +
+                1.0) %
+              1.0;
+            this._scratchBubbleColor.setHSL(
+              pHue,
+              arch === 3 ? 0.9 : 0.96,
+              Math.min(
+                0.9,
+                (arch === 0 ? 0.52 : 0.56) +
+                  bVal * 0.3 +
+                  capturedSizeBoost * 0.25 +
+                  beat * 0.08
+              )
+            );
+            colArr[idx3] = this._scratchBubbleColor.r;
+            colArr[idx3 + 1] = this._scratchBubbleColor.g;
+            colArr[idx3 + 2] = this._scratchBubbleColor.b;
+          }
+
+          colAttr.needsUpdate = true;
+          if (sizeAttr) sizeAttr.needsUpdate = true;
+          if (!reducedMotion) {
+            posAttr.needsUpdate = true;
+          }
+        }
+      } else if (obj.name === 'audio_macro_bokeh_particles') {
+        // Companion Macro-Bokeh Layer: large dreamy atmospheric orbs drifting on slow convection currents
+        const points = obj as THREE.Points;
+        const geo = points.geometry;
+        const posAttr = geo.getAttribute('position') as THREE.BufferAttribute;
+        const colAttr = geo.getAttribute('color') as THREE.BufferAttribute;
+        const {
+          basePositions,
+          velocities,
+          phases,
+          particleCount = 0,
+        } = (points.userData as {
+          basePositions?: Float32Array;
+          velocities?: Float32Array;
+          phases?: Float32Array;
+          particleCount?: number;
+        }) ?? {};
+
+        if (posAttr && colAttr && basePositions && particleCount > 0) {
+          const posArr = posAttr.array as Float32Array;
+          const colArr = colAttr.array as Float32Array;
+
+          for (let i = 0; i < particleCount; i++) {
+            const idx3 = i * 3;
+            const bandIdx = (i * 3) & 15;
+            const bVal = bands[bandIdx] ?? 0;
+            const phase = phases ? phases[i] : i * 1.17;
+
+            if (!reducedMotion && velocities) {
+              const bx = basePositions[idx3];
+              const by = basePositions[idx3 + 1];
+              const bz = basePositions[idx3 + 2];
+              const tSlow = timeSec * 0.24 + phase;
+              const tx =
+                bx + Math.sin(tSlow) * 0.95 + Math.cos(tSlow * 0.6) * 0.4;
+              const ty = by + Math.cos(tSlow * 0.75) * 0.6 + bVal * 0.5;
+              const tz =
+                bz + Math.cos(tSlow) * 0.95 + Math.sin(tSlow * 0.6) * 0.4;
+
+              const damp = Math.exp(-2.8 * dt);
+              velocities[idx3] =
+                (velocities[idx3] + (tx - posArr[idx3]) * 1.2 * dt) * damp;
+              velocities[idx3 + 1] =
+                (velocities[idx3 + 1] + (ty - posArr[idx3 + 1]) * 1.2 * dt) *
+                damp;
+              velocities[idx3 + 2] =
+                (velocities[idx3 + 2] + (tz - posArr[idx3 + 2]) * 1.2 * dt) *
+                damp;
+
+              posArr[idx3] += velocities[idx3] * dt;
+              posArr[idx3 + 1] += velocities[idx3 + 1] * dt;
+              posArr[idx3 + 2] += velocities[idx3 + 2] * dt;
+            }
+
+            const hue =
+              (bandIdx / 16 + bVal * 0.16 + centroid * 0.08 + timeSec * 0.018) %
+              1.0;
+            this._scratchBubbleColor.setHSL(
+              hue,
+              0.92,
+              Math.min(0.84, 0.5 + bVal * 0.28 + beat * 0.08)
+            );
+            colArr[idx3] = this._scratchBubbleColor.r;
+            colArr[idx3 + 1] = this._scratchBubbleColor.g;
+            colArr[idx3 + 2] = this._scratchBubbleColor.b;
+          }
+
+          colAttr.needsUpdate = true;
+          if (!reducedMotion) {
+            posAttr.needsUpdate = true;
+          }
         }
       }
     });
   }
 
-  /** Animates onboarding beacons only when the game clock is running. */
+  /**
+   * Animates the Grand Cosmic Starting Room's celestial astrolabe rings and onboarding beacons
+   * only when game clock is NOT paused (`dt > 0`).
+   */
   public static updateThresholdOnboardingVisuals(
     root: THREE.Group,
     visual: OnboardingVisualState,
@@ -1990,6 +3387,12 @@ export class CorridorBuilder {
     if (pedCrystal && !reducedMotion) {
       pedCrystal.rotation.y = timeSec * 0.85;
       pedCrystal.position.y = 1.45 + Math.sin(timeSec * 2.2) * 0.07;
+    }
+
+    const astrolabe = root.getObjectByName('cosmic_astrolabe_rings');
+    if (astrolabe && !reducedMotion) {
+      astrolabe.rotation.y = timeSec * 0.14;
+      astrolabe.rotation.z = Math.sin(timeSec * 0.25) * 0.12;
     }
 
     const postureMarks = root.getObjectByName('onboarding_posture_marks');
@@ -2046,33 +3449,234 @@ export class CorridorBuilder {
     const halfW = width * 0.5;
     const halfD = depth * 0.5;
 
+    const floorTex = createCosmicFloorTexture(
+      segment === 1
+        ? 'rgba(229, 193, 88, 0.28)'
+        : segment === 2
+        ? 'rgba(78, 168, 222, 0.28)'
+        : 'rgba(179, 136, 255, 0.28)',
+      4,
+      7
+    );
+    const sideWallTex = createArchitecturalWallTexture(
+      '#060912',
+      accentHex,
+      meta.plasmaHex,
+      6,
+      1
+    );
+    const endWallTex = createArchitecturalWallTexture(
+      '#060912',
+      accentHex,
+      meta.plasmaHex,
+      3,
+      1
+    );
+
+    const sideWallMat = new THREE.MeshStandardMaterial({
+      map: sideWallTex,
+      roughness: 0.5,
+      metalness: 0.24,
+    });
+    const endWallMat = new THREE.MeshStandardMaterial({
+      map: endWallTex,
+      roughness: 0.5,
+      metalness: 0.24,
+    });
     const gothicBasaltMat = new THREE.MeshStandardMaterial({
-      color: '#101117', roughness: 0.82, metalness: 0.08,
+      color: '#0e1320',
+      roughness: 0.42,
+      metalness: 0.32,
     });
     const floorMat = new THREE.MeshStandardMaterial({
-      color: '#03050a', roughness: 0.92, metalness: 0.025,
+      map: floorTex,
+      roughness: 0.16,
+      metalness: 0.58,
     });
     const heroTrimMat = new THREE.MeshStandardMaterial({
-      color: '#302b31', roughness: 0.62, metalness: 0.28,
-      emissive: rimHex, emissiveIntensity: 0.045,
+      color: accentHex,
+      roughness: 0.2,
+      metalness: 0.85,
+      emissive: rimHex,
+      emissiveIntensity: 0.28,
     });
 
     // 1. Walkable Polished Dark Basalt Floor (y = 0, with Fractals & Circuit Schematics)
     const floor = new THREE.Mesh(
-      new THREE.CircleGeometry(220, 128),
+      new THREE.PlaneGeometry(width, depth),
       floorMat
     );
     floor.rotation.x = -Math.PI * 0.5;
     root.add(floor);
     walkableMeshes.push(floor);
 
+    buildFloorElectricCircuitSparks({
+      root,
+      maxRadius: 9.2,
+      primaryHex: meta.plasmaHex,
+      secondaryHex: '#4ea8de',
+      goldHex: '#e5c158',
+    });
 
-    // Open sky above the sector platform; no ceiling ribs.
+    // 2. High Gothic Ribbed Vaults & Open Celestial Oculus overhead
+    buildGothicRibbedVaultsAndOculus({
+      root,
+      oculusRadius: 5.8,
+      spanRadiusX: halfW - 0.4,
+      spanRadiusZ: halfD - 2.0,
+      wallHeight: height,
+      vaultApexY: height + 3.2,
+      ribAnglesDeg: [-70, -35, 35, 70, -110, -145, 110, 145],
+      basaltMat: gothicBasaltMat,
+      trimMat: heroTrimMat,
+      innerGlowHex: meta.accentHex,
+      veilHex: rimHex,
+      centerZ: -2.0,
+    });
 
-    // Portals are free-standing in the nebula; no enclosing walls or columns.
+    // 16-Band Audio-Reactive Iridescent Soap Bubbles & Soft Spherical Multi-Colored Particles
+    buildAudioReactiveBubblesAndParticles({
+      root,
+      radiusX: halfW - 1.6,
+      radiusZ: halfD - 2.8,
+      minY: 1.8,
+      maxY: 8.6,
+      bubbleCount: 16,
+      particleCount: 192,
+      centerZ: 0,
+    });
+
+    // Central Fractal Medallion directly beneath the Celestial Oculus
+    const centerBasinRim = new THREE.Mesh(
+      new THREE.RingGeometry(1.6, 3.3, 48),
+      new THREE.MeshStandardMaterial({
+        color: skyRig.palette[1] ?? accentHex,
+        roughness: 0.14,
+        metalness: 0.85,
+        emissive: skyRig.palette[0] ?? '#143852',
+        emissiveIntensity: 0.32,
+        side: THREE.DoubleSide,
+      })
+    );
+    centerBasinRim.rotation.x = -Math.PI * 0.5;
+    centerBasinRim.position.set(0, 0.016, -2.0);
+    root.add(centerBasinRim);
+
+    // 3. Dark Basalt Gothic Side & End Walls
+    [-halfW, halfW].forEach((wx) => {
+      const sideWall = new THREE.Mesh(
+        new THREE.PlaneGeometry(depth, height),
+        sideWallMat
+      );
+      sideWall.rotation.y = wx < 0 ? Math.PI * 0.5 : -Math.PI * 0.5;
+      sideWall.position.set(wx, height * 0.5, 0);
+      root.add(sideWall);
+
+      const cornice = new THREE.Mesh(
+        new THREE.BoxGeometry(0.65, 0.45, depth),
+        gothicBasaltMat
+      );
+      cornice.position.set(
+        wx < 0 ? wx + 0.32 : wx - 0.32,
+        height - 0.22,
+        0
+      );
+      root.add(cornice);
+    });
+
+    [-halfD, halfD].forEach((wz) => {
+      const endWall = new THREE.Mesh(
+        new THREE.PlaneGeometry(width, height),
+        endWallMat
+      );
+      endWall.rotation.y = wz < 0 ? 0 : Math.PI;
+      endWall.position.set(0, height * 0.5, wz);
+      root.add(endWall);
+
+      const endCornice = new THREE.Mesh(
+        new THREE.BoxGeometry(width, 0.45, 0.65),
+        gothicBasaltMat
+      );
+      endCornice.position.set(
+        0,
+        height - 0.22,
+        wz < 0 ? wz + 0.32 : wz - 0.32
+      );
+      root.add(endCornice);
+    });
+
+    // 4. Tall Transparent Quartz Glass Plasma Columns with Swirling Plasma & Lightning strictly BETWEEN the Door Bays!
+    const columnZPositions = [-15.0, -5.0, 5.0, 15.0];
+    let cSeed = 1;
+    for (const side of [-1, 1]) {
+      for (const pz of columnZPositions) {
+        const plasmaCol = buildQuartzPlasmaColumn({
+          x: side * (halfW - 0.68),
+          z: pz,
+          height: height - 0.2,
+          radius: 0.38,
+          primaryHex: meta.plasmaHex,
+          secondaryHex: meta.accentHex,
+          goldHex: '#e5c158',
+          basaltMat: gothicBasaltMat,
+          trimMat: heroTrimMat,
+          phaseSeed: cSeed * 1.37,
+        });
+        root.add(plasmaCol);
+        cSeed++;
+      }
+    }
+
+    // 5. VR Explorer Scale Figures admiring the Sector Cathedral
+    root.add(
+      buildVRExplorerScaleFigure({
+        x: -3.6,
+        z: -6.5,
+        rotY: 0.25,
+        visorHex: meta.accentHex,
+        trimHex: meta.plasmaHex,
+      })
+    );
+    root.add(
+      buildVRExplorerScaleFigure({
+        x: 3.6,
+        z: 4.5,
+        rotY: -0.35,
+        visorHex: '#e5c158',
+        trimHex: meta.accentHex,
+      })
+    );
+
+    // 6. Central Overhead Banner on the North Cathedral Wall: `ARTMAZE // NEUROMICON PROJECT`
+    root.add(
+      buildArtmazeHeaderBanner({
+        x: 0,
+        y: 6.85,
+        z: -halfD + 0.32,
+        width: 5.8,
+        height: 1.4,
+        accentHex: meta.accentHex,
+        plasmaHex: meta.plasmaHex,
+        repoUrl: 'github.com/AlexSheff/Neuromicon',
+        trimMat: heroTrimMat,
+      })
+    );
 
     // 7. Futuristic Sci-Fi/Gothic Portals to every Artwork & Audio Room in this Sector
     const segmentNodes = getWorldNodes().filter((n) => n.segment === segment);
+    const doorLeafTex = createDoorLeafTexture(
+      '#070b16',
+      accentHex,
+      meta.plasmaHex
+    );
+    const doorLeafMat = new THREE.MeshStandardMaterial({
+      map: doorLeafTex,
+      roughness: 0.22,
+      metalness: 0.72,
+      emissive: accentHex,
+      emissiveIntensity: 0.16,
+    });
+
     const doorSlots: Array<{ x: number; z: number; rotY: number }> = [
       { x: -halfW + 0.1, z: -12.5, rotY: Math.PI * 0.5 },
       { x: halfW - 0.1, z: -12.5, rotY: -Math.PI * 0.5 },
@@ -2125,14 +3729,14 @@ export class CorridorBuilder {
         width: 2.48,
         height: 3.78,
         frameMat: heroTrimMat,
-        vortexMat: heroTrimMat,
+        vortexMat: doorLeafMat,
         accentHex,
         plasmaHex: meta.plasmaHex,
         statusColorHex: statusColor,
         plaqueTex,
-        plaqueWidth: 1.5,
-        plaqueHeight: 0.48,
-        cableSpread: 0.42,
+        plaqueWidth: 2.22,
+        plaqueHeight: 1.05,
+        cableSpread: 0.92,
         phaseSeed: index * 0.85,
       });
 
@@ -2171,14 +3775,14 @@ export class CorridorBuilder {
         width: 3.0,
         height: 4.1,
         frameMat: heroTrimMat,
-        vortexMat: heroTrimMat,
+        vortexMat: doorLeafMat,
         accentHex: targetMeta.accentHex,
         plasmaHex: targetMeta.plasmaHex,
         statusColorHex: targetMeta.accentHex,
         plaqueTex: nPlaqueTex,
-        plaqueWidth: 1.85,
-        plaqueHeight: 0.52,
-        cableSpread: 0.56,
+        plaqueWidth: 2.5,
+        plaqueHeight: 1.12,
+        cableSpread: 1.1,
         phaseSeed: (idx + 1) * 3.1,
       });
 
@@ -2212,7 +3816,7 @@ export class CorridorBuilder {
       width: 3.1,
       height: 4.1,
       frameMat: heroTrimMat,
-      vortexMat: heroTrimMat,
+      vortexMat: doorLeafMat,
       accentHex,
       plasmaHex: meta.plasmaHex,
       statusColorHex: '#ffe8a3',
@@ -2234,3 +3838,4 @@ export class CorridorBuilder {
     });
   }
 }
+

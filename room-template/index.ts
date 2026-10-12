@@ -14,14 +14,48 @@ const roomModule: RoomModule = {
   },
 
   async mount(ctx: RoomContext): Promise<void> {
-    // Keep the overhead oculus open: the mounted nebula rig supplies the room's key light.
-    // Emissive wall, portal, and floor accents belong to each room's own composition.
-    ctx.log(`[${ctx.manifest.id}] Mounted fixture-free cosmic room template.`);
+    const { THREE, root, environment } = ctx;
+    const accentColor = environment.palette[2] ?? '#c8a464';
+    const secondaryColor = environment.palette[0] ?? '#4ea8de';
+
+    // Perimeter Corner Wall Harmonic Resonators (keeps the central room & overhead Galaxy Oculus 100% open!)
+    const cornerGroup = new THREE.Group();
+    cornerGroup.name = 'template_perimeter_resonators';
+    const corners = [
+      { x: -7.1, z: -7.8 },
+      { x: 7.1, z: -7.8 },
+      { x: -7.1, z: 7.8 },
+      { x: 7.1, z: 7.8 },
+    ];
+    const ringGeo = new THREE.TorusGeometry(0.38, 0.028, 12, 32);
+    const ringMat = new THREE.MeshStandardMaterial({
+      color: accentColor,
+      roughness: 0.2,
+      metalness: 0.88,
+      emissive: secondaryColor,
+      emissiveIntensity: 0.32,
+    });
+
+    corners.forEach((c, idx) => {
+      const m = new THREE.Mesh(ringGeo.clone(), ringMat.clone());
+      m.position.set(c.x, 4.8, c.z);
+      m.rotation.y = (idx * Math.PI) / 2 + Math.PI * 0.25;
+      cornerGroup.add(m);
+    });
+    ringGeo.dispose();
+    ringMat.dispose();
+    root.add(cornerGroup);
   },
 
   update(dt: number, ctx: RoomContext): void {
     if (ctx.time.paused || dt <= 0) return;
-    // Template stays intentionally fixture-free; room modules animate only their own art.
+    const stepDt = ctx.time.delta;
+    const group = ctx.root.getObjectByName('template_perimeter_resonators');
+    if (group) {
+      group.children.forEach((child, idx) => {
+        child.rotation.z += stepDt * (0.45 + idx * 0.08);
+      });
+    }
   },
 
   onPause(ctx: RoomContext): void {

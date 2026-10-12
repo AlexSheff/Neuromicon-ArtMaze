@@ -439,12 +439,18 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
     let lastTime = performance.now();
     let uiSyncTimer = 0;
 
+    let smoothedDt = 0.0166;
+    let lastHoveredId: string | null = null;
+    let lastFloorHit = false;
+    let lastObKey = '';
+
     engine.renderer.setAnimationLoop((now) => {
-      const dt = Math.min(0.1, Math.max(0.001, (now - lastTime) / 1000));
+      const rawDt = Math.min(0.05, Math.max(0.001, (now - lastTime) / 1000));
       lastTime = now;
+      smoothedDt = smoothedDt * 0.78 + rawDt * 0.22;
 
       const desktopInput = input.consumeState();
-      const xrInput = webxrManager.pollControllerInput(dt);
+      const xrInput = webxrManager.pollControllerInput(smoothedDt);
       const curState = hubPlayerState.getState();
 
       if (xrInput.pauseJustPressed) {
@@ -452,7 +458,13 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
       }
 
       const { hovered, telemetry: frameTelemetry, onboardingVisual: obVis } =
-        engine.stepAndRender(dt, desktopInput, xrInput, curState, now / 1000);
+        engine.stepAndRender(
+          smoothedDt,
+          desktopInput,
+          xrInput,
+          curState,
+          now / 1000
+        );
 
       hoveredRef.current = hovered.target;
 
@@ -473,15 +485,32 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
         }
       }
 
-      uiSyncTimer += dt;
-      if (uiSyncTimer >= 0.12) {
-        uiSyncTimer = 0;
+      const nextHoveredId = hovered.target?.id ?? null;
+      if (nextHoveredId !== lastHoveredId) {
+        lastHoveredId = nextHoveredId;
         setHoveredTarget(hovered.target);
-        setHasFloorTeleportTarget(
-          !hovered.target && Boolean(hovered.floorHitPoint)
-        );
-        setTelemetry(frameTelemetry);
+      }
+
+      const nextFloorHit = !hovered.target && Boolean(hovered.floorHitPoint);
+      if (nextFloorHit !== lastFloorHit) {
+        lastFloorHit = nextFloorHit;
+        setHasFloorTeleportTarget(nextFloorHit);
+      }
+
+      const nextObKey = obVis
+        ? `${obVis.step}|${obVis.hintRung}|${obVis.holdingBranch ?? ''}|${Math.round(
+            obVis.branchHoldProgress * 25
+          )}`
+        : 'null';
+      if (nextObKey !== lastObKey) {
+        lastObKey = nextObKey;
         setOnboardingVisual(obVis);
+      }
+
+      uiSyncTimer += rawDt;
+      if (uiSyncTimer >= 0.6) {
+        uiSyncTimer = 0;
+        setTelemetry(frameTelemetry);
       }
     });
 
@@ -574,21 +603,21 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
         </div>
       </div>
 
-      {/* Hover Target Label */}
+      {/* Hover Target Label (High-contrast glass pill for crisp readability on desktop & VR mirror) */}
       {hoveredTarget && (
-        <div className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 bg-[#0d0c0a]/85 border border-[#c8a464]/40 px-4 py-2 rounded text-center backdrop-blur-md">
+        <div className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 bg-[#04060d]/95 border-2 border-[#e5c158]/75 px-5 py-2.5 rounded-md text-center backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.9)]">
           {isOnboardingActive &&
           hoveredTarget.kind === 'onboarding-pedestal' ? (
-            <span className="font-display text-lg text-[#e5c158] tracking-widest">
+            <span className="font-display text-xl font-bold text-[#fde047] tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">
               {t('onboarding.glyph.interact', 'en')}
             </span>
           ) : (
             <div>
-              <div className="font-display text-xs font-semibold text-[#f3ede2] tracking-wider">
+              <div className="font-display text-sm md:text-base font-bold text-white tracking-wider drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">
                 {`${t('onboarding.glyph.interact', 'en')} ${hoveredTarget.title}`}
               </div>
               {hoveredTarget.subtitle && (
-                <div className="text-[11px] font-mono text-[#a89f91] mt-0.5">
+                <div className="text-xs font-mono font-semibold text-[#e2e8f0] mt-1 drop-shadow-[0_1px_3px_rgba(0,0,0,1)]">
                   {hoveredTarget.subtitle}
                 </div>
               )}
@@ -599,8 +628,8 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
 
       {/* Onboarding String #2: Rung 3 Hint Ladder Engraving after 45s of Inactivity (§2.6 & §2.7) */}
       {onboardingVisual && onboardingVisual.hintRung >= 3 && (
-        <div className="pointer-events-none absolute top-14 left-1/2 -translate-x-1/2 bg-[#0e0c0a]/90 border border-[#c8a464]/35 px-6 py-2.5 rounded backdrop-blur-md">
-          <p className="font-display text-sm tracking-[0.2em] uppercase text-[#e5c158]">
+        <div className="pointer-events-none absolute top-14 left-1/2 -translate-x-1/2 bg-[#04060d]/95 border-2 border-[#e5c158]/70 px-6 py-3 rounded-md backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.9)]">
+          <p className="font-display text-base font-bold tracking-[0.2em] uppercase text-[#fde047] drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">
             {t('onboarding.hint.engraving', 'en')}
           </p>
         </div>
@@ -608,8 +637,8 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
 
       {/* Onboarding String #3: Mythic Memory Confirmation on Branch Commit (§2.7) */}
       {whisperText && (
-        <div className="pointer-events-none absolute top-14 left-1/2 -translate-x-1/2 bg-[#0e0c0a]/90 border border-[#c8a464]/45 px-6 py-2.5 rounded backdrop-blur-md">
-          <p className="font-display text-sm tracking-[0.18em] text-[#f3ede2]">
+        <div className="pointer-events-none absolute top-14 left-1/2 -translate-x-1/2 bg-[#04060d]/95 border-2 border-[#e5c158]/75 px-6 py-3 rounded-md backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.9)]">
+          <p className="font-display text-base font-bold tracking-[0.18em] text-white drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">
             {whisperText}
           </p>
         </div>
@@ -617,7 +646,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
 
       {/* Accessibility Audio Captions (§2.8) */}
       {captionText && (
-        <div className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/80 border border-white/15 px-4 py-1.5 rounded text-xs font-mono text-[#d8cfc0]">
+        <div className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 bg-[#04060d]/95 border border-white/30 px-5 py-2 rounded-md text-xs md:text-sm font-mono font-semibold text-white shadow-[0_6px_24px_rgba(0,0,0,0.9)]">
           {captionText}
         </div>
       )}
