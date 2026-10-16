@@ -151,7 +151,7 @@ export interface RoomContext {
 export interface RoomModule {
   preload?(ctx: RoomContext): Promise<void>;
   mount(ctx: RoomContext): Promise<void>;
-  update?(dt: number, ctx: RoomContext): void;
+  update?(ctx: RoomContext, dt: number): void;
   onPause?(ctx: RoomContext): void;
   onResume?(ctx: RoomContext): void;
   unmount(ctx: RoomContext): void;

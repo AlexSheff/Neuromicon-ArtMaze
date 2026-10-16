@@ -47,7 +47,7 @@ const roomModule: RoomModule = {
     root.add(cornerGroup);
   },
 
-  update(dt: number, ctx: RoomContext): void {
+  update(ctx: RoomContext, dt: number): void {
     if (ctx.time.paused || dt <= 0) return;
     const stepDt = ctx.time.delta;
     const group = ctx.root.getObjectByName('template_perimeter_resonators');

@@ -97,7 +97,7 @@ export function resolveRoomNebulaMapping(roomId: string): {
 } {
   const nebulae = (nebulaeData.nebulae as unknown as NebulaRegistryEntry[]) ?? [];
   const roomNebs =
-    (roomNebulaeData.rooms as Record<string, RoomNebulaMapping>) ?? {};
+    (roomNebulaeData.mappings as unknown as Record<string, RoomNebulaMapping>) ?? {};
 
   // 1. Direct explicit mapping from pre-computed room-nebulae.json
   if (roomNebs[roomId]) {

@@ -666,20 +666,20 @@ export class NebulaSkySystem {
       0.28
     );
     const darkComplement = new THREE.Color(nebula.palette[0])
-      .lerp(new THREE.Color('#090d1a'), 0.78)
-      .multiplyScalar(0.42);
+      .lerp(new THREE.Color('#03050a'), 0.88)
+      .multiplyScalar(0.32);
     const secondColor = new THREE.Color(nebula.palette[2] ?? nebula.palette[1]).lerp(
       new THREE.Color('#f4d284'),
       0.35
     );
     const fogColor = new THREE.Color(nebula.palette[0])
-      .lerp(new THREE.Color('#05070f'), 0.88);
+      .lerp(new THREE.Color('#030409'), 0.94);
 
     scene.background = fogColor;
-    // Deep gothic cathedral twilight fog so upper vaults fade into mystery while the Oculus & Plasma glow crisply
+    // Deep gothic cathedral twilight fog: upper vaults fade into mystery while the Oculus, Portals & Art glow crisply
     scene.fog = new THREE.FogExp2(
       fogColor,
-      0.0092 * (opts?.fogScale ?? 1.0)
+      0.0125 * (opts?.fogScale ?? 1.0)
     );
 
     // Low-res environment cubemap for hero reflections (TZ.md §4.2)
@@ -690,7 +690,7 @@ export class NebulaSkySystem {
     const hemiLight = new THREE.HemisphereLight(
       primaryColor,
       darkComplement,
-      0.88 * (opts?.ambientScale ?? 1.0)
+      0.52 * (opts?.ambientScale ?? 1.0)
     );
     hemiLight.name = 'nebula_hemi_light';
     skyGroup.add(hemiLight);
@@ -698,7 +698,7 @@ export class NebulaSkySystem {
     // Light 2: Directional "Key" Light aligned with the L1 Nebula Cap direction (TZ.md §4.1)
     const keyLight = new THREE.DirectionalLight(
       secondColor,
-      1.35 * intensity
+      0.98 * intensity
     );
     keyLight.name = 'nebula_directional_key_light';
     keyLight.castShadow = false; // Zero real-time shadows in XR (TZ.md §4.1)

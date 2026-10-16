@@ -89,6 +89,7 @@ export class HubEngine {
 
   private pose = {
     x: 0,
+    y: 0,
     z: 5.8,
     yaw: 0,
     pitch: 0,
@@ -1054,24 +1055,12 @@ export class HubEngine {
       }
     }
 
-    // Rebuild world chunk only on topology or quality/state change
-    const sceneKey = [
-      state.location,
-      state.branch,
-      state.segmentIndex,
-      state.currentRoomId || 'NONE',
-      state.comfort.qualityTier,
-      state.visitedRooms.length,
-      state.completedRooms.join(','),
-      state.discoveries.join(','),
-      state.teleportCount >= 5 ? 'SMOOTH_SWITCH' : 'NO_SWITCH',
-      Object.entries(state.identityChoices)
-        .map(([k, v]) => `${k}:${v}`)
-        .join(','),
-    ].join('|');
+    // Rebuild world chunk only on topology change (room/corridor/threshold transition)
+    // so quest completions, discoveries, and mirror choices never teleport the player!
+    const topologyKey = `${state.location}|${state.branch}|${state.segmentIndex}|${state.currentRoomId || 'NONE'}|${state.comfort.qualityTier}`;
 
-    if (sceneKey !== this.builtSceneKey) {
-      this.builtSceneKey = sceneKey;
+    if (topologyKey !== this.builtTopologyKey) {
+      this.builtTopologyKey = topologyKey;
       this.rebuildActiveWorld(state);
     }
 

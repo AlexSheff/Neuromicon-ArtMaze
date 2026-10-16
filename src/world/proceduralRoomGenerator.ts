@@ -1081,49 +1081,119 @@ export function buildProceduralRoom(opts: {
     particleCount: 180,
   });
 
-  // 10. Monumental 1:1 Framed Painting on West Sanctuary Wall
+  // 10. Monumental 1:1 Framed Masterpiece on Sacred Gallery Sanctuary Altar
   if (manifest.artwork) {
     const artGroup = new THREE.Group();
-    artGroup.position.set(-halfW + 0.14, 0, -0.2);
+    artGroup.name = 'room_sanctuary_art_altar';
+    // Position safely within room interior so it NEVER clips into circular, polygonal, or rectangular walls!
+    const safeArtOffset = Math.min(halfW - 1.2, 7.2);
+    artGroup.position.set(-safeArtOffset, 0, 0);
     artGroup.rotation.y = Math.PI * 0.5;
 
-    const plinthMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(3.8, 0.38, 0.58),
+    // 10A. Stepped Black Basalt & Gilded Dais
+    const daisMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(4.6, 0.42, 1.85),
       stoneTrimMat
     );
-    plinthMesh.position.set(0, 0.19, 0.18);
-    artGroup.add(plinthMesh);
+    daisMesh.position.set(0, 0.21, 0.45);
+    artGroup.add(daisMesh);
 
-    const outerFrame = new THREE.Mesh(
-      new THREE.BoxGeometry(3.56, 3.56, 0.16),
+    const daisGoldTrim = new THREE.Mesh(
+      new THREE.BoxGeometry(4.68, 0.08, 1.92),
       trimMat
     );
-    outerFrame.position.set(0, 2.55, 0.08);
+    daisGoldTrim.position.set(0, 0.42, 0.45);
+    artGroup.add(daisGoldTrim);
+
+    // 10B. Dedicated Architectural Gallery Sanctuary Backwall (guarantees solid backing, zero wall bleed-through)
+    const galleryBackwall = new THREE.Mesh(
+      new THREE.BoxGeometry(4.3, 5.2, 0.28),
+      new THREE.MeshStandardMaterial({
+        color: '#080a14',
+        roughness: 0.35,
+        metalness: 0.5,
+      })
+    );
+    galleryBackwall.position.set(0, 2.7, -0.05);
+    artGroup.add(galleryBackwall);
+
+    // 10C. Flanking Fluted Obsidian Pilasters with Gilded Capitals
+    [-2.05, 2.05].forEach((px) => {
+      const pilaster = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.18, 0.22, 5.0, 12),
+        stoneTrimMat
+      );
+      pilaster.position.set(px, 2.65, 0.16);
+      artGroup.add(pilaster);
+
+      const cap = new THREE.Mesh(
+        new THREE.BoxGeometry(0.48, 0.18, 0.48),
+        trimMat
+      );
+      cap.position.set(px, 5.15, 0.16);
+      artGroup.add(cap);
+
+      const baseRing = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.26, 0.3, 0.16, 12),
+        trimMat
+      );
+      baseRing.position.set(px, 0.5, 0.16);
+      artGroup.add(baseRing);
+    });
+
+    // 10D. Monumental Multi-Tier Gilded Frame
+    const outerFrame = new THREE.Mesh(
+      new THREE.BoxGeometry(3.68, 3.68, 0.22),
+      stoneTrimMat
+    );
+    outerFrame.position.set(0, 2.85, 0.12);
     artGroup.add(outerFrame);
 
-    const galleryLightHood = new THREE.Mesh(
-      new THREE.BoxGeometry(2.8, 0.1, 0.32),
+    const goldMoulding = new THREE.Mesh(
+      new THREE.BoxGeometry(3.42, 3.42, 0.26),
       trimMat
     );
-    galleryLightHood.position.set(0, 4.44, 0.26);
+    goldMoulding.position.set(0, 2.85, 0.15);
+    artGroup.add(goldMoulding);
+
+    const velvetMatting = new THREE.Mesh(
+      new THREE.BoxGeometry(3.22, 3.22, 0.28),
+      new THREE.MeshStandardMaterial({
+        color: '#03050a',
+        roughness: 0.85,
+        metalness: 0.05,
+      })
+    );
+    velvetMatting.position.set(0, 2.85, 0.17);
+    artGroup.add(velvetMatting);
+
+    // 10E. Gilded Museum Luminaire Hood & Warm Accent Light
+    const galleryLightHood = new THREE.Mesh(
+      new THREE.BoxGeometry(3.1, 0.14, 0.55),
+      trimMat
+    );
+    galleryLightHood.position.set(0, 4.85, 0.42);
     artGroup.add(galleryLightHood);
 
     const galleryLightTube = new THREE.Mesh(
-      new THREE.BoxGeometry(2.6, 0.06, 0.14),
+      new THREE.BoxGeometry(2.85, 0.06, 0.18),
       warmLuminaireMat
     );
-    galleryLightTube.position.set(0, 4.38, 0.3);
+    galleryLightTube.position.set(0, 4.79, 0.45);
     artGroup.add(galleryLightTube);
 
+    // 10F. Canvas Material with Masterpiece Image & Crisp Fallback
     const fallbackTex = createRoomPaintingFallbackTexture(
       manifest.identity.symbol,
       manifest.identity.name,
       manifest.artwork.sector ?? manifest.identity.dimension,
       accentHex
     );
-    const paintingMat = new THREE.MeshBasicMaterial({
+    const paintingMat = new THREE.MeshStandardMaterial({
       map: fallbackTex,
-      side: THREE.DoubleSide,
+      roughness: 0.32,
+      metalness: 0.08,
+      side: THREE.FrontSide,
     });
 
     if (manifest.artwork.imageUrl && typeof document !== 'undefined') {
@@ -1134,10 +1204,23 @@ export function buildProceduralRoom(opts: {
       const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
       const candidates: string[] = [];
       if (rawFileName) {
-        candidates.push(`assets/art/${rawFileName}`);
-        candidates.push(`${base}/assets/art/${rawFileName}`);
+        // 1. Direct local public path (always works in Vite!)
         candidates.push(`/assets/art/${rawFileName}`);
+        if (base) {
+          candidates.push(`${base}/assets/art/${rawFileName}`);
+        }
+        candidates.push(`assets/art/${rawFileName}`);
         candidates.push(`./assets/art/${rawFileName}`);
+        // If extension is png/jpg, also try alternate
+        if (rawFileName.endsWith('.png')) {
+          const jpgAlt = rawFileName.replace(/\.png$/, '.jpg');
+          candidates.push(`/assets/art/${jpgAlt}`);
+          candidates.push(`assets/art/${jpgAlt}`);
+        } else if (rawFileName.endsWith('.jpg')) {
+          const pngAlt = rawFileName.replace(/\.jpg$/, '.png');
+          candidates.push(`/assets/art/${pngAlt}`);
+          candidates.push(`assets/art/${pngAlt}`);
+        }
       }
       if (manifest.artwork.imageUrl.startsWith('http')) {
         candidates.push(manifest.artwork.imageUrl);
@@ -1160,6 +1243,9 @@ export function buildProceduralRoom(opts: {
             fallbackTex.dispose();
             loadedTex.colorSpace = THREE.SRGBColorSpace;
             loadedTex.generateMipmaps = true;
+            loadedTex.minFilter = THREE.LinearMipmapLinearFilter;
+            loadedTex.magFilter = THREE.LinearFilter;
+            loadedTex.anisotropy = 16;
             paintingMat.map = loadedTex;
             paintingMat.needsUpdate = true;
           },
@@ -1173,25 +1259,28 @@ export function buildProceduralRoom(opts: {
     }
 
     const canvasMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(3.2, 3.2),
+      new THREE.PlaneGeometry(3.08, 3.08),
       paintingMat
     );
-    canvasMesh.position.set(0, 2.55, 0.17);
+    canvasMesh.position.set(0, 2.85, 0.31);
     artGroup.add(canvasMesh);
 
+    // 10G. Tilted Museum Signage Plaque in Front of the Dais (ergonomically readable in desktop & VR)
     const artPlaqueTex = createSignageTexture(
       manifest.identity.symbol,
       manifest.identity.name,
-      manifest.identity.dimension,
-      'PAINTING & ESSAY',
+      manifest.artwork.sector ?? manifest.identity.dimension,
+      manifest.artwork.title,
       accentHex,
       '#f0d27a'
     );
     const artPlaque = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.6, 0.88),
-      new THREE.MeshBasicMaterial({ map: artPlaqueTex })
+      new THREE.PlaneGeometry(2.4, 0.76),
+      new THREE.MeshBasicMaterial({ map: artPlaqueTex, side: THREE.DoubleSide })
     );
-    artPlaque.position.set(0, 4.92, 0.16);
+    // Tilted upwards at 30 degrees like a prestigious museum exhibit label
+    artPlaque.rotation.x = -Math.PI * 0.17;
+    artPlaque.position.set(0, 0.72, 1.15);
     artGroup.add(artPlaque);
 
     root.add(artGroup);
@@ -1290,18 +1379,27 @@ export function buildProceduralRoom(opts: {
     const oz = 1.8 + rowOffset;
 
     const objGroup = new THREE.Group();
+    objGroup.name = `room_obj_group_${obj.id}`;
     objGroup.position.set(ox, 0, oz);
     objGroup.rotation.y = side < 0 ? Math.PI * 0.18 : -Math.PI * 0.18;
 
+    // Stepped Octagonal Basalt Pedestal with Golden Trim
     const ped = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.56, 0.68, 0.88, 8),
+      new THREE.CylinderGeometry(0.58, 0.74, 0.88, 8),
       stoneTrimMat
     );
     ped.position.y = 0.44;
     objGroup.add(ped);
 
+    const pedBaseMolding = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.76, 0.82, 0.18, 8),
+      trimMat
+    );
+    pedBaseMolding.position.y = 0.09;
+    objGroup.add(pedBaseMolding);
+
     const pedLightRing = new THREE.Mesh(
-      new THREE.TorusGeometry(0.58, 0.035, 10, 24),
+      new THREE.TorusGeometry(0.58, 0.038, 12, 32),
       warmLuminaireMat
     );
     pedLightRing.rotation.x = Math.PI * 0.5;
@@ -1310,34 +1408,110 @@ export function buildProceduralRoom(opts: {
 
     // Procedural internal kinetic apparatus for this object
     if (obj.type === 'busyboard') {
+      const astrolabeGroup = new THREE.Group();
+      astrolabeGroup.name = 'busyboard_astrolabe_assembly';
+      astrolabeGroup.position.y = 1.55;
+
+      // 3 concentric interlocking gimbal rings rotating on 3 axes
       const ring1 = new THREE.Mesh(
-        new THREE.TorusGeometry(0.46, 0.04, 14, 36),
+        new THREE.TorusGeometry(0.52, 0.038, 14, 36),
         trimMat
       );
-      ring1.position.y = 1.48;
-      objGroup.add(ring1);
+      ring1.name = 'busyboard_astrolabe_ring1';
+      astrolabeGroup.add(ring1);
 
       const ring2 = new THREE.Mesh(
-        new THREE.TorusGeometry(0.31, 0.035, 14, 32),
+        new THREE.TorusGeometry(0.39, 0.032, 14, 32),
         trimMat
       );
+      ring2.name = 'busyboard_astrolabe_ring2';
       ring2.rotation.y = Math.PI * 0.35;
-      ring2.position.y = 1.48;
-      objGroup.add(ring2);
-    } else {
-      const outerCradle = new THREE.Mesh(
-        new THREE.TorusGeometry(0.44, 0.035, 12, 32),
-        trimMat
-      );
-      outerCradle.position.y = 1.48;
-      objGroup.add(outerCradle);
+      astrolabeGroup.add(ring2);
 
-      const crystalCore = new THREE.Mesh(
-        new THREE.OctahedronGeometry(0.26, 0),
-        trimMat
+      const ring3 = new THREE.Mesh(
+        new THREE.TorusGeometry(0.26, 0.026, 12, 28),
+        new THREE.MeshStandardMaterial({
+          color: '#e5c158',
+          roughness: 0.2,
+          metalness: 0.9,
+          emissive: '#d4af37',
+          emissiveIntensity: 0.4,
+        })
       );
-      crystalCore.position.y = 1.48;
-      objGroup.add(crystalCore);
+      ring3.name = 'busyboard_astrolabe_ring3';
+      ring3.rotation.x = Math.PI * 0.25;
+      astrolabeGroup.add(ring3);
+
+      // Levitating, glowing faceted plasma core
+      const plasmaCore = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(0.14, 0),
+        new THREE.MeshStandardMaterial({
+          color: plasmaHex,
+          emissive: accentHex,
+          emissiveIntensity: 0.95,
+          roughness: 0.1,
+          metalness: 0.5,
+        })
+      );
+      plasmaCore.name = 'busyboard_plasma_core';
+      astrolabeGroup.add(plasmaCore);
+
+      objGroup.add(astrolabeGroup);
+    } else {
+      const monolithAssembly = new THREE.Group();
+      monolithAssembly.name = 'monolith_stele_assembly';
+      monolithAssembly.position.y = 0.88;
+
+      // Towering Jet-Black Obsidian Stele with Chamfered Edges
+      const stele = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.26, 0.44, 2.3, 4),
+        new THREE.MeshStandardMaterial({
+          color: '#060810',
+          roughness: 0.15,
+          metalness: 0.85,
+        })
+      );
+      stele.rotation.y = Math.PI * 0.25;
+      stele.position.y = 1.15;
+      monolithAssembly.add(stele);
+
+      // Glowing Plasma Inlay Vein along the stele
+      const steleGlow = new THREE.Mesh(
+        new THREE.BoxGeometry(0.045, 2.1, 0.045),
+        new THREE.MeshBasicMaterial({ color: accentHex })
+      );
+      steleGlow.position.set(0, 1.15, 0.28);
+      monolithAssembly.add(steleGlow);
+
+      // 4 Floating Orbital Satellite Shards
+      const shardOrbitGroup = new THREE.Group();
+      shardOrbitGroup.name = 'monolith_shard_orbit';
+      shardOrbitGroup.position.y = 1.35;
+
+      const shardAngles = [0, Math.PI * 0.5, Math.PI, Math.PI * 1.5];
+      const shardRadii = [0.55, 0.72, 0.62, 0.8];
+      const shardY = [-0.35, 0.15, 0.45, -0.1];
+      shardAngles.forEach((ang, sIdx) => {
+        const shard = new THREE.Mesh(
+          new THREE.OctahedronGeometry(0.065, 0),
+          new THREE.MeshStandardMaterial({
+            color: accentHex,
+            emissive: plasmaHex,
+            emissiveIntensity: 0.8,
+            roughness: 0.15,
+            metalness: 0.9,
+          })
+        );
+        shard.position.set(
+          Math.cos(ang) * shardRadii[sIdx],
+          shardY[sIdx],
+          Math.sin(ang) * shardRadii[sIdx]
+        );
+        shardOrbitGroup.add(shard);
+      });
+      monolithAssembly.add(shardOrbitGroup);
+
+      objGroup.add(monolithAssembly);
     }
 
     const oPlaqueTex = createSignageTexture(
@@ -1352,7 +1526,8 @@ export function buildProceduralRoom(opts: {
       new THREE.PlaneGeometry(1.65, 0.56),
       new THREE.MeshBasicMaterial({ map: oPlaqueTex, side: THREE.DoubleSide })
     );
-    oPlaque.position.set(0, 2.32, 0);
+    oPlaque.rotation.x = -Math.PI * 0.15;
+    oPlaque.position.set(0, 0.82, 0.72);
     objGroup.add(oPlaque);
 
     root.add(objGroup);
@@ -1369,43 +1544,74 @@ export function buildProceduralRoom(opts: {
 
   // 13. The Mirror System on East Wall
   const mirrorGroup = new THREE.Group();
-  mirrorGroup.position.set(halfW - 0.12, 0, -0.5);
+  mirrorGroup.name = 'room_transformational_mirror';
+  const safeMirrorOffset = Math.min(halfW - 1.2, 7.2);
+  mirrorGroup.position.set(safeMirrorOffset, 0, 0);
   mirrorGroup.rotation.y = -Math.PI * 0.5;
 
-  const mBase = new THREE.Mesh(
-    new THREE.BoxGeometry(3.8, 0.24, 0.58),
+  // Stepped Basalt & Gilded Mirror Dais
+  const mDais = new THREE.Mesh(
+    new THREE.BoxGeometry(4.4, 0.38, 1.7),
     stoneTrimMat
   );
-  mBase.position.set(0, 0.12, 0.2);
-  mirrorGroup.add(mBase);
+  mDais.position.set(0, 0.19, 0.4);
+  mirrorGroup.add(mDais);
 
-  const mSurround = new THREE.Mesh(
-    new THREE.BoxGeometry(3.75, 3.9, 0.16),
+  const mDaisGold = new THREE.Mesh(
+    new THREE.BoxGeometry(4.48, 0.08, 1.76),
     trimMat
   );
-  mSurround.position.set(0, 2.05, 0.06);
-  mirrorGroup.add(mSurround);
+  mDaisGold.position.set(0, 0.38, 0.4);
+  mirrorGroup.add(mDaisGold);
 
-  [-1.8, 1.8].forEach((mx) => {
-    const mLamp = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.05, 0.05, 3.4, 12),
-      warmLuminaireMat
-    );
-    mLamp.position.set(mx, 2.05, 0.2);
-    mirrorGroup.add(mLamp);
-  });
-
-  const glass = new THREE.Mesh(
-    new THREE.PlaneGeometry(3.4, 3.6),
+  // Dedicated Mirror Backwall
+  const mBackwall = new THREE.Mesh(
+    new THREE.BoxGeometry(4.2, 4.8, 0.28),
     new THREE.MeshStandardMaterial({
-      color: '#14293e',
-      roughness: 0.08,
-      metalness: 0.88,
-      transparent: true,
-      opacity: 0.82,
+      color: '#080a14',
+      roughness: 0.35,
+      metalness: 0.5,
     })
   );
-  glass.position.set(0, 2.05, 0.15);
+  mBackwall.position.set(0, 2.5, -0.05);
+  mirrorGroup.add(mBackwall);
+
+  // Flanking Obsidian Pilasters
+  [-1.95, 1.95].forEach((mx) => {
+    const pilaster = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.16, 0.2, 4.6, 12),
+      stoneTrimMat
+    );
+    pilaster.position.set(mx, 2.5, 0.16);
+    mirrorGroup.add(pilaster);
+
+    const cap = new THREE.Mesh(
+      new THREE.BoxGeometry(0.44, 0.16, 0.44),
+      trimMat
+    );
+    cap.position.set(mx, 4.8, 0.16);
+    mirrorGroup.add(cap);
+  });
+
+  const mSurround = new THREE.Mesh(
+    new THREE.BoxGeometry(3.6, 3.8, 0.18),
+    trimMat
+  );
+  mSurround.position.set(0, 2.5, 0.08);
+  mirrorGroup.add(mSurround);
+
+  // Ethereal Smoky Obsidian Reflective Surface
+  const glass = new THREE.Mesh(
+    new THREE.PlaneGeometry(3.25, 3.45),
+    new THREE.MeshStandardMaterial({
+      color: '#0e1c2e',
+      roughness: 0.06,
+      metalness: 0.94,
+      transparent: true,
+      opacity: 0.88,
+    })
+  );
+  glass.position.set(0, 2.5, 0.18);
   mirrorGroup.add(glass);
 
   const mPlaqueTex = createSignageTexture(
@@ -1417,10 +1623,11 @@ export function buildProceduralRoom(opts: {
     '#f0d27a'
   );
   const mPlaque = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.6, 0.85),
-    new THREE.MeshBasicMaterial({ map: mPlaqueTex })
+    new THREE.PlaneGeometry(2.4, 0.78),
+    new THREE.MeshBasicMaterial({ map: mPlaqueTex, side: THREE.DoubleSide })
   );
-  mPlaque.position.set(0, 4.42, 0.22);
+  mPlaque.rotation.x = -Math.PI * 0.16;
+  mPlaque.position.set(0, 0.72, 1.05);
   mirrorGroup.add(mPlaque);
 
   const choices: Array<{
@@ -1429,23 +1636,23 @@ export function buildProceduralRoom(opts: {
     x: number;
     color: string;
   }> = [
-    { choice: 'accept', label: 'ACCEPT IDENTITY', x: -1.15, color: '#66cc99' },
-    { choice: 'reject', label: 'REJECT IDENTITY', x: 0, color: '#ff6b6b' },
-    { choice: 'back', label: 'STEP BACK', x: 1.15, color: '#888888' },
+    { choice: 'accept', label: 'ACCEPT (▲)', x: -1.05, color: '#66cc99' },
+    { choice: 'reject', label: 'REJECT (▼)', x: 0, color: '#ff6b6b' },
+    { choice: 'back', label: 'STEP BACK (◈)', x: 1.05, color: '#888888' },
   ];
 
   choices.forEach((c) => {
     const btnMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(0.95, 0.36, 0.14),
+      new THREE.BoxGeometry(0.88, 0.38, 0.22),
       new THREE.MeshStandardMaterial({
         color: c.color,
-        roughness: 0.25,
-        metalness: 0.75,
+        roughness: 0.2,
+        metalness: 0.8,
         emissive: c.color,
-        emissiveIntensity: 0.3,
+        emissiveIntensity: 0.42,
       })
     );
-    btnMesh.position.set(c.x, 0.82, 0.3);
+    btnMesh.position.set(c.x, 0.58, 0.82);
     mirrorGroup.add(btnMesh);
 
     registerTarget(btnMesh, {
@@ -1626,6 +1833,25 @@ export function buildProceduralRoom(opts: {
         if (halo) halo.rotation.z -= 0.05 * dt;
       }
     }
+
+    // Animate interactive kinetic objects across the room
+    root.traverse((child) => {
+      if (child.name === 'busyboard_astrolabe_assembly') {
+        const r1 = child.getObjectByName('busyboard_astrolabe_ring1');
+        const r2 = child.getObjectByName('busyboard_astrolabe_ring2');
+        const r3 = child.getObjectByName('busyboard_astrolabe_ring3');
+        const core = child.getObjectByName('busyboard_plasma_core');
+        if (r1) r1.rotation.z += 0.22 * dt;
+        if (r2) r2.rotation.y += 0.32 * dt;
+        if (r3) r3.rotation.x += 0.26 * dt;
+        if (core) {
+          core.rotation.y += 0.45 * dt;
+          core.position.y = Math.sin(animTime * 1.5) * 0.03;
+        }
+      } else if (child.name === 'monolith_shard_orbit') {
+        child.rotation.y += 0.4 * dt;
+      }
+    });
   };
 
   return { config, update };

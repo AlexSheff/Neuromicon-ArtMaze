@@ -2051,17 +2051,93 @@ export function buildWiredSciFiGothicPortal(opts: {
   neonAndWiresMesh.userData = { phaseSeed };
   group.add(neonAndWiresMesh);
 
-  // Mesh #3: Dimensional Portal Vortex Aperture (1 draw call)
+  // Mesh #3: Deep Dimensional Recessed Void Chamber (depth = 0.45m)
+  const tunnelDepth = 0.45;
+  const innerW = width - 0.54;
+  const innerH = height - 0.46;
+  const centerY = 0.18 + innerH * 0.5;
+
+  // Dark cosmic void backing plate
+  const voidBacking = new THREE.Mesh(
+    new THREE.PlaneGeometry(innerW, innerH),
+    new THREE.MeshBasicMaterial({ color: '#03050c', side: THREE.DoubleSide })
+  );
+  voidBacking.position.set(0, centerY, -tunnelDepth);
+  group.add(voidBacking);
+
+  // Recessed tunnel lining walls (top, bottom, left, right)
+  const tunnelJambs = new THREE.Mesh(
+    new THREE.BoxGeometry(innerW, innerH, tunnelDepth),
+    new THREE.MeshStandardMaterial({
+      color: '#070a14',
+      roughness: 0.35,
+      metalness: 0.8,
+    })
+  );
+  tunnelJambs.position.set(0, centerY, -tunnelDepth * 0.5);
+  group.add(tunnelJambs);
+
+  // Mesh #4: Glowing Event Horizon Plasma Vortex Aperture
   const vortexAperture = new THREE.Mesh(
-    new THREE.BoxGeometry(width - 0.56, height - 0.48, 0.14),
+    new THREE.PlaneGeometry(innerW * 0.98, innerH * 0.98),
     vortexMat
   );
   vortexAperture.name = 'portal_vortex_aperture';
   vortexAperture.userData = { phaseSeed };
-  vortexAperture.position.set(0, 0.18 + (height - 0.48) * 0.5, 0.14);
+  vortexAperture.position.set(0, centerY, -tunnelDepth * 0.5);
   group.add(vortexAperture);
 
-  // Mesh #4: Built-in Sci-Fi/Gothic Telemetry Display Plaque above portal (1 draw call)
+  // Mesh #5A: Outer Rotating Stargate Dial Ring (kinetic celestial ring floating inside aperture)
+  const ringRadius = Math.min(innerW, innerH) * 0.42;
+  const stargateRing = new THREE.Mesh(
+    new THREE.TorusGeometry(ringRadius, 0.036, 12, 36),
+    new THREE.MeshStandardMaterial({
+      color: statusColorHex ?? accentHex,
+      emissive: statusColorHex ?? accentHex,
+      emissiveIntensity: 0.95,
+      roughness: 0.18,
+      metalness: 0.92,
+    })
+  );
+  stargateRing.name = 'portal_stargate_ring';
+  stargateRing.userData = { phaseSeed, speed: (phaseSeed % 2 === 0 ? 1 : -1) * 0.38 };
+  stargateRing.position.set(0, centerY, -tunnelDepth * 0.38);
+  group.add(stargateRing);
+
+  // Mesh #5B: Inner Counter-Rotating Stargate Ring with Radial Chevrons
+  const innerRingRadius = ringRadius * 0.66;
+  const innerStargateRing = new THREE.Mesh(
+    new THREE.TorusGeometry(innerRingRadius, 0.024, 10, 28),
+    new THREE.MeshStandardMaterial({
+      color: accentHex,
+      emissive: statusColorHex ?? accentHex,
+      emissiveIntensity: 0.82,
+      roughness: 0.22,
+      metalness: 0.88,
+    })
+  );
+  innerStargateRing.name = 'portal_inner_stargate_ring';
+  innerStargateRing.userData = { phaseSeed, speed: (phaseSeed % 2 === 0 ? -1 : 1) * 0.55 };
+  innerStargateRing.position.set(0, centerY, -tunnelDepth * 0.34);
+  group.add(innerStargateRing);
+
+  // Inner Concentric Event Horizon Glow Core
+  const horizonCore = new THREE.Mesh(
+    new THREE.RingGeometry(innerRingRadius * 0.25, innerRingRadius * 0.95, 32),
+    new THREE.MeshBasicMaterial({
+      color: statusColorHex ?? accentHex,
+      transparent: true,
+      opacity: 0.42,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    })
+  );
+  horizonCore.name = 'portal_horizon_core';
+  horizonCore.userData = { phaseSeed };
+  horizonCore.position.set(0, centerY, -tunnelDepth * 0.36);
+  group.add(horizonCore);
+
+  // Mesh #6: Built-in Sci-Fi/Gothic Telemetry Display Plaque above portal (1 draw call)
   const plaqueMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(plaqueWidth, plaqueHeight),
     new THREE.MeshBasicMaterial({ map: plaqueTex })
@@ -2789,7 +2865,28 @@ export class CorridorBuilder {
         const seed = (mesh.userData?.phaseSeed as number) ?? 0;
         if (mat && 'emissiveIntensity' in mat && !reducedMotion) {
           mat.emissiveIntensity =
-            0.2 + Math.sin(timeSec * 1.1 + seed) * 0.05 + beat * 0.1;
+            0.32 + Math.sin(timeSec * 0.95 + seed) * 0.08 + beat * 0.15;
+        }
+      } else if (obj.name === 'portal_stargate_ring') {
+        const mesh = obj as THREE.Mesh;
+        const speed = (mesh.userData?.speed as number) ?? 0.38;
+        if (!reducedMotion) {
+          mesh.rotation.z += speed * dt * (1 + beat * 0.25);
+        }
+      } else if (obj.name === 'portal_inner_stargate_ring') {
+        const mesh = obj as THREE.Mesh;
+        const speed = (mesh.userData?.speed as number) ?? -0.55;
+        if (!reducedMotion) {
+          mesh.rotation.z += speed * dt * (1 + beat * 0.25);
+        }
+      } else if (obj.name === 'portal_horizon_core') {
+        const mesh = obj as THREE.Mesh;
+        const mat = mesh.material as THREE.MeshBasicMaterial;
+        const seed = (mesh.userData?.phaseSeed as number) ?? 0;
+        if (!reducedMotion) {
+          mesh.rotation.z -= 0.18 * dt;
+          mat.opacity =
+            0.32 + Math.sin(timeSec * 1.1 + seed) * 0.08 + beat * 0.14;
         }
       }
     });
@@ -3078,98 +3175,37 @@ export class CorridorBuilder {
               // Physical mass per archetype (Macro Bokeh = heavy inertia, Sparks = featherlight)
               const pMass = arch === 0 ? 4.2 : arch === 1 ? 1.6 : arch === 2 ? 1.1 : 0.42;
 
-              // 1. Archetype-specific 3D Curl-Vortex & Convection Flow Field
-              // Strongly shaped by musical tone (vertical levitation & vortex spin) and drums (kick radial burst)
-              const toneLift = (tonePitch - 0.42) * 2.2;
-              const toneSpin = 0.75 + Math.min(2.5, toneHz / 440) * 0.55;
-              const horizDist = Math.hypot(px, pz);
-              const kickBurst = kick * (arch === 3 ? 4.2 : 2.8);
+              // 1. Smooth Spring Restoring Force towards anchor base (elastic containment, zero sign-flipping)
+              const springK = arch === 0 ? 1.8 : 1.4;
+              let fx = (bx - px) * springK;
+              let fy = (by - py) * springK;
+              let fz = (bz - pz) * springK;
 
-              let fx = (px / Math.max(0.35, horizDist)) * kickBurst;
-              let fy = toneLift * (1.2 + bVal * 0.95);
-              let fz = (pz / Math.max(0.35, horizDist)) * kickBurst;
+              // 2. Silk-smooth harmonic celestial curl flow field (smooth deterministic frequencies, zero phase jerking)
+              const pFreq = 0.18 + (i % 5) * 0.035;
+              const flowT = timeSec * pFreq + phase;
+              const curlX = Math.sin(flowT + by * 0.35) * 0.55;
+              const curlY = Math.cos(flowT * 0.85 + bx * 0.35) * 0.45 + (bVal * 0.35);
+              const curlZ = Math.cos(flowT * 0.92 - bz * 0.35) * 0.55;
 
-              // Continuous Brownian / thermal micro-turbulence
-              const brownianX = Math.sin(timeSec * 1.8 + phase * 3.7 + px * 0.8) * 0.28;
-              const brownianY = Math.cos(timeSec * 1.4 + phase * 2.9 + py * 0.9) * 0.22;
-              const brownianZ = Math.sin(timeSec * 1.6 - phase * 3.3 + pz * 0.8) * 0.28;
-              fx += brownianX;
-              fy += brownianY;
-              fz += brownianZ;
+              const audioEnergy = 0.75 + bVal * 0.5 + kick * 0.35;
+              fx += curlX * audioEnergy;
+              fy += curlY * audioEnergy;
+              fz += curlZ * audioEnergy;
 
-              // Spherical acoustic shockwave radiating from room center on drum kicks
-              const waveRadius = (timeSec * 3.8) % 12.0;
-              const distFromCenter = Math.hypot(px, py - 1.2, pz);
-              const waveDist = Math.abs(distFromCenter - waveRadius);
-              if (waveDist < 1.3 && kick > 0.04) {
-                const waveImpulse = ((1.3 - waveDist) / 1.3) * kick * 5.4;
-                const invD = distFromCenter > 0.1 ? 1 / distFromCenter : 0;
-                fx += px * invD * waveImpulse;
-                fy += (py - 1.2) * invD * waveImpulse * 0.7;
-                fz += pz * invD * waveImpulse;
+              // Smooth radial expansion on drum kicks (soft, stable, no sudden sign reversals)
+              if (kick > 0.05) {
+                const dx = px - bx;
+                const dz = pz - bz;
+                const d2 = dx * dx + dz * dz + 0.15;
+                const rNorm = Math.sqrt(d2);
+                const kickPush = kick * 0.45 * (arch === 3 ? 1.4 : 0.85);
+                fx += (dx / rNorm) * kickPush;
+                fz += (dz / rNorm) * kickPush;
+                fy += kick * 0.22;
               }
 
-              // Snare acoustic cavitation and vertical levitation
-              if (snare > 0.04) {
-                const snareForce = snare * (arch === 3 ? 2.4 : 1.1);
-                const sPhase = phase * 9.0 + timeSec * 32.0;
-                fx += Math.sin(sPhase) * snareForce;
-                fy += (Math.abs(Math.cos(sPhase * 1.2)) * 1.4 + 0.4) * snareForce;
-                fz += Math.cos(sPhase * 0.85) * snareForce;
-              }
-
-              if (arch === 0) {
-                // Archetype 0: Giant Bokeh Orbs — slow, majestic toroidal convection plumes + bass swells
-                const tSlow = timeSec * 0.28 + phase;
-                const targetX = bx + Math.sin(tSlow) * (0.85 + kick * 0.45);
-                const targetY =
-                  by + Math.cos(tSlow * 0.8) * 0.65 + bVal * 0.55 + (tonePitch - 0.5) * 1.4;
-                const targetZ = bz + Math.cos(tSlow) * (0.85 + kick * 0.45);
-                fx += (targetX - px) * 2.2;
-                fy += (targetY - py) * 2.2;
-                fz += (targetZ - pz) * 2.2;
-              } else if (arch === 1) {
-                // Archetype 1: Double-Helix Curl Vortex Streamers — 3D divergence-free rotational eddies tuned to toneHz
-                const curlT = timeSec * 0.45 * toneSpin;
-                const curlX =
-                  Math.sin(py * 0.65 + curlT + phase) -
-                  Math.cos(pz * 0.55 - curlT);
-                const curlY =
-                  Math.sin(pz * 0.55 + curlT) -
-                  Math.cos(px * 0.55 + phase * 0.5);
-                const curlZ =
-                  Math.sin(px * 0.55 - curlT + phase) -
-                  Math.cos(py * 0.65 + curlT);
-                const swirlGain = (1.1 + bVal * 1.35 + energy * 0.5) * toneSpin;
-                fx += curlX * swirlGain + (bx - px) * 0.95;
-                fy += curlY * 0.75 * swirlGain + (by + bVal * 0.6 - py) * 0.95;
-                fz += curlZ * swirlGain + (bz - pz) * 0.95;
-              } else if (arch === 2) {
-                // Archetype 2: Bubble-Seeker Satellites — roam along figure-8 currents seeking nearby soap bubbles
-                const tSeek = timeSec * 0.62 * toneSpin + phase;
-                const targetX = bx + Math.sin(tSeek) * (1.35 + kick * 0.4);
-                const targetY =
-                  by + Math.sin(tSeek * 1.618) * 0.78 + bVal * 0.65 + (tonePitch - 0.5) * 1.25;
-                const targetZ = bz + Math.cos(tSeek * 0.85) * (1.35 + kick * 0.4);
-                fx += (targetX - px) * 2.4;
-                fy += (targetY - py) * 2.4;
-                fz += (targetZ - pz) * 2.4;
-              } else {
-                // Archetype 3: Fine Stardust Micro-Sparks — nimble harmonic figure-8 + high-frequency shimmer
-                const tSpark = timeSec * 0.78 * toneSpin + phase;
-                fx +=
-                  Math.cos(tSpark + py * 0.9) * (1.1 + bVal * 1.5 + kick * 0.6) +
-                  (bx - px) * 1.2;
-                fy +=
-                  Math.sin(tSpark * 1.3 + px * 0.8) * (0.95 + bVal * 1.3 + snare * 0.8) +
-                  (by + bVal * 0.55 - py) * 1.2;
-                fz +=
-                  Math.sin(tSpark - pz * 0.9) * (1.1 + bVal * 1.5 + kick * 0.6) +
-                  (bz - pz) * 1.2;
-              }
-
-              // 2. Particle-to-Bubble Gravitational & Tangential Vortex Capture!
-              // Particles near any Iridescent Soap Bubble get swept into a glowing orbital ring around the bubble
+              // 3. Smooth Particle-to-Bubble Gravitational Swirl (gentle and orbital)
               if (bubbleCount > 0) {
                 let nearestDistSq = 999;
                 let nearBubble: THREE.Mesh | null = null;
@@ -3185,106 +3221,55 @@ export class CorridorBuilder {
                   }
                 }
 
-                const captureRange = arch === 2 ? 3.4 : 2.5;
+                const captureRange = arch === 2 ? 3.0 : 2.2;
                 if (
                   nearBubble &&
-                  nearestDistSq > 0.0001 &&
+                  nearestDistSq > 0.01 &&
                   nearestDistSq < captureRange * captureRange
                 ) {
                   const dist = Math.sqrt(nearestDistSq);
-                  const bRad =
-                    (nearBubble.userData?.baseRadius as number) ?? 0.3;
-                  const bBand =
-                    (nearBubble.userData?.smoothBand as number) ?? bVal;
+                  const bRad = (nearBubble.userData?.baseRadius as number) ?? 0.3;
+                  const bBand = (nearBubble.userData?.smoothBand as number) ?? bVal;
                   const bHue = (nearBubble.userData?.baseHue as number) ?? 0;
 
-                  // Ideal orbital shell radius around the soap bubble
-                  const orbitShell = bRad * (1.85 + (i % 3) * 0.35 + kick * 0.3);
+                  const orbitShell = bRad * (1.8 + (i % 3) * 0.3);
                   const rx = (px - nearBubble.position.x) / dist;
                   const ry = (py - nearBubble.position.y) / dist;
                   const rz = (pz - nearBubble.position.z) / dist;
 
                   const influence = 1 - dist / captureRange;
-                  // Radial spring pulling particle onto the bubble's orbital shell (repels if inside shell, attracts if outside)
-                  const shellForce = (orbitShell - dist) * 4.4 * influence;
+                  const shellForce = (orbitShell - dist) * 2.2 * influence;
                   fx += rx * shellForce;
                   fy += ry * shellForce;
                   fz += rz * shellForce;
 
-                  // Tangential cross-product swirl around the bubble's spin axis
-                  const orbitSpeed =
-                    (arch === 2 ? 3.6 : 2.3) * influence * (1 + bBand * 0.85 + kick * 0.5) * toneSpin;
+                  const orbitSpeed = 1.4 * influence * (1 + bBand * 0.5);
                   fx += -rz * orbitSpeed;
                   fz += rx * orbitSpeed;
-                  fy += Math.sin(phase + timeSec * 1.8) * 0.65 * influence;
 
-                  capturedHueShift = (bHue - bandIdx / 16) * influence * 0.65;
-                  capturedSizeBoost = influence * (0.45 + bBand * 0.5 + kick * 0.4);
+                  capturedHueShift = (bHue - bandIdx / 16) * influence * 0.5;
+                  capturedSizeBoost = influence * (0.35 + bBand * 0.4);
                 }
               }
 
-              // 3. Particle-to-Particle Neighbor Flocking (Alignment & Soft Dipole Repulsion)
-              const nIdx = ((i + 7) % particleCount) * 3;
-              const ndx = px - posArr[nIdx];
-              const ndy = py - posArr[nIdx + 1];
-              const ndz = pz - posArr[nIdx + 2];
-              const nDistSq = ndx * ndx + ndy * ndy + ndz * ndz;
-
-              if (nDistSq > 0.0001 && nDistSq < 3.24) {
-                const nDist = Math.sqrt(nDistSq);
-                if (nDist < 0.65) {
-                  // Soft close-range dipole repulsion so particles never clump
-                  const rep = ((0.65 - nDist) / 0.65) * 2.4;
-                  fx += (ndx / nDist) * rep;
-                  fy += (ndy / nDist) * rep;
-                  fz += (ndz / nDist) * rep;
-                } else {
-                  // Mid-range velocity alignment creating graceful flowing ribbons/murmurations
-                  const align = 0.45;
-                  fx += (velocities[nIdx] - vx) * align;
-                  fy += (velocities[nIdx + 1] - vy) * align;
-                  fz += (velocities[nIdx + 2] - vz) * align;
-                }
-              }
-
-              // 4. Newtonian acceleration + Aerodynamic drag integration
+              // 4. Smooth velocity integration with continuous exponential damping
               const ax = fx / pMass;
               const ay = fy / pMass;
               const az = fz / pMass;
 
+              const damp = Math.exp(-(arch === 0 ? 2.4 : 1.8) * dt);
+              vx = (vx + ax * dt) * damp;
+              vy = (vy + ay * dt) * damp;
+              vz = (vz + az * dt) * damp;
+
+              // Smooth velocity clamp without jarring reversals
+              const maxV = arch === 0 ? 0.85 : arch === 3 ? 1.6 : 1.25;
               const vMag = Math.hypot(vx, vy, vz);
-              const dragCoeff = arch === 0 ? 2.2 : arch === 3 ? 1.4 : 1.7;
-              const dragDamp = 1.0 / (1.0 + (dragCoeff + 0.12 * vMag) * dt);
-
-              vx = (vx + ax * dt) * dragDamp;
-              vy = (vy + ay * dt) * dragDamp;
-              vz = (vz + az * dt) * dragDamp;
-
-              // Soft elastic boundary containment around anchor volume
-              const maxDevX = arch === 0 ? 3.2 : 4.8;
-              const maxDevY = 2.4;
-              const maxDevZ = arch === 0 ? 3.2 : 4.8;
-
-              if (Math.abs(px + vx * dt - bx) > maxDevX) {
-                vx = -vx * 0.6;
-              }
-              if (py + vy * dt < 0.35) {
-                vy = Math.abs(vy) * 0.6 + 0.15;
-              } else if (py + vy * dt > by + maxDevY) {
-                vy = -Math.abs(vy) * 0.6;
-              }
-              if (Math.abs(pz + vz * dt - bz) > maxDevZ) {
-                vz = -vz * 0.6;
-              }
-
-              // Clamp velocity for absolute comfort
-              const maxV = (arch === 0 ? 1.0 : arch === 3 ? 2.4 : 1.8) * (1.0 + kick * 0.45);
-              const vSq = vx * vx + vy * vy + vz * vz;
-              if (vSq > maxV * maxV) {
-                const invV = maxV / Math.sqrt(vSq);
-                vx *= invV;
-                vy *= invV;
-                vz *= invV;
+              if (vMag > maxV) {
+                const s = maxV / vMag;
+                vx *= s;
+                vy *= s;
+                vz *= s;
               }
 
               px += vx * dt;
@@ -3382,30 +3367,18 @@ export class CorridorBuilder {
               const bx = basePositions[idx3];
               const by = basePositions[idx3 + 1];
               const bz = basePositions[idx3 + 2];
-              const tSlow = timeSec * 0.24 + phase;
-              const tx =
-                bx +
-                Math.sin(tSlow) * (0.95 + kick * 0.5) +
-                Math.cos(tSlow * 0.6) * 0.4;
-              const ty =
-                by +
-                Math.cos(tSlow * 0.75) * 0.6 +
-                bVal * 0.5 +
-                (tonePitch - 0.45) * 1.6;
-              const tz =
-                bz +
-                Math.cos(tSlow) * (0.95 + kick * 0.5) +
-                Math.sin(tSlow * 0.6) * 0.4;
+              const fSlow = 0.16 + (i % 4) * 0.035;
+              const tSlow = timeSec * fSlow + phase;
 
-              const damp = Math.exp(-2.8 * dt);
-              velocities[idx3] =
-                (velocities[idx3] + (tx - posArr[idx3]) * 1.2 * dt) * damp;
-              velocities[idx3 + 1] =
-                (velocities[idx3 + 1] + (ty - posArr[idx3 + 1]) * 1.2 * dt) *
-                damp;
-              velocities[idx3 + 2] =
-                (velocities[idx3 + 2] + (tz - posArr[idx3 + 2]) * 1.2 * dt) *
-                damp;
+              // Smooth harmonic spring force towards base anchor + gentle ambient convection
+              const fx = (bx - posArr[idx3]) * 1.1 + Math.sin(tSlow) * 0.35;
+              const fy = (by - posArr[idx3 + 1]) * 1.1 + Math.cos(tSlow * 0.8) * 0.28 + bVal * 0.22;
+              const fz = (bz - posArr[idx3 + 2]) * 1.1 + Math.cos(tSlow * 0.9) * 0.35;
+
+              const damp = Math.exp(-2.2 * dt);
+              velocities[idx3] = (velocities[idx3] + fx * dt) * damp;
+              velocities[idx3 + 1] = (velocities[idx3 + 1] + fy * dt) * damp;
+              velocities[idx3 + 2] = (velocities[idx3 + 2] + fz * dt) * damp;
 
               posArr[idx3] += velocities[idx3] * dt;
               posArr[idx3 + 1] += velocities[idx3 + 1] * dt;
