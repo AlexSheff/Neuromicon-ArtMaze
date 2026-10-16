@@ -276,6 +276,29 @@ export const RoomValidatorPanel: React.FC<RoomValidatorPanelProps> = ({
             </p>
           </div>
         )}
+        <div className="p-4 bg-[#131210] border border-white/10 rounded">
+          <div className="flex items-center justify-between text-xs font-mono tabular-nums">
+            <span className="text-[#c8a464] font-semibold">
+              {lang === 'ru' ? '1149 УНИКАЛЬНЫХ КОМНАТ' : '1149 PROCEDURAL ROOMS'}
+            </span>
+            <span
+              className={
+                suiteSummary.procedural1149UniquenessPassed
+                  ? 'text-emerald-400'
+                  : 'text-rose-400'
+              }
+            >
+              {suiteSummary.procedural1149UniquenessPassed
+                ? (lang === 'ru' ? 'БЕЗ ПОВТОРОВ · PASS' : '0 COLLISIONS · PASS')
+                : 'ERROR'}
+            </span>
+          </div>
+          <p className="text-xs text-[#9c9488] mt-1">
+            {lang === 'ru'
+              ? '10 форм залов · 12 механизмов · Уникальный визуал каждого зала'
+              : '10 Room Shapes · 12 Kinetic Machineries · Zero Duplicates'}
+          </p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">

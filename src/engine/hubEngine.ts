@@ -83,11 +83,12 @@ export class HubEngine {
     mesh: THREE.Object3D;
     target: SpatialInteractiveTarget;
   }> = [];
+  private cachedInteractiveMeshes: THREE.Object3D[] = [];
+  private cachedPauseMeshes: THREE.Object3D[] = [];
   private walkableMeshes: THREE.Object3D[] = [];
 
   private pose = {
     x: 0,
-    y: 0,
     z: 5.8,
     yaw: 0,
     pitch: 0,
@@ -101,13 +102,15 @@ export class HubEngine {
 
   private snapCooldown = 0;
   private teleportStickCooldown = 0;
-  private builtSceneKey = '';
+  private builtTopologyKey = '';
+  private lastIncrementalStateVersion = -1;
   private fovZoom = false;
 
   // Dynamic Resolution Scaler & Frame Budget Tracking (72 Hz = 13.9 ms budget, §6)
   private smoothedFps = 72;
   private rollingFrameMs = 11.2;
   private resolutionScale = 1.0;
+  private appliedResolutionScale = 1.0;
   private scalerCheckTimer = 0;
 
   // Contextual Discovery Timers (§2.5)
@@ -381,18 +384,17 @@ export class HubEngine {
       mesh.position.set(x, y, 0.012);
       this.pausePanelRoot.add(mesh);
 
-      this.pauseInteractiveEntries.push({
-        mesh,
-        target: {
-          id: `PAUSE_BTN_${action}`,
-          kind: 'pause-action',
-          pauseAction: action,
-          title,
-          titleRu: title,
-          subtitle,
-          subtitleRu: subtitle,
-        },
-      });
+      const target: SpatialInteractiveTarget = {
+        id: `PAUSE_BTN_${action}`,
+        kind: 'pause-action',
+        pauseAction: action,
+        title,
+        titleRu: title,
+        subtitle,
+        subtitleRu: subtitle,
+      };
+      mesh.userData.interactiveTarget = target;
+      this.pauseInteractiveEntries.push({ mesh, target });
     };
 
     // Row 1: Primary Resume & Mute Toggle
@@ -570,10 +572,12 @@ export class HubEngine {
       'open-codex',
       '#e5c158'
     );
+    this.cachedPauseMeshes = this.pauseInteractiveEntries.map((e) => e.mesh);
   }
 
   private unmountWorldLockedPausePanel(): void {
     this.pauseInteractiveEntries = [];
+    this.cachedPauseMeshes = [];
     this.pausePanelRoot.visible = false;
     disposeThreeHierarchy(this.pausePanelRoot);
   }
@@ -614,6 +618,33 @@ export class HubEngine {
       }
       hubPlayerState.incrementTeleportCount();
     }, speed);
+  }
+
+  public transitionToThresholdBranch(branch: CorridorBranch): void {
+    if (this.transitionInProgress) return;
+    this.transitionInProgress = true;
+    this.comfort.triggerFadeTransition(() => {
+      try {
+        hubPlayerState.chooseBranchFromThreshold(branch);
+      } finally {
+        this.transitionInProgress = false;
+      }
+    });
+  }
+
+  public transitionToCorridorSegment(
+    branch: CorridorBranch,
+    segment: 1 | 2 | 3
+  ): void {
+    if (this.transitionInProgress) return;
+    this.transitionInProgress = true;
+    this.comfort.triggerFadeTransition(() => {
+      try {
+        hubPlayerState.setCorridorSegment(branch, segment);
+      } finally {
+        this.transitionInProgress = false;
+      }
+    });
   }
 
   /**
@@ -894,7 +925,6 @@ export class HubEngine {
     };
 
     if (state.location === 'threshold') {
-      spatialAudioSystem.stopRoomSoundtrack();
       CorridorBuilder.buildThresholdHall(
         this.worldRoot,
         this.scene,
@@ -903,15 +933,25 @@ export class HubEngine {
         this.walkableMeshes
       );
       this.pose = { x: 0, y: 0, z: 5.8, yaw: 0, pitch: 0 };
-      spatialAudioSystem.setCorridorVerticalCrossfade(
-        0.5,
-        'Grand Cosmic Starting Room'
+      nebulaSkySystem.mountRoomSkyAndLighting(
+        'threshold',
+        this.worldRoot,
+        this.scene,
+        {
+          nebulaId: 'NEB_0001',
+          intensity: 1.15,
+          ambientScale: 1.1,
+        }
+      );
+      spatialAudioSystem.playRoomSoundtrack(
+        'assets/audio/01_Purpose.mp3',
+        144,
+        'Intro · Purpose'
       );
       return;
     }
 
     if (state.location === 'corridor') {
-      spatialAudioSystem.stopRoomSoundtrack();
       CorridorBuilder.buildCorridorSegment(
         this.worldRoot,
         this.scene,
@@ -922,6 +962,15 @@ export class HubEngine {
         this.walkableMeshes
       );
       this.pose = { x: 0, y: 0, z: 12.5, yaw: 0, pitch: 0 };
+      nebulaSkySystem.mountRoomSkyAndLighting(
+        `corridor_${state.branch}_${state.segmentIndex}`,
+        this.worldRoot,
+        this.scene,
+        {
+          nebulaId: state.branch === 'ascend' ? 'NEB_0002' : 'NEB_0012',
+          intensity: 1.1,
+        }
+      );
       spatialAudioSystem.setCorridorVerticalCrossfade(
         state.branch === 'ascend' ? 1.0 : 0.0,
         `Sector Room ${state.segmentIndex}`
@@ -1151,6 +1200,13 @@ export class HubEngine {
         this.gameTimeSec,
         state.comfort.reducedMotion
       );
+      if (this.roomApiRoot && this.roomApiRoot.children.length > 0) {
+        CorridorBuilder.updateDynamicAtmosphere(
+          this.roomApiRoot,
+          this.gameTimeSec,
+          state.comfort.reducedMotion
+        );
+      }
     }
     nebulaSkySystem.update(gameDt, this.gameTimeSec, {
       reducedMotion: state.comfort.reducedMotion,

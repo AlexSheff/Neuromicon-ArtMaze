@@ -92,31 +92,31 @@
     },
     {
       "id": "NEB_0004",
-      "name": "Ring Nebula in Lyra (alternate field)",
+      "name": "Dumbbell Nebula Core Knot Filaments (Messier 27 / NGC 6853)",
       "kind": "planetary",
       "image": "assets/space/neb_0004.jpg",
       "preview": "assets/space/neb_0004.jpg",
       "remoteImageUrl": "assets/space/neb_0004.jpg",
       "nativeSize": [
-        1215,
-        1241
+        1262,
+        750
       ],
-      "byteLength": 114738,
-      "credit": "ESA/Webb, NASA, CSA, M. Barlow, N. Cox, R. Wesson",
+      "byteLength": 80965,
+      "credit": "NASA, JPL, STScI (Hubble WFC3)",
       "license": "PD-NASA",
       "licenseUrl": "https://www.nasa.gov/nasa-brand-center/images-and-media/",
-      "sourceUrl": "https://images-assets.nasa.gov/image/PIA14443/PIA14443~orig.jpg",
+      "sourceUrl": "https://images-assets.nasa.gov/image/PIA04249/PIA04249~orig.jpg",
       "retrievedAt": "2026-10-12",
       "licenseVerifiedBy": "AlexSheff-Audit-R0",
-      "sha256": "06a014fa366876953bbfb89627ba341f36a1d922c9b8dc3ce1742aa428780085",
-      "processing": "NASA large/original (1215x1241), aspect-preserving downsample to 1215x1241, JPEG quality 92; hosted locally",
+      "sha256": "268df1575bf0c8bd873eec4603837bc4751e24757fad804ca2bf55b8e4067074",
+      "processing": "NASA large/original (1262x750), aspect-preserving downsample to 1262x750, JPEG quality 92; hosted locally",
       "palette": [
-        "#e6a444",
-        "#32889c",
-        "#f5e4a8"
+        "#6c8aa2",
+        "#99896c",
+        "#bcaea8"
       ],
-      "dominantHue": 38,
-      "tone": "warm"
+      "dominantHue": 204,
+      "tone": "cool"
     },
     {
       "id": "NEB_0005",

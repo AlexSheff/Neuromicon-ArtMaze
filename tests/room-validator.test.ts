@@ -15,6 +15,7 @@ import {
   getRoomV1Manifest,
   roomStreamer,
 } from '../src/world/roomStreamer';
+import { deriveProceduralRoomConfig } from '../src/world/proceduralRoomGenerator';
 import { RoomContext } from '../src/room-sdk';
 import room0000 from '../main-maze/room.json';
 import room0001 from '../rooms/ArtMaze-Room-0001/room.json';
@@ -36,6 +37,7 @@ export function runRepositoryValidationSuite(): {
   mixerCurvePassed: boolean;
   migrationPassed: boolean;
   unknownRoomSafePassed: boolean;
+  procedural1149UniquenessPassed: boolean;
 } {
   const manifests = [
     room0000,
@@ -120,18 +122,38 @@ export function runRepositoryValidationSuite(): {
     migrated.state.audio.voice === 0.8 &&
     migrated.state.audio.muted === false;
 
+  // 5. Validate Procedural Room Uniqueness & Non-Repeating Archetypes across all 1149 rooms
+  const configKeys = new Set<string>();
+  let procedural1149UniquenessPassed = true;
+  for (let i = 1; i <= 1149; i++) {
+    const rid = `ROOM_${String(i).padStart(4, '0')}`;
+    const cfg = deriveProceduralRoomConfig(
+      rid,
+      ['#e5c158', '#9d4edd', '#4ea8de'],
+      'warm'
+    );
+    const key = `${cfg.shape}:${cfg.machinery}:${cfg.colonnade}:${cfg.floorMotif}`;
+    if (configKeys.has(key)) {
+      procedural1149UniquenessPassed = false;
+      break;
+    }
+    configKeys.add(key);
+  }
+
   return {
     passed:
       results.every((r) => r.valid) &&
       skyValid &&
       mixerCurvePassed &&
       unknownRoomSafePassed &&
-      migrationPassed,
+      migrationPassed &&
+      procedural1149UniquenessPassed,
     results,
     nebulaReport,
     mixerCurvePassed,
     migrationPassed,
     unknownRoomSafePassed,
+    procedural1149UniquenessPassed,
   };
 }
 
@@ -288,3 +310,4 @@ export async function runAsyncIntegrityAndLeakVerification(): Promise<{
     leakTestResult,
   };
 }
+

@@ -5,7 +5,8 @@ import {
   deterministicRoomSeed,
   NebulaRegistryEntry,
   resolveRoomNebulaMapping,
-} from '../../../tools/space-assets/pipeline';
+} from './nebulaRegistry';
+import { spatialAudioSystem } from '../audio/spatialAudioSystem';
 
 export type QualityTier = 'auto' | 'quest' | 'desktop-low' | 'desktop-high';
 
@@ -37,6 +38,7 @@ export class NebulaSkySystem {
   private preloadedNebulaTextures: Map<string, THREE.Texture> = new Map();
   private activeSkyGroup: THREE.Group | null = null;
   private activeEnvCubemap: THREE.CubeTexture | null = null;
+  private activeStarSphere: THREE.Mesh | null = null;
   private activeNebulaMesh: THREE.Mesh | null = null;
   private activeDustPoints: THREE.Points | null = null;
   private activeTwinklePoints: THREE.Points | null = null;
@@ -478,6 +480,7 @@ export class NebulaSkySystem {
       this.activeEnvCubemap = null;
     }
 
+    this.activeStarSphere = null;
     this.activeNebulaMesh = null;
     this.activeDustPoints = null;
     this.activeTwinklePoints = null;
@@ -533,6 +536,7 @@ export class NebulaSkySystem {
     l0Sphere.rotation.y = ((seed % 360) * Math.PI) / 180;
     l0Sphere.rotation.x = (((seed >> 4) % 40) - 20) * (Math.PI / 180);
     skyGroup.add(l0Sphere);
+    this.activeStarSphere = l0Sphere;
     skyDrawCalls += 1;
 
     // =========================================================================
@@ -744,21 +748,35 @@ export class NebulaSkySystem {
         0.15 + (this.activeRigState.intensity * 0.85) * t01;
     }
 
-    // Vection guard (TZ.md §3.1): Sky rotation is strictly OFF in Reduced Motion and Seated mode
-    if (!opts.reducedMotion && !opts.seated) {
-      // <= 0.2 deg/s = 0.00349 rad/s
-      const maxAngularSpeedRad = 0.0028;
+    // Slow majestic celestial drift: comfortable, smooth and perceptibly alive (strictly paused on Reduced Motion)
+    if (!opts.reducedMotion) {
+      if (this.activeStarSphere) {
+        this.activeStarSphere.rotation.y += dt * 0.0078;
+        this.activeStarSphere.rotation.x = Math.sin(timeSec * 0.035) * 0.025;
+      }
+      if (this.activeNebulaMesh) {
+        this.activeNebulaMesh.rotation.y += dt * 0.0058;
+        this.activeNebulaMesh.rotation.z = Math.sin(timeSec * 0.042) * 0.02;
+      }
       if (this.activeSkyGroup) {
-        this.activeSkyGroup.rotation.y += dt * maxAngularSpeedRad;
+        this.activeSkyGroup.rotation.y += dt * 0.0036;
       }
       if (this.activeDustPoints) {
-        this.activeDustPoints.rotation.y -= dt * 0.006;
+        this.activeDustPoints.rotation.y -= dt * 0.012;
+        this.activeDustPoints.position.y = Math.sin(timeSec * 0.24) * 0.52;
       }
     }
 
     if (this.activeTwinklePoints) {
+      const spectrum = spatialAudioSystem.getMultiBandSpectrum(timeSec);
       const mat = this.activeTwinklePoints.material as THREE.PointsMaterial;
-      mat.opacity = 0.55 + Math.sin(timeSec * 2.4) * 0.22;
+      mat.opacity = Math.min(
+        1.0,
+        0.5 +
+          Math.sin(timeSec * 2.4) * 0.2 +
+          spectrum.drumSnare * 0.3 +
+          (spectrum.bands[14] ?? 0) * 0.2
+      );
     }
   }
 }

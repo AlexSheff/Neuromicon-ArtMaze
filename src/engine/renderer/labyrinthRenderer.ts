@@ -14,6 +14,7 @@ import { observationSystem } from '../../systems/observation/observationSystem';
 import { getActiveRoomObjects } from '../../systems/rooms/roomStateSystem';
 import { getVoidDescriptor } from '../../world/void/voidSystem';
 import { createSoftParticleTexture } from '../../systems/sky/softParticleTexture';
+import { spatialAudioSystem } from '../../systems/audio/spatialAudioSystem';
 import { CameraPose } from '../locomotion/locomotionSystem';
 
 export interface RaycastTarget {
@@ -554,9 +555,18 @@ export class ThreeLabyrinthEngine {
       this.camera.rotation.set(pose.pitch, 0, 0, 'YXZ');
     }
 
-    // Animate dust particles & 3D Void geometry
+    // Animate dust particles with music, drum kick shockwaves, snare shimmer, and tone
     if (this.dustParticles) {
-      this.dustParticles.rotation.y = timeSec * 0.025;
+      const spectrum = spatialAudioSystem.getMultiBandSpectrum(timeSec);
+      this.dustParticles.rotation.y = timeSec * 0.025 + spectrum.beatPulse * 0.04;
+      const pMat = this.dustParticles.material as THREE.PointsMaterial;
+      if (pMat) {
+        pMat.size = 0.042 * (1.0 + spectrum.drumKick * 0.65 + spectrum.overallEnergy * 0.35);
+        pMat.opacity = Math.min(
+          0.92,
+          0.45 + spectrum.overallEnergy * 0.28 + spectrum.drumSnare * 0.22
+        );
+      }
     }
     if (this.voidGroup) {
       this.voidGroup.children.forEach((child, idx) => {

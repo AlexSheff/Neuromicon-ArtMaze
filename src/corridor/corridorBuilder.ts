@@ -1205,13 +1205,8 @@ export function buildGothicRibbedVaultsAndOculus(opts: {
   const vaultGroup = new THREE.Group();
   vaultGroup.position.set(0, 0, centerZ);
 
-  // 1. Open Celestial Oculus Ring + Outer Gothic Clerestory Gallery Ring (Merged into 1 basalt mesh)
+  // 1. Perimeter Gothic Clerestory Gallery Ring along wall top (Merged into 1 basalt mesh)
   const basaltParts: THREE.BufferGeometry[] = [];
-  const oculusOuter = new THREE.TorusGeometry(oculusRadius, 0.38, 12, 56);
-  oculusOuter.rotateX(Math.PI * 0.5);
-  oculusOuter.translate(0, vaultApexY, 0);
-  basaltParts.push(oculusOuter);
-
   const galleryRing = new THREE.TorusGeometry(
     Math.min(spanRadiusX, spanRadiusZ) * 0.96,
     0.26,
@@ -1222,61 +1217,28 @@ export function buildGothicRibbedVaultsAndOculus(opts: {
   galleryRing.translate(0, wallHeight - 0.18, 0);
   basaltParts.push(galleryRing);
 
-  // 2. High Gothic Ribbed Vault Struts + Carved Oculus Keystone Bosses + Flying Buttress Brackets (Merged into 1 trim mesh)
+  // 2. Perimeter Wall Springers & Cornice Accents (Framing wall perimeter, keeping zenith 100% open)
   const trimParts: THREE.BufferGeometry[] = [];
 
   ribAnglesDeg.forEach((deg) => {
     const rad = THREE.MathUtils.degToRad(deg);
     const startX = Math.sin(rad) * spanRadiusX;
     const startZ = -Math.cos(rad) * spanRadiusZ;
-    const endX = Math.sin(rad) * oculusRadius;
-    const endZ = -Math.cos(rad) * oculusRadius;
 
-    const dx = endX - startX;
-    const dy = vaultApexY - wallHeight;
-    const dz = endZ - startZ;
-    const length = Math.hypot(dx, dy, dz);
-
-    // Main diagonal vault rib
-    const stoneRib = new THREE.BoxGeometry(0.32, 0.44, length);
-    const lookMat = new THREE.Matrix4();
-    const midPos = new THREE.Vector3(
-      (startX + endX) * 0.5,
-      (wallHeight + vaultApexY) * 0.5,
-      (startZ + endZ) * 0.5
-    );
-    lookMat.lookAt(midPos, new THREE.Vector3(endX, vaultApexY, endZ), new THREE.Vector3(0, 1, 0));
-    lookMat.setPosition(midPos);
-    stoneRib.applyMatrix4(lookMat);
-    trimParts.push(stoneRib);
-
-    // Carved Gothic Octahedral Keystone Boss where the rib meets the Oculus rim
-    const boss = new THREE.OctahedronGeometry(0.46, 0);
-    boss.translate(endX, vaultApexY - 0.08, endZ);
-    trimParts.push(boss);
-
-    // Perimeter Flying Buttress Spandrel Bracket at the upper wall springer
-    const spandrel = new THREE.BoxGeometry(0.42, 1.45, 0.52);
+    // Wall perimeter springer bracket
+    const spandrel = new THREE.BoxGeometry(0.36, 0.52, 0.44);
     spandrel.rotateY(-rad);
-    spandrel.translate(startX * 0.97, wallHeight - 0.65, startZ * 0.97);
+    spandrel.translate(startX * 0.97, wallHeight - 0.35, startZ * 0.97);
     basaltParts.push(spandrel);
+
+    // Subtle metallic accent boss at the wall rim
+    const accentBoss = new THREE.BoxGeometry(0.24, 0.24, 0.24);
+    accentBoss.translate(startX * 0.95, wallHeight - 0.12, startZ * 0.95);
+    trimParts.push(accentBoss);
   });
 
   vaultGroup.add(new THREE.Mesh(mergeBufferGeometries(basaltParts), basaltMat));
   vaultGroup.add(new THREE.Mesh(mergeBufferGeometries(trimParts), trimMat));
-
-  // 3. Backlit inner Oculus rim (`обрамленное краями окулуса и подсвеченное изнутри, создавая ощущение глубины`)
-  const oculusInnerGlow = new THREE.Mesh(
-    new THREE.TorusGeometry(oculusRadius - 0.36, 0.12, 10, 56),
-    new THREE.MeshBasicMaterial({
-      color: innerGlowHex,
-      transparent: true,
-      opacity: 0.92,
-    })
-  );
-  oculusInnerGlow.rotation.x = Math.PI * 0.5;
-  oculusInnerGlow.position.y = vaultApexY - 0.12;
-  vaultGroup.add(oculusInnerGlow);
 
   root.add(vaultGroup);
 }
@@ -2712,7 +2674,12 @@ export class CorridorBuilder {
     const spectrum = spatialAudioSystem.getMultiBandSpectrum(timeSec);
     const bands = spectrum.bands;
     const beat = spectrum.beatPulse;
+    const kick = spectrum.drumKick;
+    const snare = spectrum.drumSnare;
+    const tonePitch = spectrum.tonePitch;
+    const toneHz = spectrum.toneHz;
     const centroid = spectrum.spectralCentroid;
+    const energy = spectrum.overallEnergy;
 
     // Compute smooth bounded frame delta `dt` from `timeSec` stored on `root.userData`
     const prevTime =
@@ -2738,19 +2705,19 @@ export class CorridorBuilder {
         const seed = (mesh.userData?.phaseSeed as number) ?? 0;
         const bandVal = bands[Math.floor(seed * 3) & 15] ?? 0;
         if (!reducedMotion) {
-          // Incremental rotation prevents instantaneous angular jumps when bandVal changes
-          mesh.rotation.y += (0.38 + bandVal * 0.45) * dt;
+          // Slow serene rotation
+          mesh.rotation.y += (0.08 + bandVal * 0.12) * dt;
           mat.opacity =
-            0.7 + Math.sin(timeSec * 0.95 + seed) * 0.1 + bandVal * 0.14;
+            0.62 + Math.sin(timeSec * 0.45 + seed) * 0.08 + bandVal * 0.1;
         } else {
-          mat.opacity = 0.78;
+          mat.opacity = 0.7;
         }
       } else if (obj.name === 'plasma_vortex_helix') {
         const mesh = obj as THREE.Mesh;
         const seed = (mesh.userData?.phaseSeed as number) ?? 0;
         const bandVal = bands[Math.floor(seed * 5) & 15] ?? 0;
         if (!reducedMotion) {
-          mesh.rotation.y -= (0.52 + bandVal * 0.35) * dt;
+          mesh.rotation.y -= (0.1 + bandVal * 0.1) * dt;
         }
       } else if (obj.name === 'plasma_floor_pool') {
         const mesh = obj as THREE.Mesh;
@@ -2758,7 +2725,7 @@ export class CorridorBuilder {
         const seed = (mesh.userData?.phaseSeed as number) ?? 0;
         if (!reducedMotion) {
           mat.opacity =
-            0.16 + Math.sin(timeSec * 0.85 + seed) * 0.04 + beat * 0.08;
+            0.15 + Math.sin(timeSec * 0.45 + seed) * 0.03 + beat * 0.06;
         }
       } else if (obj.name === 'plasma_lightning_arc') {
         const line = obj as THREE.LineSegments;
@@ -2767,13 +2734,13 @@ export class CorridorBuilder {
         if (reducedMotion) {
           mat.opacity = 0;
         } else {
-          // Serene, photosensitive-safe slow plasma filament wave (no 14Hz snapping or strobing!)
-          line.rotation.y += 0.22 * dt;
+          // Slow, peaceful celestial plasma filament wave
+          line.rotation.y += 0.06 * dt;
           const slowWave =
-            Math.sin(timeSec * 0.55 + seed * 2.1) *
-            Math.cos(timeSec * 0.82 - seed * 1.3);
+            Math.sin(timeSec * 0.28 + seed * 2.1) *
+            Math.cos(timeSec * 0.42 - seed * 1.3);
           const env = Math.max(0, (slowWave - 0.35) / 0.65);
-          mat.opacity = Math.min(0.42, env * env * 0.36 + beat * 0.08);
+          mat.opacity = Math.min(0.38, env * env * 0.32 + beat * 0.06);
         }
       } else if (obj.name === 'floor_electric_spark') {
         const spark = obj as THREE.Mesh;
@@ -2792,15 +2759,15 @@ export class CorridorBuilder {
         if (reducedMotion) {
           mat.opacity = 0.3;
         } else {
-          // Smooth radial travel with sine bell-curve fade at both ends so wrapping is 100% invisible
+          // Slow, graceful radial glide
           const span = Math.max(2.5, maxRadius - 1.6);
-          const calmSpeed = speed * 0.38;
+          const calmSpeed = speed * 0.1;
           const progress = ((timeSec * calmSpeed + phase) % span) / span;
           const dist = 1.4 + progress * span;
           spark.position.x = Math.sin(angle) * dist;
           spark.position.z = -Math.cos(angle) * dist;
           const edgeEnvelope = Math.sin(progress * Math.PI);
-          mat.opacity = edgeEnvelope * (0.42 + beat * 0.16);
+          mat.opacity = edgeEnvelope * (0.38 + beat * 0.12);
         }
       } else if (obj.name === 'vr_explorer_visor') {
         if (!reducedMotion) {
@@ -2877,38 +2844,38 @@ export class CorridorBuilder {
       }
 
       if (!reducedMotion) {
-        // 3D Lissajous & inclined figure-8 target trajectory unique to each bubble
-        const fx = uA.freqX ?? 0.32;
-        const fy = uA.freqY ?? 0.41;
-        const fz = uA.freqZ ?? 0.29;
-        const rx = (uA.orbitRx ?? 0.65) * (1 + bandVal * 0.35);
-        const ry = (uA.orbitRy ?? 0.45) * (1 + bandVal * 0.4);
-        const rz = (uA.orbitRz ?? 0.65) * (1 + bandVal * 0.35);
+        // Deep, slow, tranquil drifting trajectory (ultra-calm cosmic drift)
+        const fx = (uA.freqX ?? 0.32) * 0.05;
+        const fy = (uA.freqY ?? 0.41) * 0.05;
+        const fz = (uA.freqZ ?? 0.29) * 0.05;
+        const rx = (uA.orbitRx ?? 0.65) * (0.4 + bandVal * 0.1);
+        const ry = (uA.orbitRy ?? 0.45) * (0.4 + bandVal * 0.1);
+        const rz = (uA.orbitRz ?? 0.65) * (0.4 + bandVal * 0.1);
         const seed = uA.phaseSeed ?? 0;
 
         const targetX =
           uA.baseX +
           Math.sin(timeSec * fx + seed) * rx +
-          Math.cos(timeSec * (fx * 1.618) - seed) * (rx * 0.35);
+          Math.cos(timeSec * (fx * 1.618) - seed) * (rx * 0.25);
         const targetY =
           uA.baseY +
           Math.cos(timeSec * fy + seed * 1.3) * ry +
-          Math.sin(timeSec * (fy * 0.5) + seed) * 0.22 +
-          bandVal * 0.38;
+          Math.sin(timeSec * (fy * 0.5) + seed) * 0.08 +
+          bandVal * 0.12;
         const targetZ =
           uA.baseZ +
           Math.cos(timeSec * fz + seed * 0.7) * rz +
-          Math.sin(timeSec * (fz * 1.414) + seed) * (rz * 0.35);
+          Math.sin(timeSec * (fz * 1.414) + seed) * (rz * 0.25);
 
-        // Smooth spring force toward target 3D Lissajous current
-        let ax = (targetX - uA.curX) * 2.4;
-        let ay = (targetY - uA.curY) * 2.4;
-        let az = (targetZ - uA.curZ) * 2.4;
+        // Soft, gentle spring force
+        let ax = (targetX - uA.curX) * 0.15;
+        let ay = (targetY - uA.curY) * 0.15;
+        let az = (targetZ - uA.curZ) * 0.15;
 
         let huePull = 0;
         let squashTarget = 0;
 
-        // Bubble-to-Bubble Interactions: Mutual tangential orbital dance + soft elastic cushion + sympathetic hue blend
+        // Gentle bubble interactions
         for (let j = 0; j < bubbleCount; j++) {
           if (i === j) continue;
           const bB = bubbles[j];
@@ -2929,27 +2896,24 @@ export class CorridorBuilder {
             const ny = dy / dist;
             const nz = dz / dist;
 
-            // Soft elastic repulsion when closer than 2.8x combined radii
-            const minSep = (uA.baseRadius + (uB.baseRadius ?? 0.28)) * 2.8;
+            const minSep = (uA.baseRadius + (uB.baseRadius ?? 0.28)) * 2.2;
             if (dist < minSep) {
-              const repulse = ((minSep - dist) / minSep) * 3.2;
+              const repulse = ((minSep - dist) / minSep) * 0.25;
               ax += nx * repulse;
-              ay += ny * repulse * 0.6;
+              ay += ny * repulse * 0.2;
               az += nz * repulse;
               squashTarget = Math.max(
                 squashTarget,
-                ((minSep - dist) / minSep) * 0.16
+                ((minSep - dist) / minSep) * 0.05
               );
             }
 
-            // Mutual tangential vortex swirl (bubbles gracefully waltz around each other on close approach)
-            const swirlStrength = closeness * closeness * 1.45;
+            const swirlStrength = closeness * closeness * 0.08;
             ax += -nz * swirlStrength;
             az += nx * swirlStrength;
 
-            // Sympathetic hue resonance between interacting bubbles
             const otherHue = (uB.baseHue as number) ?? 0;
-            huePull += (otherHue - uA.baseHue) * closeness * 0.35;
+            huePull += (otherHue - uA.baseHue) * closeness * 0.15;
           }
         }
 
@@ -2958,6 +2922,16 @@ export class CorridorBuilder {
         uA.vy = (uA.vy + ay * dt) * damping;
         uA.vz = (uA.vz + az * dt) * damping;
 
+        // Strictly clamp bubble speed to 0.05 m/s for tranquil, serene movement
+        const maxBubbleV = 0.05;
+        const bSpeedSq = uA.vx * uA.vx + uA.vy * uA.vy + uA.vz * uA.vz;
+        if (bSpeedSq > maxBubbleV * maxBubbleV) {
+          const bScale = maxBubbleV / Math.sqrt(bSpeedSq);
+          uA.vx *= bScale;
+          uA.vy *= bScale;
+          uA.vz *= bScale;
+        }
+
         uA.curX += uA.vx * dt;
         uA.curY += uA.vy * dt;
         uA.curZ += uA.vz * dt;
@@ -2965,37 +2939,47 @@ export class CorridorBuilder {
         bA.position.set(uA.curX, uA.curY, uA.curZ);
 
         uA.sympatheticHueShift +=
-          (huePull - uA.sympatheticHueShift) * Math.min(1, dt * 4.0);
+          (huePull - uA.sympatheticHueShift) * Math.min(1, dt * 1.5);
         uA.interactionSquash +=
-          (squashTarget - uA.interactionSquash) * Math.min(1, dt * 7.0);
+          (squashTarget - uA.interactionSquash) * Math.min(1, dt * 3.0);
 
-        // Smooth incremental thin-film spin (never jumps when bandVal changes!)
+        // Serene slow thin-film spin
         const spinRate =
           (uA.sizeTier === 'macro'
-            ? 0.28
+            ? 0.02
             : uA.sizeTier === 'micro'
-            ? 0.72
-            : 0.45) +
-          bandVal * 0.95;
+            ? 0.05
+            : 0.03) +
+          bandVal * 0.04;
         uA.spinY += spinRate * dt;
-        uA.spinZ = Math.sin(timeSec * 0.95 + seed) * 0.28;
+        uA.spinZ = Math.sin(timeSec * 0.2 + seed) * 0.08;
         bA.rotation.y = uA.spinY;
         bA.rotation.z = uA.spinZ;
 
-        // Smooth elastic breathing & interaction deformation
-        const s = uA.baseRadius * (1.0 + bandVal * 0.52 + beat * 0.16);
+        // Peaceful breathing + elastic drum kick bounce
+        const s =
+          uA.baseRadius *
+          (1.0 + bandVal * 0.22 + kick * 0.28 + beat * 0.08);
         const wobble =
           1.0 +
-          Math.sin(timeSec * 2.1 + seed) * 0.045 * (1 + bandVal * 0.6) +
+          Math.sin(timeSec * 0.3 + seed) * 0.02 * (1 + bandVal * 0.2) +
           uA.interactionSquash;
-        bA.scale.set(s * wobble, s / wobble, s * wobble);
+        const kickSquash = 1.0 + kick * 0.24;
+        bA.scale.set(
+          s * wobble * kickSquash,
+          (s / wobble) / (kickSquash * 0.8 + 0.2),
+          s * wobble * kickSquash
+        );
       } else {
-        bA.scale.setScalar(uA.baseRadius * (1.0 + bandVal * 0.2));
+        bA.scale.setScalar(
+          uA.baseRadius * (1.0 + bandVal * 0.15 + kick * 0.15)
+        );
       }
 
       const mat = bA.material as THREE.MeshStandardMaterial;
       const hue =
         (uA.baseHue +
+          tonePitch * 0.35 +
           uA.sympatheticHueShift +
           bandVal * 0.22 +
           centroid * 0.12 +
@@ -3006,20 +2990,26 @@ export class CorridorBuilder {
       this._scratchBubbleColor.setHSL(
         hue,
         0.95,
-        Math.min(0.82, 0.54 + bandVal * 0.24)
+        Math.min(0.9, 0.54 + bandVal * 0.24 + kick * 0.18)
       );
       this._scratchBubbleEmissive.setHSL(
         (hue + 0.16) % 1.0,
         0.98,
-        Math.min(0.72, 0.3 + bandVal * 0.36 + beat * 0.12)
+        Math.min(0.85, 0.3 + bandVal * 0.36 + kick * 0.35 + beat * 0.12)
       );
 
       mat.color.copy(this._scratchBubbleColor);
       mat.emissive.copy(this._scratchBubbleEmissive);
-      mat.emissiveIntensity = 0.45 + bandVal * 1.15 + beat * 0.35;
+      mat.emissiveIntensity =
+        0.45 + bandVal * 1.15 + kick * 0.65 + beat * 0.35;
       mat.opacity =
-        (uA.sizeTier === 'macro' ? 0.54 : uA.sizeTier === 'micro' ? 0.72 : 0.62) +
-        bandVal * 0.26;
+        (uA.sizeTier === 'macro'
+          ? 0.54
+          : uA.sizeTier === 'micro'
+          ? 0.72
+          : 0.62) +
+        bandVal * 0.26 +
+        energy * 0.12;
     }
 
     // Pass 3: Multi-Scale, 4-Archetype Chromatic Particles + Bubble Orbital Capture + Neighbor Flocking
@@ -3085,24 +3075,62 @@ export class CorridorBuilder {
               const by = basePositions[idx3 + 1];
               const bz = basePositions[idx3 + 2];
 
+              // Physical mass per archetype (Macro Bokeh = heavy inertia, Sparks = featherlight)
+              const pMass = arch === 0 ? 4.2 : arch === 1 ? 1.6 : arch === 2 ? 1.1 : 0.42;
+
               // 1. Archetype-specific 3D Curl-Vortex & Convection Flow Field
-              let fx = 0;
-              let fy = 0;
-              let fz = 0;
+              // Strongly shaped by musical tone (vertical levitation & vortex spin) and drums (kick radial burst)
+              const toneLift = (tonePitch - 0.42) * 2.2;
+              const toneSpin = 0.75 + Math.min(2.5, toneHz / 440) * 0.55;
+              const horizDist = Math.hypot(px, pz);
+              const kickBurst = kick * (arch === 3 ? 4.2 : 2.8);
+
+              let fx = (px / Math.max(0.35, horizDist)) * kickBurst;
+              let fy = toneLift * (1.2 + bVal * 0.95);
+              let fz = (pz / Math.max(0.35, horizDist)) * kickBurst;
+
+              // Continuous Brownian / thermal micro-turbulence
+              const brownianX = Math.sin(timeSec * 1.8 + phase * 3.7 + px * 0.8) * 0.28;
+              const brownianY = Math.cos(timeSec * 1.4 + phase * 2.9 + py * 0.9) * 0.22;
+              const brownianZ = Math.sin(timeSec * 1.6 - phase * 3.3 + pz * 0.8) * 0.28;
+              fx += brownianX;
+              fy += brownianY;
+              fz += brownianZ;
+
+              // Spherical acoustic shockwave radiating from room center on drum kicks
+              const waveRadius = (timeSec * 3.8) % 12.0;
+              const distFromCenter = Math.hypot(px, py - 1.2, pz);
+              const waveDist = Math.abs(distFromCenter - waveRadius);
+              if (waveDist < 1.3 && kick > 0.04) {
+                const waveImpulse = ((1.3 - waveDist) / 1.3) * kick * 5.4;
+                const invD = distFromCenter > 0.1 ? 1 / distFromCenter : 0;
+                fx += px * invD * waveImpulse;
+                fy += (py - 1.2) * invD * waveImpulse * 0.7;
+                fz += pz * invD * waveImpulse;
+              }
+
+              // Snare acoustic cavitation and vertical levitation
+              if (snare > 0.04) {
+                const snareForce = snare * (arch === 3 ? 2.4 : 1.1);
+                const sPhase = phase * 9.0 + timeSec * 32.0;
+                fx += Math.sin(sPhase) * snareForce;
+                fy += (Math.abs(Math.cos(sPhase * 1.2)) * 1.4 + 0.4) * snareForce;
+                fz += Math.cos(sPhase * 0.85) * snareForce;
+              }
 
               if (arch === 0) {
-                // Archetype 0: Giant Bokeh Orbs — slow, majestic toroidal convection plumes
+                // Archetype 0: Giant Bokeh Orbs — slow, majestic toroidal convection plumes + bass swells
                 const tSlow = timeSec * 0.28 + phase;
-                const targetX = bx + Math.sin(tSlow) * 0.75;
+                const targetX = bx + Math.sin(tSlow) * (0.85 + kick * 0.45);
                 const targetY =
-                  by + Math.cos(tSlow * 0.8) * 0.55 + bVal * 0.45;
-                const targetZ = bz + Math.cos(tSlow) * 0.75;
-                fx = (targetX - px) * 1.4;
-                fy = (targetY - py) * 1.4;
-                fz = (targetZ - pz) * 1.4;
+                  by + Math.cos(tSlow * 0.8) * 0.65 + bVal * 0.55 + (tonePitch - 0.5) * 1.4;
+                const targetZ = bz + Math.cos(tSlow) * (0.85 + kick * 0.45);
+                fx += (targetX - px) * 2.2;
+                fy += (targetY - py) * 2.2;
+                fz += (targetZ - pz) * 2.2;
               } else if (arch === 1) {
-                // Archetype 1: Double-Helix Curl Vortex Streamers — 3D divergence-free rotational eddies
-                const curlT = timeSec * 0.45;
+                // Archetype 1: Double-Helix Curl Vortex Streamers — 3D divergence-free rotational eddies tuned to toneHz
+                const curlT = timeSec * 0.45 * toneSpin;
                 const curlX =
                   Math.sin(py * 0.65 + curlT + phase) -
                   Math.cos(pz * 0.55 - curlT);
@@ -3112,32 +3140,32 @@ export class CorridorBuilder {
                 const curlZ =
                   Math.sin(px * 0.55 - curlT + phase) -
                   Math.cos(py * 0.65 + curlT);
-                const swirlGain = 0.85 + bVal * 1.15;
-                fx = curlX * swirlGain + (bx - px) * 0.65;
-                fy = curlY * 0.65 * swirlGain + (by + bVal * 0.5 - py) * 0.75;
-                fz = curlZ * swirlGain + (bz - pz) * 0.65;
+                const swirlGain = (1.1 + bVal * 1.35 + energy * 0.5) * toneSpin;
+                fx += curlX * swirlGain + (bx - px) * 0.95;
+                fy += curlY * 0.75 * swirlGain + (by + bVal * 0.6 - py) * 0.95;
+                fz += curlZ * swirlGain + (bz - pz) * 0.95;
               } else if (arch === 2) {
                 // Archetype 2: Bubble-Seeker Satellites — roam along figure-8 currents seeking nearby soap bubbles
-                const tSeek = timeSec * 0.62 + phase;
-                const targetX = bx + Math.sin(tSeek) * 1.25;
+                const tSeek = timeSec * 0.62 * toneSpin + phase;
+                const targetX = bx + Math.sin(tSeek) * (1.35 + kick * 0.4);
                 const targetY =
-                  by + Math.sin(tSeek * 1.618) * 0.68 + bVal * 0.55;
-                const targetZ = bz + Math.cos(tSeek * 0.85) * 1.25;
-                fx = (targetX - px) * 1.6;
-                fy = (targetY - py) * 1.6;
-                fz = (targetZ - pz) * 1.6;
+                  by + Math.sin(tSeek * 1.618) * 0.78 + bVal * 0.65 + (tonePitch - 0.5) * 1.25;
+                const targetZ = bz + Math.cos(tSeek * 0.85) * (1.35 + kick * 0.4);
+                fx += (targetX - px) * 2.4;
+                fy += (targetY - py) * 2.4;
+                fz += (targetZ - pz) * 2.4;
               } else {
-                // Archetype 3: Fine Stardust Micro-Sparks — nimble harmonic figure-8 + neighbor flocking
-                const tSpark = timeSec * 0.78 + phase;
-                fx =
-                  Math.cos(tSpark + py * 0.9) * (0.9 + bVal * 1.3) +
-                  (bx - px) * 0.95;
-                fy =
-                  Math.sin(tSpark * 1.3 + px * 0.8) * (0.75 + bVal * 1.1) +
-                  (by + bVal * 0.45 - py) * 0.95;
-                fz =
-                  Math.sin(tSpark - pz * 0.9) * (0.9 + bVal * 1.3) +
-                  (bz - pz) * 0.95;
+                // Archetype 3: Fine Stardust Micro-Sparks — nimble harmonic figure-8 + high-frequency shimmer
+                const tSpark = timeSec * 0.78 * toneSpin + phase;
+                fx +=
+                  Math.cos(tSpark + py * 0.9) * (1.1 + bVal * 1.5 + kick * 0.6) +
+                  (bx - px) * 1.2;
+                fy +=
+                  Math.sin(tSpark * 1.3 + px * 0.8) * (0.95 + bVal * 1.3 + snare * 0.8) +
+                  (by + bVal * 0.55 - py) * 1.2;
+                fz +=
+                  Math.sin(tSpark - pz * 0.9) * (1.1 + bVal * 1.5 + kick * 0.6) +
+                  (bz - pz) * 1.2;
               }
 
               // 2. Particle-to-Bubble Gravitational & Tangential Vortex Capture!
@@ -3157,7 +3185,7 @@ export class CorridorBuilder {
                   }
                 }
 
-                const captureRange = arch === 2 ? 3.2 : 2.3;
+                const captureRange = arch === 2 ? 3.4 : 2.5;
                 if (
                   nearBubble &&
                   nearestDistSq > 0.0001 &&
@@ -3171,27 +3199,27 @@ export class CorridorBuilder {
                   const bHue = (nearBubble.userData?.baseHue as number) ?? 0;
 
                   // Ideal orbital shell radius around the soap bubble
-                  const orbitShell = bRad * (1.85 + (i % 3) * 0.35);
+                  const orbitShell = bRad * (1.85 + (i % 3) * 0.35 + kick * 0.3);
                   const rx = (px - nearBubble.position.x) / dist;
                   const ry = (py - nearBubble.position.y) / dist;
                   const rz = (pz - nearBubble.position.z) / dist;
 
                   const influence = 1 - dist / captureRange;
                   // Radial spring pulling particle onto the bubble's orbital shell (repels if inside shell, attracts if outside)
-                  const shellForce = (orbitShell - dist) * 3.8 * influence;
+                  const shellForce = (orbitShell - dist) * 4.4 * influence;
                   fx += rx * shellForce;
                   fy += ry * shellForce;
                   fz += rz * shellForce;
 
                   // Tangential cross-product swirl around the bubble's spin axis
                   const orbitSpeed =
-                    (arch === 2 ? 3.4 : 2.1) * influence * (1 + bBand * 0.85);
+                    (arch === 2 ? 3.6 : 2.3) * influence * (1 + bBand * 0.85 + kick * 0.5) * toneSpin;
                   fx += -rz * orbitSpeed;
                   fz += rx * orbitSpeed;
-                  fy += Math.sin(phase + timeSec * 1.8) * 0.55 * influence;
+                  fy += Math.sin(phase + timeSec * 1.8) * 0.65 * influence;
 
                   capturedHueShift = (bHue - bandIdx / 16) * influence * 0.65;
-                  capturedSizeBoost = influence * (0.42 + bBand * 0.45);
+                  capturedSizeBoost = influence * (0.45 + bBand * 0.5 + kick * 0.4);
                 }
               }
 
@@ -3206,26 +3234,51 @@ export class CorridorBuilder {
                 const nDist = Math.sqrt(nDistSq);
                 if (nDist < 0.65) {
                   // Soft close-range dipole repulsion so particles never clump
-                  const rep = ((0.65 - nDist) / 0.65) * 2.2;
+                  const rep = ((0.65 - nDist) / 0.65) * 2.4;
                   fx += (ndx / nDist) * rep;
                   fy += (ndy / nDist) * rep;
                   fz += (ndz / nDist) * rep;
                 } else {
                   // Mid-range velocity alignment creating graceful flowing ribbons/murmurations
-                  const align = 0.42;
+                  const align = 0.45;
                   fx += (velocities[nIdx] - vx) * align;
                   fy += (velocities[nIdx + 1] - vy) * align;
                   fz += (velocities[nIdx + 2] - vz) * align;
                 }
               }
 
-              const pDamp = Math.exp(-(arch === 0 ? 3.4 : 2.6) * dt);
-              vx = (vx + fx * dt) * pDamp;
-              vy = (vy + fy * dt) * pDamp;
-              vz = (vz + fz * dt) * pDamp;
+              // 4. Newtonian acceleration + Aerodynamic drag integration
+              const ax = fx / pMass;
+              const ay = fy / pMass;
+              const az = fz / pMass;
+
+              const vMag = Math.hypot(vx, vy, vz);
+              const dragCoeff = arch === 0 ? 2.2 : arch === 3 ? 1.4 : 1.7;
+              const dragDamp = 1.0 / (1.0 + (dragCoeff + 0.12 * vMag) * dt);
+
+              vx = (vx + ax * dt) * dragDamp;
+              vy = (vy + ay * dt) * dragDamp;
+              vz = (vz + az * dt) * dragDamp;
+
+              // Soft elastic boundary containment around anchor volume
+              const maxDevX = arch === 0 ? 3.2 : 4.8;
+              const maxDevY = 2.4;
+              const maxDevZ = arch === 0 ? 3.2 : 4.8;
+
+              if (Math.abs(px + vx * dt - bx) > maxDevX) {
+                vx = -vx * 0.6;
+              }
+              if (py + vy * dt < 0.35) {
+                vy = Math.abs(vy) * 0.6 + 0.15;
+              } else if (py + vy * dt > by + maxDevY) {
+                vy = -Math.abs(vy) * 0.6;
+              }
+              if (Math.abs(pz + vz * dt - bz) > maxDevZ) {
+                vz = -vz * 0.6;
+              }
 
               // Clamp velocity for absolute comfort
-              const maxV = arch === 0 ? 0.9 : arch === 3 ? 2.2 : 1.65;
+              const maxV = (arch === 0 ? 1.0 : arch === 3 ? 2.4 : 1.8) * (1.0 + kick * 0.45);
               const vSq = vx * vx + vy * vy + vz * vz;
               if (vSq > maxV * maxV) {
                 const invV = maxV / Math.sqrt(vSq);
@@ -3247,36 +3300,45 @@ export class CorridorBuilder {
               posArr[idx3 + 2] = pz;
             }
 
-            // Dynamic per-particle size modulation (multi-scale base size + harmonic swell + bubble capture aura)
+            // Dynamic per-particle size modulation (multi-scale base size + harmonic swell + drum kick expansion)
             if (sizeScales && sizeAttr) {
               const breathe =
                 1.0 +
                 Math.sin(timeSec * (arch === 0 ? 0.9 : 1.7) + phase) * 0.16;
+              const kickSizeBoost = kick * (arch === 3 ? 1.4 : 0.95);
+              const snareSizeBoost = snare * (arch === 3 ? 0.55 : 0.18);
               sizeScales[i] =
                 baseSz *
-                (breathe + bVal * (arch === 3 ? 0.85 : 0.55) + capturedSizeBoost);
+                (breathe +
+                  bVal * (arch === 3 ? 0.85 : 0.55) +
+                  capturedSizeBoost +
+                  kickSizeBoost +
+                  snareSizeBoost);
             }
 
-            // Smooth harmonic color evolution + sympathetic shift when orbiting a soap bubble
-            const pHue =
-              (bandIdx / 16 +
+            // Smooth harmonic color evolution: tonePitch governs chromatic spectrum, kick & snare boost luminosity
+            const toneShift =
+              (tonePitch * 0.75 +
+                (bandIdx / 16) * 0.25 +
                 capturedHueShift +
-                bVal * 0.18 +
-                centroid * 0.1 +
-                timeSec * 0.02 +
-                1.0) %
+                timeSec * 0.015) %
               1.0;
-            this._scratchBubbleColor.setHSL(
-              pHue,
-              arch === 3 ? 0.9 : 0.96,
-              Math.min(
-                0.9,
-                (arch === 0 ? 0.52 : 0.56) +
-                  bVal * 0.3 +
-                  capturedSizeBoost * 0.25 +
-                  beat * 0.08
-              )
+            const pHue =
+              (toneShift + bVal * 0.15 + centroid * 0.08 + 1.0) % 1.0;
+            const pSat = Math.max(
+              0.25,
+              (arch === 3 ? 0.88 : 0.96) - snare * 0.35
             );
+            const pLight = Math.min(
+              0.96,
+              (arch === 0 ? 0.52 : 0.56) +
+                bVal * 0.26 +
+                kick * 0.32 +
+                snare * 0.24 +
+                capturedSizeBoost * 0.2 +
+                beat * 0.08
+            );
+            this._scratchBubbleColor.setHSL(pHue, pSat, pLight);
             colArr[idx3] = this._scratchBubbleColor.r;
             colArr[idx3 + 1] = this._scratchBubbleColor.g;
             colArr[idx3 + 2] = this._scratchBubbleColor.b;
@@ -3322,10 +3384,18 @@ export class CorridorBuilder {
               const bz = basePositions[idx3 + 2];
               const tSlow = timeSec * 0.24 + phase;
               const tx =
-                bx + Math.sin(tSlow) * 0.95 + Math.cos(tSlow * 0.6) * 0.4;
-              const ty = by + Math.cos(tSlow * 0.75) * 0.6 + bVal * 0.5;
+                bx +
+                Math.sin(tSlow) * (0.95 + kick * 0.5) +
+                Math.cos(tSlow * 0.6) * 0.4;
+              const ty =
+                by +
+                Math.cos(tSlow * 0.75) * 0.6 +
+                bVal * 0.5 +
+                (tonePitch - 0.45) * 1.6;
               const tz =
-                bz + Math.cos(tSlow) * 0.95 + Math.sin(tSlow * 0.6) * 0.4;
+                bz +
+                Math.cos(tSlow) * (0.95 + kick * 0.5) +
+                Math.sin(tSlow * 0.6) * 0.4;
 
               const damp = Math.exp(-2.8 * dt);
               velocities[idx3] =
@@ -3342,13 +3412,23 @@ export class CorridorBuilder {
               posArr[idx3 + 2] += velocities[idx3 + 2] * dt;
             }
 
-            const hue =
-              (bandIdx / 16 + bVal * 0.16 + centroid * 0.08 + timeSec * 0.018) %
+            const toneMacroHue =
+              (tonePitch * 0.75 +
+                (bandIdx / 16) * 0.25 +
+                bVal * 0.16 +
+                timeSec * 0.018) %
               1.0;
             this._scratchBubbleColor.setHSL(
-              hue,
+              toneMacroHue,
               0.92,
-              Math.min(0.84, 0.5 + bVal * 0.28 + beat * 0.08)
+              Math.min(
+                0.95,
+                0.5 +
+                  bVal * 0.26 +
+                  kick * 0.35 +
+                  snare * 0.2 +
+                  beat * 0.08
+              )
             );
             colArr[idx3] = this._scratchBubbleColor.r;
             colArr[idx3 + 1] = this._scratchBubbleColor.g;

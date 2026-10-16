@@ -10,6 +10,14 @@ export interface AudioSpectrumState {
   bands: Float32Array;
   /** Instantaneous beat/transient pulse [0..1] */
   beatPulse: number;
+  /** Punchy drum kick transient [0..1] (sub-bass & kick drum punch) */
+  drumKick: number;
+  /** Crisp drum snare / percussion transient [0..1] (mid-high punch) */
+  drumSnare: number;
+  /** Dominant musical tone pitch normalized [0..1] */
+  tonePitch: number;
+  /** Dominant musical frequency in Hz */
+  toneHz: number;
   /** Overall RMS/spectral energy [0..1] */
   overallEnergy: number;
   /** Index (0..15) of the currently dominant frequency band */
@@ -60,6 +68,12 @@ export class SpatialAudioSystem {
   private readonly bands16 = new Float32Array(16);
   private readonly smoothedBands16 = new Float32Array(16);
   private prevLowEnergy = 0;
+  private prevKickEnergy = 0;
+  private prevSnareEnergy = 0;
+  private kickEnvelope = 0;
+  private snareEnvelope = 0;
+  private smoothedTonePitch = 0.5;
+  private smoothedToneHz = 144;
   private beatPulseEnvelope = 0;
   private currentBaseHz = 144;
 
@@ -70,11 +84,27 @@ export class SpatialAudioSystem {
   private savedPauseTime = 0;
   private playbackToken = 0;
 
+  // Generative Room Ambient Synth (routes exclusively through `music` bus into AudioMixer)
+  private synthGainNode: GainNode | null = null;
+  private synthFilterNode: BiquadFilterNode | null = null;
+  private synthOscillators: OscillatorNode[] = [];
+  private synthLfoOsc: OscillatorNode | null = null;
+  private synthChimeTimer: number | null = null;
+  private isSynthActive = false;
+
+  // Corridor / Threshold Ambient Drone (routes exclusively through `ambient` bus)
+  private corridorDroneGain: GainNode | null = null;
+  private corridorDroneOsc: OscillatorNode | null = null;
+
   private currentTrackLabel = 'Cosmic Nexus (Silent Outside Rooms)';
 
   private readonly spectrumState: AudioSpectrumState = {
     bands: this.smoothedBands16,
     beatPulse: 0,
+    drumKick: 0,
+    drumSnare: 0,
+    tonePitch: 0.5,
+    toneHz: 144,
     overallEnergy: 0,
     dominantBand: 0,
     spectralCentroid: 0.5,
@@ -134,7 +164,6 @@ export class SpatialAudioSystem {
     }
 
     const isMusicActive =
-      this.inRoom &&
       Boolean(this.currentRoomTrackUrl) &&
       !audioMixer.getState().muted &&
       !this.pausedByGame;
@@ -151,8 +180,12 @@ export class SpatialAudioSystem {
       try {
         analyser.getByteFrequencyData(this.fftBytes);
         let maxByte = 0;
+        let peakBin = 1;
         for (let i = 1; i < 128; i++) {
-          if (this.fftBytes[i] > maxByte) maxByte = this.fftBytes[i];
+          if (this.fftBytes[i] > maxByte) {
+            maxByte = this.fftBytes[i];
+            peakBin = i;
+          }
         }
         if (maxByte > 3) {
           hasLiveFft = true;
@@ -167,13 +200,47 @@ export class SpatialAudioSystem {
               if (v > peak) peak = v;
             }
             // High frequencies naturally have lower raw energy in music; apply gentle perceptual tilt
-            const tilt = 1.0 + b * 0.05;
+            const tilt = 1.0 + b * 0.06;
             const rawBand = Math.min(
               1.0,
-              ((sum / count) * 0.72 + peak * 0.28) * tilt
+              ((sum / count) * 0.68 + peak * 0.32) * tilt
             );
             this.bands16[b] = rawBand;
           }
+
+          // 1. Drum Kick Transient Detection (bins 1..4: 30–160 Hz)
+          const kickRaw =
+            (this.fftBytes[1] * 1.3 + this.fftBytes[2] * 1.2 + this.fftBytes[3] + this.fftBytes[4] * 0.8) /
+            (4.3 * 255);
+          const kickDelta = Math.max(0, kickRaw - this.prevKickEnergy);
+          this.prevKickEnergy = kickRaw * 0.65 + this.prevKickEnergy * 0.35;
+          if (kickDelta > 0.025) {
+            this.kickEnvelope = Math.min(1.0, this.kickEnvelope + kickDelta * 4.8);
+          } else {
+            this.kickEnvelope *= 0.88;
+          }
+
+          // 2. Drum Snare / Percussion Detection (bins 6..14: 250–1200 Hz)
+          const snareRaw =
+            (this.fftBytes[6] + this.fftBytes[8] * 1.1 + this.fftBytes[10] * 1.2 + this.fftBytes[12]) /
+            (4.3 * 255);
+          const snareDelta = Math.max(0, snareRaw - this.prevSnareEnergy);
+          this.prevSnareEnergy = snareRaw * 0.65 + this.prevSnareEnergy * 0.35;
+          if (snareDelta > 0.03) {
+            this.snareEnvelope = Math.min(1.0, this.snareEnvelope + snareDelta * 4.4);
+          } else {
+            this.snareEnvelope *= 0.85;
+          }
+
+          // 3. Dominant Musical Tone & Pitch (bins to Hz, logarithmic pitch [0..1])
+          const ctx = audioMixer.ensureContext();
+          const approxHz = peakBin * ((ctx?.sampleRate ?? 44100) / 512);
+          const rawTonePitch = Math.min(
+            1.0,
+            Math.max(0.0, Math.log2(Math.max(45, approxHz) / 45) / 6.5)
+          );
+          this.smoothedTonePitch += (rawTonePitch - this.smoothedTonePitch) * 0.2;
+          this.smoothedToneHz += (approxHz - this.smoothedToneHz) * 0.2;
         }
       } catch {
         hasLiveFft = false;
@@ -182,9 +249,8 @@ export class SpatialAudioSystem {
 
     if (!hasLiveFft) {
       if (isMusicActive) {
-        // Gentle, liquid-smooth 16-band harmonic synthesis when inside an active music room
-        // where external GitHub MP3 CORS restricts raw FFT byte reading.
-        const tempoRad = timeSec * 0.92;
+        // Fallback musical simulation when inside active music
+        const tempoRad = timeSec * 2.2;
         const toneShift = (this.currentBaseHz % 256) / 256;
 
         for (let b = 0; b < 16; b++) {
@@ -196,13 +262,24 @@ export class SpatialAudioSystem {
             0,
             (w1 * 0.45 + w2 * 0.35 + w3 * 0.2 + 0.6) * 0.68
           );
-          this.bands16[b] = Math.min(1.0, Math.pow(harmonic, 1.5) * 0.78);
+          this.bands16[b] = Math.min(1.0, Math.pow(harmonic, 1.5) * 0.82);
         }
+
+        // 4/4 musical rhythm: Kick on 1 & 3, Snare on 2 & 4
+        const beatCycle = (timeSec * 2.2) % 4.0;
+        const kickDist = Math.min(beatCycle % 2.0, 2.0 - (beatCycle % 2.0));
+        const snareDist = Math.min(Math.abs(beatCycle - 1.0), Math.abs(beatCycle - 3.0));
+        this.kickEnvelope = Math.max(0, 1.0 - kickDist * 5.5);
+        this.snareEnvelope = Math.max(0, 1.0 - snareDist * 6.5);
+        this.smoothedTonePitch = (toneShift + Math.sin(timeSec * 0.3) * 0.25 + 0.5) % 1.0;
+        this.smoothedToneHz = this.currentBaseHz || 220;
       } else {
-        // Outside rooms or when audio is muted/stopped: zero target energy so nothing twitches without music!
+        // When audio is muted/stopped: zero target energy so nothing twitches without music!
         for (let b = 0; b < 16; b++) {
           this.bands16[b] = 0;
         }
+        this.kickEnvelope *= 0.8;
+        this.snareEnvelope *= 0.8;
       }
     }
 
@@ -217,8 +294,8 @@ export class SpatialAudioSystem {
       // Silky-smooth exponential attack and release to prevent any sudden jumps or epileptic flicker
       const next =
         target > prev
-          ? prev + (target - prev) * 0.18
-          : prev + (target - prev) * 0.08;
+          ? prev + (target - prev) * 0.22
+          : prev + (target - prev) * 0.09;
       this.smoothedBands16[b] = next < 0.0005 ? 0 : next;
       totalEnergy += this.smoothedBands16[b];
       weightedSum += this.smoothedBands16[b] * (b / 15);
@@ -252,7 +329,14 @@ export class SpatialAudioSystem {
       if (this.beatPulseEnvelope < 0.001) this.beatPulseEnvelope = 0;
     }
 
-    this.spectrumState.beatPulse = this.beatPulseEnvelope;
+    this.spectrumState.beatPulse = Math.max(
+      this.beatPulseEnvelope,
+      this.kickEnvelope * 0.7 + this.snareEnvelope * 0.5
+    );
+    this.spectrumState.drumKick = this.kickEnvelope;
+    this.spectrumState.drumSnare = this.snareEnvelope;
+    this.spectrumState.tonePitch = this.smoothedTonePitch;
+    this.spectrumState.toneHz = this.smoothedToneHz;
     this.spectrumState.overallEnergy = Math.min(1.0, totalEnergy / 16);
     this.spectrumState.dominantBand = domBand;
     this.spectrumState.spectralCentroid =
@@ -327,7 +411,74 @@ export class SpatialAudioSystem {
   }
 
   /**
-   * Immediately halts any playing MP3 track and invalidates pending play() promises
+   * Generative synth is disabled to ensure pure music without background drone or hum.
+   */
+  private startGenerativeRoomSynth(_baseHz: number): void {
+    this.stopGenerativeRoomSynth();
+  }
+
+  private stopGenerativeRoomSynth(): void {
+    if (this.synthChimeTimer !== null) {
+      window.clearTimeout(this.synthChimeTimer);
+      this.synthChimeTimer = null;
+    }
+    if (this.synthGainNode) {
+      try {
+        const ctx = audioMixer.ensureContext();
+        if (ctx) {
+          const now = ctx.currentTime;
+          this.synthGainNode.gain.cancelScheduledValues(now);
+          this.synthGainNode.gain.setValueAtTime(0, now);
+        }
+      } catch {}
+    }
+    const oscs = this.synthOscillators;
+    const lfo = this.synthLfoOsc;
+    const gainNode = this.synthGainNode;
+    this.synthOscillators = [];
+    this.synthLfoOsc = null;
+    this.synthGainNode = null;
+    this.synthFilterNode = null;
+    this.isSynthActive = false;
+
+    oscs.forEach((o) => {
+      try {
+        o.stop();
+        o.disconnect();
+      } catch {}
+    });
+    try {
+      lfo?.stop();
+      lfo?.disconnect();
+      gainNode?.disconnect();
+    } catch {}
+  }
+
+  private duckGenerativeRoomSynth(_duck: boolean): void {
+    // Pure music mode: no background synth drone is generated
+  }
+
+  private startCorridorDrone(_baseFreq = 55): void {
+    // Pure music mode: 55Hz background drone is completely silenced
+    this.stopCorridorDrone();
+  }
+
+  private stopCorridorDrone(): void {
+    if (!this.corridorDroneOsc) return;
+    const osc = this.corridorDroneOsc;
+    const gain = this.corridorDroneGain;
+    this.corridorDroneOsc = null;
+    this.corridorDroneGain = null;
+
+    try {
+      osc.stop();
+      osc.disconnect();
+      gain?.disconnect();
+    } catch {}
+  }
+
+  /**
+   * Immediately halts any playing room track and invalidates pending play() promises
    * so two tracks can never overlap.
    */
   public stopRoomSoundtrack(): void {
@@ -337,6 +488,8 @@ export class SpatialAudioSystem {
     this.isMp3Streaming = false;
     this.savedPauseTime = 0;
     this.currentTrackLabel = 'Cosmic Nexus (Tracks play only inside rooms)';
+
+    this.stopGenerativeRoomSynth();
 
     if (this.mp3Audio) {
       try {
@@ -358,7 +511,7 @@ export class SpatialAudioSystem {
     if (this.pausedByGame) return;
     this.pausedByGame = true;
     audioMixer.pauseForGamePause(() => {
-      if (this.mp3Audio && this.inRoom) {
+      if (this.mp3Audio && Boolean(this.currentRoomTrackUrl)) {
         try {
           this.savedPauseTime = this.mp3Audio.currentTime;
           this.mp3Audio.pause();
@@ -378,7 +531,6 @@ export class SpatialAudioSystem {
     this.pausedByGame = false;
     audioMixer.resumeFromGamePause(() => {
       if (
-        this.inRoom &&
         this.currentRoomTrackUrl &&
         this.mp3Audio &&
         !audioMixer.getState().muted
@@ -400,10 +552,13 @@ export class SpatialAudioSystem {
                 this.pausedByGame
               ) {
                 this.mp3Audio?.pause();
+              } else {
+                this.duckGenerativeRoomSynth(true);
               }
             })
             .catch(() => {
               this.isMp3Streaming = false;
+              this.duckGenerativeRoomSynth(false);
             });
         } catch {
           // ignore
@@ -417,7 +572,7 @@ export class SpatialAudioSystem {
   }
 
   public isStreamingMp3(): boolean {
-    return this.isMp3Streaming && this.inRoom && !this.pausedByGame;
+    return (this.isMp3Streaming || this.isSynthActive) && this.inRoom && !this.pausedByGame;
   }
 
   public getCurrentMp3Url(): string {
@@ -440,52 +595,100 @@ export class SpatialAudioSystem {
   public toggle(): boolean {
     const muted = audioMixer.toggleMute();
     this.syncElementVolume();
-    if (!muted && this.inRoom && this.currentRoomTrackUrl && !this.pausedByGame) {
-      const audio = this.ensureMp3Element();
-      const token = ++this.playbackToken;
-      void audio
-        .play()
-        .then(() => {
-          if (token !== this.playbackToken || !this.inRoom || this.pausedByGame) {
-            audio.pause();
-          }
-        })
-        .catch(() => {
-          this.isMp3Streaming = false;
-        });
+    if (!muted && this.inRoom && !this.pausedByGame) {
+      if (this.currentRoomTrackUrl && this.mp3Audio) {
+        const audio = this.mp3Audio;
+        const token = ++this.playbackToken;
+        void audio
+          .play()
+          .then(() => {
+            if (token !== this.playbackToken || !this.inRoom || this.pausedByGame) {
+              audio.pause();
+            } else {
+              this.duckGenerativeRoomSynth(true);
+            }
+          })
+          .catch(() => {
+            this.isMp3Streaming = false;
+            this.duckGenerativeRoomSynth(false);
+          });
+      }
     }
     return !muted;
   }
 
   public start(): void {
-    audioMixer.ensureContext();
+    const ctx = audioMixer.ensureContext();
+    if (ctx && ctx.state === 'suspended') {
+      void ctx.resume();
+    }
     this.ensureAnalyser();
     this.syncElementVolume();
-    if (this.inRoom && this.currentRoomTrackUrl && !this.pausedByGame) {
-      this.playRoomSoundtrack(this.currentRoomTrackUrl, this.currentBaseHz);
+    if (!this.pausedByGame && !audioMixer.getState().muted) {
+      if (!this.currentRoomTrackUrl) {
+        this.playRoomSoundtrack(
+          'assets/audio/01_Purpose.mp3',
+          144,
+          'Intro · Purpose'
+        );
+      } else if (this.mp3Audio && (this.mp3Audio.paused || !this.isMp3Streaming)) {
+        const audio = this.mp3Audio;
+        const token = ++this.playbackToken;
+        const p = audio.play();
+        if (p !== undefined) {
+          p.then(() => {
+            if (token === this.playbackToken) {
+              this.isMp3Streaming = true;
+            }
+          }).catch(() => {});
+        }
+      }
     }
+  }
+
+  private preloadedUrls = new Set<string>();
+
+  /**
+   * Preloads an upcoming room audio track into browser cache when looking at a door.
+   */
+  public preloadTrack(trackPath: string): void {
+    if (!trackPath || this.preloadedUrls.has(trackPath)) return;
+    this.preloadedUrls.add(trackPath);
+    try {
+      const audio = new Audio();
+      audio.preload = 'auto';
+      const rawFileName = trackPath.split('/').pop()?.split('?')[0] || '';
+      const url = rawFileName ? `/assets/audio/${rawFileName.replace(/\.ogg$/, '.mp3')}` : trackPath;
+      audio.src = url;
+      audio.load();
+    } catch {}
   }
 
   public stop(): void {
     audioMixer.setVolumeState({ muted: true });
     this.stopRoomSoundtrack();
+    this.stopCorridorDrone();
+    this.stopGenerativeRoomSynth();
   }
 
   /**
-   * Called when the player is in the Starting Cosmic Room or 3 Sector Rooms.
-   * MP3 tracks play ONLY inside the 25 rooms and never outside.
+   * Called when the player is in the Starting Cosmic Room or Sector Halls.
+   * Plays the atmospheric intro / corridor music track with zero background drone or hum.
    */
   public setCorridorVerticalCrossfade(_blend01: number, label?: string): void {
-    if (this.inRoom || this.currentRoomTrackUrl) {
-      this.stopRoomSoundtrack();
-    }
-    if (label) {
-      this.currentTrackLabel = `${label} (Silent outside rooms)`;
+    const corridorTrack = 'assets/audio/01_Purpose.mp3';
+    if (this.currentRoomTrackUrl !== corridorTrack || (this.mp3Audio && this.mp3Audio.paused)) {
+      this.playRoomSoundtrack(
+        corridorTrack,
+        144,
+        label || 'Intro · Purpose'
+      );
     }
   }
 
   /**
-   * Starts the unique MP3 track for the mounted room routed through the `music` bus.
+   * Starts the room soundtrack routed through the `music` bus.
+   * Plays ONLY the music track without any background hum or oscillator drone.
    */
   public playRoomSoundtrack(
     trackPath: string,
@@ -493,52 +696,117 @@ export class SpatialAudioSystem {
     displayTitle?: string
   ): void {
     this.currentBaseHz = baseHz || 144;
-    const token = ++this.playbackToken;
-    const audio = this.ensureMp3Element();
-    this.ensureAnalyser();
-    try {
-      audio.pause();
-      audio.currentTime = 0;
-    } catch {
-      // ignore
-    }
+    this.stopCorridorDrone();
+    this.stopGenerativeRoomSynth();
 
-    if (!trackPath || !trackPath.startsWith('http')) {
-      this.inRoom = false;
-      this.currentRoomTrackUrl = '';
-      this.isMp3Streaming = false;
-      return;
-    }
-
-    this.inRoom = true;
-    this.savedPauseTime = 0;
-    this.currentRoomTrackUrl = trackPath;
-    const fileName = decodeURIComponent(trackPath.split('/').pop() ?? trackPath);
+    const fileName = trackPath
+      ? decodeURIComponent(trackPath.split('/').pop() ?? trackPath)
+      : 'Room Track';
     this.currentTrackLabel = displayTitle
       ? `${displayTitle} · ${fileName}`
       : `ROOM TRACK · ${fileName}`;
 
-    audio.src = trackPath;
-    this.syncElementVolume();
-    audio.load();
+    if (!trackPath) return;
 
-    if (!this.pausedByGame && !audioMixer.getState().muted) {
-      void audio
-        .play()
-        .then(() => {
-          if (
-            token !== this.playbackToken ||
-            !this.inRoom ||
-            this.pausedByGame ||
-            audioMixer.getState().muted
-          ) {
-            audio.pause();
-            audio.currentTime = 0;
+    // If already playing or loading this exact track, keep playing without aborting
+    if (this.currentRoomTrackUrl === trackPath && this.mp3Audio) {
+      this.inRoom = true;
+      this.syncElementVolume();
+      const ctx = audioMixer.ensureContext();
+      if (ctx && ctx.state === 'suspended') {
+        void ctx.resume();
+      }
+      if (this.mp3Audio.paused && !this.pausedByGame && !audioMixer.getState().muted) {
+        void this.mp3Audio.play().then(() => {
+          this.isMp3Streaming = true;
+        }).catch(() => {});
+      }
+      return;
+    }
+
+    const token = ++this.playbackToken;
+    this.inRoom = true;
+    this.savedPauseTime = 0;
+    this.currentRoomTrackUrl = trackPath || '';
+
+    // Resolve audio track path (prioritizing local /assets/audio/ bundle, then remote/relative)
+    const rawFileName = trackPath.split('/').pop()?.split('?')[0] || '';
+    const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+    const candidates: string[] = [];
+    if (rawFileName) {
+      const mp3Name = rawFileName.replace(/\.ogg$/, '.mp3');
+      candidates.push(`/assets/audio/${mp3Name}`);
+      if (base) {
+        candidates.push(`${base}/assets/audio/${mp3Name}`);
+      }
+      candidates.push(`assets/audio/${mp3Name}`);
+      candidates.push(`./assets/audio/${mp3Name}`);
+    }
+    if (trackPath.startsWith('http')) {
+      candidates.push(trackPath);
+    }
+    if (candidates.length === 0) {
+      candidates.push(trackPath);
+    }
+
+    const audio = this.ensureMp3Element();
+    this.ensureAnalyser();
+
+    const ctx = audioMixer.ensureContext();
+    if (ctx && ctx.state === 'suspended') {
+      void ctx.resume();
+    }
+
+    try {
+      audio.pause();
+      audio.currentTime = 0;
+      let cIdx = 0;
+      audio.src = candidates[0];
+      this.syncElementVolume();
+      audio.load();
+
+      audio.onerror = () => {
+        cIdx++;
+        if (cIdx < candidates.length && this.inRoom && token === this.playbackToken) {
+          audio.src = candidates[cIdx];
+          audio.load();
+          if (!this.pausedByGame && !audioMixer.getState().muted) {
+            void audio.play().then(() => {
+              this.isMp3Streaming = true;
+            }).catch(() => {});
           }
-        })
-        .catch(() => {
-          this.isMp3Streaming = false;
-        });
+        }
+      };
+
+      if (!this.pausedByGame && !audioMixer.getState().muted) {
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              if (
+                token !== this.playbackToken ||
+                !this.inRoom ||
+                this.pausedByGame ||
+                audioMixer.getState().muted
+              ) {
+                audio.pause();
+                audio.currentTime = 0;
+              } else {
+                this.isMp3Streaming = true;
+                this.duckGenerativeRoomSynth(true);
+              }
+            })
+            .catch(() => {
+              // Auto-play was prevented by browser before user gesture, or network error.
+              // Generative room synthesizer remains active at full volume!
+              this.isMp3Streaming = false;
+              this.duckGenerativeRoomSynth(false);
+            });
+        }
+      }
+    } catch {
+      this.isMp3Streaming = false;
+      this.duckGenerativeRoomSynth(false);
     }
   }
 

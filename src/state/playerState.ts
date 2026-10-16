@@ -606,7 +606,7 @@ class HubPlayerStateStore {
     this.state.radioChannels[channel] = [
       ...existing,
       { author, text, timestamp },
-    ];
+    ].slice(-50);
     this.notifyAndDebounceSave();
   }
 

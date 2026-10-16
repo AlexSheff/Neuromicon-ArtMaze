@@ -10,7 +10,11 @@ import { OnboardingFrameSignals, OnboardingStateHandler } from '../types';
 export const awakenState: OnboardingStateHandler = {
   id: 'AWAKEN',
   onEnter() {
-    spatialAudioSystem.setCorridorVerticalCrossfade(0.5);
+    spatialAudioSystem.playRoomSoundtrack(
+      'assets/audio/01_Purpose.mp3',
+      144,
+      'Intro · Purpose'
+    );
     eventBus.emit('audio:caption', { textId: 'caption.drone_swell' });
   },
   update(signals: OnboardingFrameSignals): OnboardingStepId | null {

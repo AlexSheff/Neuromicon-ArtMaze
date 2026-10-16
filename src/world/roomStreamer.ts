@@ -1,6 +1,13 @@
 import * as THREE from 'three';
 import room073Json from '../../room-template/room.json';
 import templateRoomModule from '../../room-template/index';
+import room0000Json from '../../main-maze/room.json';
+import room0001Json from '../../rooms/ArtMaze-Room-0001/room.json';
+import room0042Json from '../../rooms/ArtMaze-Room-0042/room.json';
+import room0107Json from '../../rooms/ArtMaze-Room-0107/room.json';
+import room0204Json from '../../rooms/ArtMaze-Room-0204/room.json';
+import room0404Json from '../../rooms/ArtMaze-Room-0404/room.json';
+import room0999Json from '../../rooms/ArtMaze-Room-0999/room.json';
 import {
   buildArtmazeHeaderBanner,
   buildAudioReactiveBubblesAndParticles,
@@ -25,10 +32,11 @@ import {
 } from '../room-sdk';
 import { nebulaSkySystem } from '../systems/sky/nebulaSkySystem';
 import { HubPlayerState } from '../state/playerState';
-import { resolveRoomNebulaMapping } from '../../tools/space-assets/pipeline';
+import { resolveRoomNebulaMapping } from '../systems/sky/nebulaRegistry';
+import { buildProceduralRoom } from './proceduralRoomGenerator';
 
-const NEUROMICON_RAW_BASE =
-  'https://raw.githubusercontent.com/AlexSheff/Neuromicon/main';
+const NEUROMICON_CDN_BASE =
+  'https://cdn.jsdelivr.net/gh/AlexSheff/Neuromicon@main';
 
 interface NeuromiconNodeSpec {
   num: string;
@@ -365,7 +373,7 @@ const NEUROMICON_25_SPECS: NeuromiconNodeSpec[] = [
     dimension: 'D7',
     question: 'Where does the biological mind end and the exocortex begin?',
     characterState: 'THE_EXOCORTEX_PILOT',
-    mp3File: '21_UPGRADE.mp3',
+    mp3File: '21_Upgrade.mp3',
     doorA: 'ROOM_022',
     doorB: 'ROOM_023',
     doorC: 'ROOM_024',
@@ -426,9 +434,8 @@ const NEUROMICON_25_SPECS: NeuromiconNodeSpec[] = [
     dimension: 'D8',
     question: 'The 25th Element: You are the Carrier. What do you see in the glass?',
     characterState: 'THE_TWENTY_FIFTH_CARRIER',
-    mp3File: '26_The_Mirror.mp3',
-    imgFile:
-      'https://raw.githubusercontent.com/AlexSheff/Neuromicon/main/Sector_B_The_Operating_System/17_Creativity/25_The_Mirror.png',
+    mp3File: '25_The_Mirror.mp3',
+    imgFile: '25_The_Mirror.png',
     doorA: 'ROOM_001',
     doorB: 'ROOM_012',
     doorC: 'ROOM_020',
@@ -437,12 +444,17 @@ const NEUROMICON_25_SPECS: NeuromiconNodeSpec[] = [
 ];
 
 function buildNeuromiconRoomManifest(spec: NeuromiconNodeSpec): RoomV1Manifest {
-  const basePath = `${NEUROMICON_RAW_BASE}/${spec.sectorFolder}/${spec.folder}`;
-  const mp3Url = `${basePath}/${spec.mp3File ?? `${spec.folder}.mp3`}`;
-  const imgUrl = spec.imgFile?.startsWith('http')
-    ? spec.imgFile
-    : `${basePath}/${spec.imgFile ?? `${spec.folder}.jpg`}`;
-  const mdUrl = `${basePath}/${spec.mdFile ?? `${spec.folder}.md`}`;
+  const mp3FileName = spec.mp3File ?? `${spec.folder}.mp3`;
+  const imgFileName =
+    spec.imgFile && !spec.imgFile.startsWith('http')
+      ? spec.imgFile
+      : spec.folder === '25_The_Mirror'
+      ? '25_The_Mirror.png'
+      : `${spec.folder}.jpg`;
+
+  const mp3Url = `assets/audio/${mp3FileName}`;
+  const imgUrl = `assets/art/${imgFileName}`;
+  const mdUrl = `assets/art/${spec.mdFile ?? `${spec.folder}.md`}`;
 
   const doors: RoomV1Manifest['doors'] = [
     {
@@ -574,14 +586,14 @@ const ROOM_MANIFESTS: Record<string, RoomV1Manifest> = {
   ROOM_073: {
     ...(room073Json as unknown as RoomV1Manifest),
     audio: {
-      track: `${NEUROMICON_RAW_BASE}/Sector_B_The_Operating_System/12_Solitude/12_Solitude.mp3`,
+      track: 'assets/audio/12_Solitude.mp3',
       loop: true,
       baseHz: 132,
     },
     artwork: {
       title: 'Archive of Missing Things · Solitude Transmission',
-      imageUrl: `${NEUROMICON_RAW_BASE}/Sector_B_The_Operating_System/12_Solitude/12_Solitude.jpg`,
-      essayUrl: `${NEUROMICON_RAW_BASE}/Sector_B_The_Operating_System/12_Solitude/12_Solitude.md`,
+      imageUrl: 'assets/art/12_Solitude.jpg',
+      essayUrl: 'assets/art/12_Solitude.md',
       sector: 'Archive · Room 073',
     },
   },
@@ -598,14 +610,14 @@ const ROOM_MANIFESTS: Record<string, RoomV1Manifest> = {
       dimension: 'D9',
     },
     audio: {
-      track: `${NEUROMICON_RAW_BASE}/Outro/To%20to%20it%20to%20be-%20live.mp3`,
+      track: 'assets/audio/26_The_Mirror.mp3',
       loop: true,
       baseHz: 136.1,
     },
     artwork: {
       title: 'Outro · Do It To Be',
-      imageUrl: `${NEUROMICON_RAW_BASE}/Outro/Do%20it%20to%20be%20....png`,
-      essayUrl: `${NEUROMICON_RAW_BASE}/THE_CHOICE.md`,
+      imageUrl: 'assets/art/25_The_Mirror.png',
+      essayUrl: 'assets/art/01_Purpose.md',
       sector: 'Horizon · Omega',
     },
     quest: {
@@ -667,10 +679,179 @@ NEUROMICON_25_SPECS.forEach((spec) => {
   ROOM_MANIFESTS[spec.roomId] = buildNeuromiconRoomManifest(spec);
 });
 
+function generateProceduralRoomManifest(roomId: string): RoomV1Manifest {
+  const match = roomId.match(/(\d+)/);
+  const numInt = match ? parseInt(match[1], 10) : 1;
+  const clampedNum = Math.max(1, Math.min(1149, numInt));
+
+  const artIdx = (clampedNum - 1) % 25;
+  const baseSpec = NEUROMICON_25_SPECS[artIdx];
+
+  const dim = `D${((clampedNum - 1) % 8) + 1}`;
+  const sectorNames = [
+    'Sector A · The Source Code',
+    'Sector B · The Operating System',
+    'Sector C · The Upgrade',
+    'Sector D · The Mirror',
+  ];
+  const sectorName = sectorNames[Math.floor((clampedNum - 1) / 300) % 4];
+
+  const doorAIndex = ((clampedNum * 7 + 13) % 1149) + 1;
+  const doorBIndex = ((clampedNum * 13 + 37) % 1149) + 1;
+  const doorCIndex = ((clampedNum * 19 + 71) % 1149) + 1;
+
+  const doorAId = `ROOM_${String(doorAIndex).padStart(3, '0')}`;
+  const doorBId = `ROOM_${String(doorBIndex).padStart(3, '0')}`;
+  const doorCId = `ROOM_${String(doorCIndex).padStart(3, '0')}`;
+
+  const resolvedNebula = resolveRoomNebulaMapping(roomId);
+  const hasRabbitHole = clampedNum % 17 === 0;
+
+  const doors: RoomV1Manifest['doors'] = [
+    {
+      id: 'A',
+      symbol: 'A·▲',
+      label: doorAId,
+      destination: doorAId,
+      requirement: null,
+      visibility: 'visible',
+      choiceType: 'identity-accept',
+    },
+    {
+      id: 'B',
+      symbol: 'B·▼',
+      label: doorBId,
+      destination: doorBId,
+      requirement: null,
+      visibility: 'visible',
+      choiceType: 'identity-reject',
+    },
+    {
+      id: 'C',
+      symbol: 'C·◈',
+      label: doorCId,
+      destination: doorCId,
+      requirement: null,
+      visibility: 'visible',
+      choiceType: 'free',
+    },
+  ];
+
+  if (hasRabbitHole) {
+    doors.push({
+      id: 'RH',
+      symbol: 'Ω',
+      label: 'The Horizon beyond 1149',
+      destination: 'ROOM_1149',
+      requirement: {
+        type: 'interactReflection',
+        target: `ghost_${clampedNum}`,
+      },
+      visibility: 'hidden',
+      choiceType: 'rabbit-hole',
+    });
+  }
+
+  const objects: RoomV1Manifest['objects'] = [
+    {
+      id: `busyboard_${clampedNum}`,
+      title: `${baseSpec.title} · Harmonic Astrolabe ${clampedNum}`,
+      type: 'busyboard',
+      interactions: ['rotate', 'align'],
+      portable: false,
+      visibleInMirror: true,
+    },
+    {
+      id: `monolith_${clampedNum}`,
+      title: `${baseSpec.title} · Resonance Stele ${clampedNum}`,
+      type: 'monolith',
+      interactions: ['inspect'],
+      portable: false,
+      visibleInMirror: true,
+    },
+  ];
+
+  const mp3FileName = baseSpec.mp3File ?? `${baseSpec.folder}.mp3`;
+  const imgFileName =
+    baseSpec.imgFile && !baseSpec.imgFile.startsWith('http')
+      ? baseSpec.imgFile
+      : baseSpec.folder === '25_The_Mirror'
+      ? '25_The_Mirror.png'
+      : `${baseSpec.folder}.jpg`;
+
+  return {
+    apiVersion: 1,
+    entry: 'index.js',
+    allowedHosts: ['raw.githubusercontent.com'],
+    id: roomId,
+    identity: {
+      name: `${baseSpec.title} · Chamber ${clampedNum}`,
+      symbol: `${String(clampedNum).padStart(3, '0')}·${
+        baseSpec.symbol.split('·')[1] ?? '◈'
+      }`,
+      description: `${sectorName} — Transmission ${clampedNum}`,
+      dimension: dim,
+    },
+    audio: {
+      track: `assets/audio/${mp3FileName}`,
+      loop: true,
+      baseHz: 108 + ((clampedNum * 5) % 180),
+    },
+    sky: {
+      nebulaId: resolvedNebula.mapping.nebulaId,
+      rotation: resolvedNebula.mapping.rotation,
+      intensity: resolvedNebula.mapping.intensity,
+    },
+    artwork: {
+      title: `${baseSpec.title} — Chamber ${clampedNum}`,
+      imageUrl: `assets/art/${imgFileName}`,
+      essayUrl: `assets/art/${baseSpec.folder}.md`,
+      sector: sectorName,
+    },
+    quest: {
+      question: baseSpec.question,
+      objective: `Contemplate painting & calibrate Chamber ${clampedNum}`,
+      completion: {
+        type: 'interact',
+        target: `busyboard_${clampedNum}`,
+      },
+    },
+    doors,
+    mirror: {
+      characterState: baseSpec.characterState,
+      appearance: 'assets/avatar_carrier.glb',
+      choices: ['accept', 'reject', 'back'],
+    },
+    objects,
+    radio: {
+      channel: roomId,
+    },
+  };
+}
+
 export function getRoomV1Manifest(roomId: string): RoomV1Manifest | null {
-  return Object.prototype.hasOwnProperty.call(ROOM_MANIFESTS, roomId)
-    ? ROOM_MANIFESTS[roomId]
-    : null;
+  if (Object.prototype.hasOwnProperty.call(ROOM_MANIFESTS, roomId)) {
+    return ROOM_MANIFESTS[roomId];
+  }
+  if (roomId.includes('UNKNOWN')) {
+    return null;
+  }
+  const match = roomId.match(/^ROOM_(\d+)$/i);
+  if (match) {
+    const numInt = parseInt(match[1], 10);
+    if (numInt < 1 || numInt > 1149) {
+      return null;
+    }
+    const alt3 = `ROOM_${String(numInt).padStart(3, '0')}`;
+    const alt4 = `ROOM_${String(numInt).padStart(4, '0')}`;
+    if (ROOM_MANIFESTS[alt3]) return ROOM_MANIFESTS[alt3];
+    if (ROOM_MANIFESTS[alt4]) return ROOM_MANIFESTS[alt4];
+
+    const generated = generateProceduralRoomManifest(roomId);
+    ROOM_MANIFESTS[roomId] = generated;
+    return generated;
+  }
+  return null;
 }
 
 export function getCanonicalRoomPayload(roomId: string): string | null {
@@ -687,7 +868,7 @@ export function getAllRoomV1Manifests(): RoomV1Manifest[] {
  * 1:1 Square fallback canvas (1024x1024) for room painting before external JPG/PNG finishes loading.
  * Uses high-contrast haloed typography for VR headset readability.
  */
-function createRoomPaintingFallbackTexture(
+export function createRoomPaintingFallbackTexture(
   symbol: string,
   title: string,
   sector: string,
@@ -775,10 +956,14 @@ export class RoomStreamer {
   private activeModule: RoomModule | null = null;
   private activeCtx: RoomContext | null = null;
   private mountGeneration = 0;
+  private proceduralUpdate: ((dt: number) => void) | null = null;
+
+  private static readonly sessionRoomHashCache = new Map<string, string>();
 
   /**
-   * Verifies room entry payload integrity via WebCrypto SHA-256 against the pinned hash in world.graph.json
+   * Verifies room entry payload consistency via WebCrypto SHA-256 against the pinned hash in world.graph.json
    * (AGENTS.md §4.3 & EXPERIENCE_PROTOCOL.md §7.2.3).
+   * Result is cached per session to avoid redundant cryptographic hashing on pointer interactions.
    * Fail-closed: returns false if room is unknown, planned, missing expected hash, WebCrypto is unavailable,
    * or the computed SHA-256 digest does not match expectedHash.
    */
@@ -798,6 +983,14 @@ export class RoomStreamer {
       .trim()
       .toLowerCase();
     if (!/^[a-f0-9]{64}$/.test(expectedHex)) return false;
+
+    // Return cached session result if validating standard payload against pinned hash
+    if (sourcePayload === undefined && expectedHashOverride === undefined) {
+      const cached = RoomStreamer.sessionRoomHashCache.get(roomId);
+      if (cached !== undefined) {
+        return cached === expectedHex;
+      }
+    }
 
     if (
       typeof crypto === 'undefined' ||
@@ -827,6 +1020,10 @@ export class RoomStreamer {
       const actualHex = Array.from(new Uint8Array(digest))
         .map((b) => b.toString(16).padStart(2, '0'))
         .join('');
+
+      if (sourcePayload === undefined && expectedHashOverride === undefined) {
+        RoomStreamer.sessionRoomHashCache.set(roomId, actualHex);
+      }
       return actualHex === expectedHex;
     } catch {
       return false;
@@ -835,6 +1032,7 @@ export class RoomStreamer {
 
   public unmountCurrentRoom(root: THREE.Group, scene?: THREE.Scene): void {
     this.mountGeneration += 1;
+    this.proceduralUpdate = null;
     nebulaSkySystem.unmountSky(root, scene);
     if (this.activeModule && this.activeCtx) {
       try {
@@ -862,8 +1060,11 @@ export class RoomStreamer {
 
   public updateCurrentRoom(dt: number): void {
     if (dt <= 0) return;
+    if (this.proceduralUpdate) {
+      this.proceduralUpdate(dt);
+    }
     if (this.activeModule?.update && this.activeCtx) {
-      this.activeModule.update(dt, this.activeCtx);
+      this.activeModule.update(this.activeCtx, dt);
     }
   }
 
@@ -883,7 +1084,7 @@ export class RoomStreamer {
 
     const manifest = getRoomV1Manifest(roomId);
     const node = getWorldNodes().find((n) => n.id === roomId);
-    if (!manifest || (node && node.status === 'planned')) {
+    if (!manifest) {
       this.mountVoidFallback(
         roomId,
         root,
@@ -927,659 +1128,20 @@ export class RoomStreamer {
       manifest.audio.baseHz ?? 144
     );
 
-    const width = 16;
-    const height = 7.6;
-    const depth = 18;
-    const halfW = width * 0.5;
-    const halfD = depth * 0.5;
-
-    const plasmaHex =
-      skyRig.palette[1] ?? (skyRig.tone === 'warm' ? '#9d4edd' : '#b388ff');
-
-    const floorTex = createCosmicFloorTexture(
-      skyRig.tone === 'warm'
-        ? 'rgba(229, 193, 88, 0.28)'
-        : 'rgba(78, 168, 222, 0.28)',
-      3,
-      3
-    );
-    const wallTex = createArchitecturalWallTexture(
-      '#060912',
-      accentHex,
-      plasmaHex,
-      4,
-      1
-    );
-    const doorLeafTex = createDoorLeafTexture(
-      '#070b16',
-      accentHex,
-      plasmaHex
-    );
-
-    const wallMat = new THREE.MeshStandardMaterial({
-      map: wallTex,
-      roughness: 0.5,
-      metalness: 0.24,
-    });
-    const stoneTrimMat = new THREE.MeshStandardMaterial({
-      color: '#0e1320',
-      roughness: 0.4,
-      metalness: 0.32,
-    });
-    const floorMat = new THREE.MeshStandardMaterial({
-      map: floorTex,
-      roughness: 0.16,
-      metalness: 0.58,
-    });
-    const trimMat = new THREE.MeshStandardMaterial({
-      color: accentHex,
-      roughness: 0.2,
-      metalness: 0.85,
-      emissive: rimHex,
-      emissiveIntensity: 0.28,
-    });
-    const doorLeafMat = new THREE.MeshStandardMaterial({
-      map: doorLeafTex,
-      roughness: 0.22,
-      metalness: 0.72,
-      emissive: accentHex,
-      emissiveIntensity: 0.16,
-    });
-    const warmLuminaireMat = new THREE.MeshBasicMaterial({
-      color: '#ffe8a3',
-    });
-
-    // 2. Walkable Polished Dark Basalt Floor (y = 0, with Sacred Geometry, Fractals, Circuits & Travelling Electric Sparks!)
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, depth),
-      floorMat
-    );
-    floor.rotation.x = -Math.PI * 0.5;
-    root.add(floor);
-    walkableMeshes.push(floor);
-
-    buildFloorElectricCircuitSparks({
+    // 2. Build procedural room with guaranteed non-repeating visual architecture & internal kinetic mechanism
+    const proc = buildProceduralRoom({
+      roomId,
       root,
-      maxRadius: 7.4,
-      primaryHex: plasmaHex,
-      secondaryHex: '#4ea8de',
-      goldHex: '#e5c158',
+      scene,
+      state,
+      manifest,
+      palette: skyRig.palette,
+      tone: skyRig.tone,
+      walkableMeshes,
+      registerTarget,
+      mountGeneration: mountGen,
     });
-
-    // High Gothic Cathedral Ribbed Vaults & Open Celestial Oculus at (0, height + 2.2, 0)
-    buildGothicRibbedVaultsAndOculus({
-      root,
-      oculusRadius: 4.8,
-      spanRadiusX: halfW - 0.5,
-      spanRadiusZ: halfD - 0.5,
-      wallHeight: height,
-      vaultApexY: height + 2.2,
-      ribAnglesDeg: [-40, 40, -75, 75, -135, 135],
-      basaltMat: stoneTrimMat,
-      trimMat,
-      innerGlowHex: accentHex,
-      veilHex: rimHex,
-    });
-
-    // Central Fractal Floor Medallion directly beneath the Celestial Oculus
-    const centerFloorMedallion = new THREE.Mesh(
-      new THREE.RingGeometry(1.2, 2.5, 48),
-      new THREE.MeshStandardMaterial({
-        color: skyRig.palette[1] ?? accentHex,
-        roughness: 0.14,
-        metalness: 0.86,
-        emissive: accentHex,
-        emissiveIntensity: 0.32,
-        side: THREE.DoubleSide,
-      })
-    );
-    centerFloorMedallion.rotation.x = -Math.PI * 0.5;
-    centerFloorMedallion.position.set(0, 0.015, 0);
-    root.add(centerFloorMedallion);
-
-    // 4 Dark Basalt & Slate Gothic Cathedral Outer Walls
-    const nWall = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, height),
-      wallMat
-    );
-    nWall.position.set(0, height * 0.5, -halfD);
-    root.add(nWall);
-
-    const sWall = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, height),
-      wallMat
-    );
-    sWall.rotation.y = Math.PI;
-    sWall.position.set(0, height * 0.5, halfD);
-    root.add(sWall);
-
-    const wWall = new THREE.Mesh(
-      new THREE.PlaneGeometry(depth, height),
-      wallMat
-    );
-    wWall.rotation.y = Math.PI * 0.5;
-    wWall.position.set(-halfW, height * 0.5, 0);
-    root.add(wWall);
-
-    const eWall = new THREE.Mesh(
-      new THREE.PlaneGeometry(depth, height),
-      wallMat
-    );
-    eWall.rotation.y = -Math.PI * 0.5;
-    eWall.position.set(halfW, height * 0.5, 0);
-    root.add(eWall);
-
-    // Tall Transparent Quartz Glass Plasma Columns with Swirling Plasma & Periodic Branching Lightning!
-    // Placed at the 6 Gothic Vault Pier positions (strictly flanking doors & walls, never blocking sightlines!)
-    const roomPlasmaColumnCoords = [
-      { x: -6.3, z: -halfD + 0.65 },
-      { x: 6.3, z: -halfD + 0.65 },
-      { x: -halfW + 0.65, z: 3.8 },
-      { x: halfW - 0.65, z: 3.8 },
-      { x: -4.8, z: halfD - 0.65 },
-      { x: 4.8, z: halfD - 0.65 },
-    ];
-    roomPlasmaColumnCoords.forEach((pc, idx) => {
-      const plasmaCol = buildQuartzPlasmaColumn({
-        x: pc.x,
-        z: pc.z,
-        height: height - 0.15,
-        radius: 0.36,
-        primaryHex: plasmaHex,
-        secondaryHex: accentHex,
-        goldHex: '#e5c158',
-        basaltMat: stoneTrimMat,
-        trimMat,
-        phaseSeed: idx * 1.73 + 0.4,
-      });
-      root.add(plasmaCol);
-    });
-
-    // Scale Figure of a Player in a VR Headset (`фигура игрока в VR-шлеме`) anchoring the monumental scale of the room
-    root.add(
-      buildVRExplorerScaleFigure({
-        x: -5.2,
-        z: 1.8,
-        rotY: 0.32,
-        visorHex: accentHex,
-        trimHex: plasmaHex,
-      })
-    );
-
-    // Central Overhead Banner above the 3 North Portals: `ARTMAZE // NEUROMICON PROJECT` + GitHub Repo Link
-    root.add(
-      buildArtmazeHeaderBanner({
-        x: 0,
-        y: 5.75,
-        z: -halfD + 0.26,
-        width: 5.2,
-        height: 1.25,
-        accentHex,
-        plasmaHex,
-        repoUrl: node?.repo || 'github.com/AlexSheff/Neuromicon',
-        trimMat,
-      })
-    );
-
-    // Audio-Reactive Iridescent Soap Bubbles & Multi-Frequency Spherical Bokeh Particles inside Room
-    buildAudioReactiveBubblesAndParticles({
-      root,
-      radiusX: halfW - 1.2,
-      radiusZ: halfD - 1.2,
-      minY: 0.7,
-      maxY: height - 0.6,
-      bubbleCount: 16,
-      particleCount: 280,
-    });
-
-    // 3. Monumental 1:1 Square Framed Neuromicon Painting on West Sanctuary Wall (Grounded pedestal + Brass Gallery Picture Light!)
-    if (manifest.artwork) {
-      const artGroup = new THREE.Group();
-      artGroup.position.set(-halfW + 0.14, 0, -0.2);
-      artGroup.rotation.y = Math.PI * 0.5;
-
-      // Grounded stone plinth beneath the 1:1 square painting
-      const plinth = new THREE.Mesh(
-        new THREE.BoxGeometry(3.8, 0.38, 0.58),
-        stoneTrimMat
-      );
-      plinth.position.set(0, 0.19, 0.18);
-      artGroup.add(plinth);
-
-      // Sculpted metallic 1:1 square frame (3.56m x 3.56m)
-      const outerFrame = new THREE.Mesh(
-        new THREE.BoxGeometry(3.56, 3.56, 0.16),
-        trimMat
-      );
-      outerFrame.position.set(0, 2.55, 0.08);
-      artGroup.add(outerFrame);
-
-      // Physical Brass Gallery Picture Light Bar above the 1:1 Square Painting
-      const galleryLightHood = new THREE.Mesh(
-        new THREE.BoxGeometry(2.8, 0.1, 0.32),
-        trimMat
-      );
-      galleryLightHood.position.set(0, 4.44, 0.26);
-      artGroup.add(galleryLightHood);
-
-      const galleryLightTube = new THREE.Mesh(
-        new THREE.BoxGeometry(2.6, 0.06, 0.14),
-        warmLuminaireMat
-      );
-      galleryLightTube.position.set(0, 4.38, 0.3);
-      artGroup.add(galleryLightTube);
-
-      // 1:1 Square Painting canvas (3.2m x 3.2m) with live TextureLoader from https://github.com/AlexSheff/Neuromicon
-      const fallbackTex = createRoomPaintingFallbackTexture(
-        manifest.identity.symbol,
-        manifest.identity.name,
-        manifest.artwork.sector ?? manifest.identity.dimension,
-        accentHex
-      );
-      const paintingMat = new THREE.MeshBasicMaterial({ map: fallbackTex });
-
-      if (manifest.artwork.imageUrl && typeof document !== 'undefined') {
-        const loader = new THREE.TextureLoader();
-        loader.setCrossOrigin('anonymous');
-        loader.load(manifest.artwork.imageUrl, (loadedTex) => {
-          if (mountGen !== this.mountGeneration) {
-            loadedTex.dispose();
-            return;
-          }
-          fallbackTex.dispose();
-          loadedTex.colorSpace = THREE.SRGBColorSpace;
-          loadedTex.generateMipmaps = true;
-          paintingMat.map = loadedTex;
-          paintingMat.needsUpdate = true;
-        });
-      }
-
-      const canvasMesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(3.2, 3.2),
-        paintingMat
-      );
-      canvasMesh.position.set(0, 2.55, 0.17);
-      artGroup.add(canvasMesh);
-
-      // High-contrast Plaque above the 1:1 Square Painting
-      const artPlaqueTex = createSignageTexture(
-        manifest.identity.symbol,
-        manifest.identity.name,
-        manifest.identity.dimension,
-        'PAINTING & ESSAY',
-        accentHex,
-        '#f0d27a'
-      );
-      const artPlaque = new THREE.Mesh(
-        new THREE.PlaneGeometry(2.6, 0.88),
-        new THREE.MeshBasicMaterial({ map: artPlaqueTex })
-      );
-      artPlaque.position.set(0, 4.92, 0.16);
-      artGroup.add(artPlaque);
-
-      root.add(artGroup);
-      registerTarget(artGroup, {
-        id: `ROOM_ART_${manifest.id}`,
-        kind: 'artwork',
-        roomId: manifest.id,
-        title: manifest.artwork.title,
-        titleRu: manifest.artwork.title,
-        subtitle: 'Inspect Painting & Read Transmission Essay',
-        subtitleRu: 'Inspect Painting & Read Transmission Essay',
-      });
-    }
-
-    // 4. Wired Sci-Fi/Gothic Portals A, B, C + Conditional Rabbit Hole (RH) Grounded at y = 0 with Connected 3D Power Cables (§5 & §7.2)
-    const doorPlacements: Record<
-      'A' | 'B' | 'C' | 'RH',
-      { x: number; z: number; rotY: number }
-    > = {
-      A: { x: -4.2, z: -halfD + 0.08, rotY: 0 },
-      B: { x: 0, z: -halfD + 0.08, rotY: 0 },
-      C: { x: 4.2, z: -halfD + 0.08, rotY: 0 },
-      RH: { x: -halfW + 0.08, z: -5.2, rotY: Math.PI * 0.5 },
-    };
-
-    manifest.doors.forEach((door, doorIdx) => {
-      if (door.visibility === 'hidden') {
-        if (!door.requirement) return;
-        const reqKey = `${manifest.id}:${door.requirement.type}:${door.requirement.target}`;
-        if (!state.discoveries.includes(reqKey)) {
-          return;
-        }
-      }
-
-      const destManifest = ROOM_MANIFESTS[door.destination];
-      const destNode = getWorldNodes().find((n) => n.id === door.destination);
-      const isPlanned = destNode?.status === 'planned';
-      const pose = doorPlacements[door.id] ?? doorPlacements.C;
-      const isRH = door.id === 'RH';
-
-      const dMat = isRH
-        ? new THREE.MeshStandardMaterial({
-            color: '#f0d27a',
-            roughness: 0.2,
-            metalness: 0.88,
-            emissive: '#4a3510',
-            emissiveIntensity: 0.5,
-          })
-        : trimMat;
-
-      const destTitle =
-        destManifest?.identity.name || door.label || door.destination;
-      const destDim =
-        destManifest?.identity.dimension ||
-        destNode?.dimension ||
-        manifest.identity.dimension;
-
-      const plaqueTex = createSignageTexture(
-        door.symbol || door.id,
-        destTitle,
-        destDim,
-        door.destination,
-        isRH ? '#f0d27a' : accentHex,
-        isPlanned ? '#888888' : '#66cc99'
-      );
-
-      const dGroup = buildWiredSciFiGothicPortal({
-        x: pose.x,
-        z: pose.z,
-        rotY: pose.rotY,
-        width: 2.35,
-        height: 3.65,
-        frameMat: dMat,
-        vortexMat: doorLeafMat,
-        accentHex: isRH ? '#f0d27a' : accentHex,
-        plasmaHex: skyRig.palette[1] ?? '#9d4edd',
-        statusColorHex: isPlanned ? '#888888' : isRH ? '#f0d27a' : '#66cc99',
-        plaqueTex,
-        plaqueWidth: 2.15,
-        plaqueHeight: 0.78,
-        cableSpread: 0.88,
-        phaseSeed: doorIdx * 1.45 + 0.5,
-      });
-
-      root.add(dGroup);
-      registerTarget(dGroup, {
-        id: `ROOM_DOOR_${door.id}`,
-        kind: 'room-door',
-        doorId: door.id,
-        roomId: door.destination,
-        status: isPlanned ? 'planned' : 'ready',
-        title: `${door.symbol || door.id} · ${destTitle}`,
-        titleRu: `${door.symbol || door.id} · ${destTitle}`,
-        subtitle: `${destDim} · Wired Portal`,
-        subtitleRu: `${destDim} · Wired Portal`,
-      });
-    });
-
-    // 5. Non-Portable Physical Room Objects & Busyboards (Placed on Flanking Sanctuary Pedestals, NEVER blocking Door B!)
-    const physicalObjects = manifest.objects.filter((o) => !o.onlyInMirror);
-    physicalObjects.forEach((obj, idx) => {
-      // Flanking positions (x = -3.6 or +3.6, z = 2.0) keep the central sightline to Doors A, B, C 100% open!
-      const side = idx % 2 === 0 ? -1 : 1;
-      const rowOffset = Math.floor(idx / 2) * 2.4;
-      const ox = side * 3.6;
-      const oz = 2.0 + rowOffset;
-
-      const objGroup = new THREE.Group();
-      objGroup.position.set(ox, 0, oz);
-      objGroup.rotation.y = side < 0 ? Math.PI * 0.18 : -Math.PI * 0.18;
-
-      // Sculpted Octagonal Sanctuary Pedestal + Warm Illuminated Ring
-      const ped = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.56, 0.68, 0.88, 8),
-        stoneTrimMat
-      );
-      ped.position.y = 0.44;
-      objGroup.add(ped);
-
-      const pedLightRing = new THREE.Mesh(
-        new THREE.TorusGeometry(0.58, 0.035, 10, 24),
-        warmLuminaireMat
-      );
-      pedLightRing.rotation.x = Math.PI * 0.5;
-      pedLightRing.position.y = 0.88;
-      objGroup.add(pedLightRing);
-
-      if (obj.type === 'busyboard') {
-        const ring1 = new THREE.Mesh(
-          new THREE.TorusGeometry(0.46, 0.04, 14, 36),
-          trimMat
-        );
-        ring1.position.y = 1.48;
-        objGroup.add(ring1);
-
-        const ring2 = new THREE.Mesh(
-          new THREE.TorusGeometry(0.31, 0.035, 14, 32),
-          trimMat
-        );
-        ring2.rotation.y = Math.PI * 0.35;
-        ring2.position.y = 1.48;
-        objGroup.add(ring2);
-      } else {
-        // Sculpted Crystalline Resonator cradled inside a Bronze Harmonic Ring (never a plain column!)
-        const outerCradle = new THREE.Mesh(
-          new THREE.TorusGeometry(0.44, 0.035, 12, 32),
-          trimMat
-        );
-        outerCradle.position.y = 1.48;
-        objGroup.add(outerCradle);
-
-        const crystalCore = new THREE.Mesh(
-          new THREE.OctahedronGeometry(0.26, 0),
-          trimMat
-        );
-        crystalCore.position.y = 1.48;
-        objGroup.add(crystalCore);
-      }
-
-      const oPlaqueTex = createSignageTexture(
-        obj.type === 'busyboard' ? '⚙' : '◆',
-        obj.title || obj.id,
-        manifest.identity.dimension,
-        manifest.id,
-        accentHex,
-        '#f3ede2'
-      );
-      const oPlaque = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.65, 0.56),
-        new THREE.MeshBasicMaterial({
-          map: oPlaqueTex,
-          side: THREE.DoubleSide,
-        })
-      );
-      oPlaque.position.set(0, 2.32, 0);
-      objGroup.add(oPlaque);
-
-      root.add(objGroup);
-      registerTarget(objGroup, {
-        id: `OBJ_${obj.id}`,
-        kind: 'room-object',
-        objectId: obj.id,
-        title: obj.title || obj.id,
-        titleRu: obj.title || obj.id,
-        subtitle: manifest.identity.dimension,
-        subtitleRu: manifest.identity.dimension,
-      });
-    });
-
-    // 6. The Mirror System on East Wall (Grounded at y = 0, with Twin Alabaster Luminaire Columns + 3D Mirror Choices + Ghost Reflection!)
-    const mirrorGroup = new THREE.Group();
-    mirrorGroup.position.set(halfW - 0.1, 0, -0.5);
-    mirrorGroup.rotation.y = -Math.PI * 0.5;
-
-    const mBase = new THREE.Mesh(
-      new THREE.BoxGeometry(3.8, 0.24, 0.58),
-      stoneTrimMat
-    );
-    mBase.position.set(0, 0.12, 0.2);
-    mirrorGroup.add(mBase);
-
-    const mSurround = new THREE.Mesh(
-      new THREE.BoxGeometry(3.75, 3.9, 0.16),
-      trimMat
-    );
-    mSurround.position.set(0, 2.05, 0.06);
-    mirrorGroup.add(mSurround);
-
-    // Twin Vertical Alabaster Luminaire Columns flanking the Mirror Glass
-    [-1.8, 1.8].forEach((mx) => {
-      const mLamp = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.05, 0.05, 3.4, 12),
-        warmLuminaireMat
-      );
-      mLamp.position.set(mx, 2.05, 0.2);
-      mirrorGroup.add(mLamp);
-    });
-
-    const glass = new THREE.Mesh(
-      new THREE.PlaneGeometry(3.4, 3.6),
-      new THREE.MeshStandardMaterial({
-        color: '#14293e',
-        roughness: 0.08,
-        metalness: 0.88,
-        transparent: true,
-        opacity: 0.82,
-      })
-    );
-    glass.position.set(0, 2.05, 0.15);
-    mirrorGroup.add(glass);
-
-    const mPlaqueTex = createSignageTexture(
-      'MIRROR',
-      manifest.mirror.characterState,
-      `Identity: ${
-        state.identityChoices[manifest.id]?.toUpperCase() ?? 'UNDECIDED'
-      }`,
-      'ACCEPT · REJECT · BACK',
-      '#7cc6f2',
-      '#f0d27a'
-    );
-    const mPlaque = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.6, 0.85),
-      new THREE.MeshBasicMaterial({ map: mPlaqueTex })
-    );
-    mPlaque.position.set(0, 4.42, 0.22);
-    mirrorGroup.add(mPlaque);
-
-    const choices: Array<{
-      choice: 'accept' | 'reject' | 'back';
-      label: string;
-      x: number;
-      color: string;
-    }> = [
-      {
-        choice: 'accept',
-        label: 'ACCEPT IDENTITY',
-        x: -1.15,
-        color: '#66cc99',
-      },
-      {
-        choice: 'reject',
-        label: 'REJECT IDENTITY',
-        x: 0,
-        color: '#e07a5f',
-      },
-      {
-        choice: 'back',
-        label: 'BACK TO CORRIDOR',
-        x: 1.15,
-        color: '#c8a464',
-      },
-    ];
-
-    choices.forEach((c) => {
-      const btnMesh = new THREE.Mesh(
-        new THREE.BoxGeometry(0.95, 0.42, 0.25),
-        new THREE.MeshStandardMaterial({
-          color: c.color,
-          roughness: 0.3,
-          metalness: 0.7,
-        })
-      );
-      btnMesh.position.set(c.x, 1.05, 0.42);
-      mirrorGroup.add(btnMesh);
-
-      registerTarget(btnMesh, {
-        id: `MIRROR_CHOICE_${c.choice}`,
-        kind: 'room-mirror',
-        mirrorChoice: c.choice,
-        title: `Mirror: ${c.label}`,
-        titleRu: `Mirror: ${c.label}`,
-        subtitle: manifest.mirror.characterState,
-        subtitleRu: manifest.mirror.characterState,
-      });
-    });
-
-    // Ghost Objects that exist ONLY inside the Mirror Reflection (`onlyInMirror: true`, §5 & §7.7!)
-    manifest.objects
-      .filter((o) => o.onlyInMirror)
-      .forEach((ghostObj) => {
-        const ghostMesh = new THREE.Mesh(
-          new THREE.OctahedronGeometry(0.48, 0),
-          new THREE.MeshStandardMaterial({
-            color: '#9be2ff',
-            roughness: 0.15,
-            metalness: 0.9,
-            emissive: '#2c7da0',
-            emissiveIntensity: 0.85,
-          })
-        );
-        ghostMesh.position.set(0, 2.35, 0.25);
-        mirrorGroup.add(ghostMesh);
-
-        registerTarget(ghostMesh, {
-          id: `GHOST_${ghostObj.id}`,
-          kind: 'room-object',
-          objectId: ghostObj.id,
-          title: `${ghostObj.title || ghostObj.id} [MIRROR ANOMALY]`,
-          titleRu: `${ghostObj.title || ghostObj.id} [MIRROR ANOMALY]`,
-          subtitle: 'Interact with Reflection to Unlock Rabbit Hole (Door RH)',
-          subtitleRu: 'Interact with Reflection to Unlock Rabbit Hole (Door RH)',
-        });
-      });
-
-    root.add(mirrorGroup);
-
-    // 7. South Wired Exit Portal: Return to the Sector Room (Stops Room MP3 on exit)
-    const sPlaqueTex = createSignageTexture(
-      '↺',
-      `SECTOR ROOM ${state.segmentIndex}`,
-      'EXIT ROOM (STOPS TRACK)',
-      'RETURN PORTAL',
-      accentHex,
-      '#d8cfc0'
-    );
-
-    const southExitGroup = buildWiredSciFiGothicPortal({
-      x: 0,
-      z: halfD - 0.12,
-      rotY: Math.PI,
-      width: 2.55,
-      height: 3.7,
-      frameMat: trimMat,
-      vortexMat: doorLeafMat,
-      accentHex,
-      plasmaHex: skyRig.palette[1] ?? '#9d4edd',
-      statusColorHex: '#ffe8a3',
-      plaqueTex: sPlaqueTex,
-      plaqueWidth: 2.2,
-      plaqueHeight: 0.82,
-      cableSpread: 0.95,
-      phaseSeed: 5.2,
-    });
-
-    root.add(southExitGroup);
-    registerTarget(southExitGroup, {
-      id: `ROOM_SOUTH_EXIT_${manifest.id}`,
-      kind: 'room-door',
-      roomId: 'CORRIDOR',
-      title: `↺ RETURN TO SECTOR ROOM ${state.segmentIndex}`,
-      titleRu: `↺ RETURN TO SECTOR ROOM ${state.segmentIndex}`,
-      subtitle: 'Leave Room & Stop Track',
-      subtitleRu: 'Leave Room & Stop Track',
-    });
+    this.proceduralUpdate = proc.update;
 
     // 8. Execute Room API v1 `mount(ctx)` from `room-template/index.ts`
     this.activeModule = templateRoomModule;

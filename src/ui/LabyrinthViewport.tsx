@@ -677,260 +677,197 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
             </span>
           </span>
         </div>
-        <div className="pointer-events-auto flex max-w-[calc(100vw-2rem)] flex-wrap items-center justify-end gap-1.5 rounded-2xl border border-white/10 bg-[#080b12]/70 p-2 shadow-[0_8px_36px_rgba(0,0,0,0.32)] backdrop-blur-xl sm:max-w-[calc(100vw-3rem)] sm:gap-2 sm:p-2.5">
-        {vrSupported && (
-          <button
-            onClick={() => {
-              spatialAudioSystem.start();
-              void webxrManager.toggleVRSession();
-            }}
-            title="Enter / Exit WebXR (Meta Quest 2)"
-            className={`px-3 py-1.5 rounded text-xs font-mono border transition-colors ${
-              xrActive
-                ? 'bg-[#e5c158] text-[#0b0a09] border-[#e5c158] font-semibold'
-                : 'bg-[#12100e]/85 text-[#e5c158] border-[#c8a464]/50 hover:border-[#e5c158]'
-            }`}
-          >
-            {t('entry.vr', 'en')}
-          </button>
-        )}
+        <div className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/10 bg-[#080b12]/80 px-3 py-2 shadow-[0_8px_36px_rgba(0,0,0,0.32)] backdrop-blur-xl">
+          {vrSupported && (
+            <button
+              onClick={() => {
+                spatialAudioSystem.start();
+                void webxrManager.toggleVRSession();
+              }}
+              title="Enter / Exit WebXR"
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono border transition-colors ${
+                xrActive
+                  ? 'bg-[#e5c158] text-[#0b0a09] border-[#e5c158] font-bold'
+                  : 'bg-white/5 text-[#e5c158] border-[#c8a464]/50 hover:border-[#e5c158]'
+              }`}
+            >
+              {xrActive ? 'EXIT VR' : 'ENTER VR'}
+            </button>
+          )}
 
-        {isControlRevealed('zoom') && (
           <button
             onClick={() => {
-              const eng = engineRef.current;
-              if (eng) {
-                const next = !eng.isFovZoom();
-                eng.setFovZoom(next);
-                setZoomActive(next);
+              hubPlayerState.toggleAudioMuted();
+              if (engineRef.current?.isPaused()) {
+                engineRef.current.mountWorldLockedPausePanel();
               }
             }}
-            title="Zoom (C)"
-            className={`px-3 py-1.5 rounded text-xs font-mono border transition-colors ${
-              zoomActive
-                ? 'bg-[#c8a464] text-[#0b0a09] border-[#c8a464] font-semibold'
-                : 'bg-[#12100e]/85 text-[#d8cfc0] border-white/15 hover:border-[#c8a464]/60'
+            title="Mute / Unmute Audio (M)"
+            className={`p-1.5 rounded-lg text-sm border transition-colors ${
+              hubState.audio.muted
+                ? 'bg-[#ff6b6b]/20 text-[#ff6b6b] border-[#ff6b6b]/50'
+                : 'bg-white/5 text-[#d8cfc0] border-white/15 hover:border-[#c8a464]/60'
             }`}
           >
-            ◎ {!xrActive && 'C'}
+            {hubState.audio.muted ? '🔇' : '🔊'}
           </button>
-        )}
 
-        {isControlRevealed('radio') && (
           <button
-            onClick={() =>
-              setActiveDrawer((prev) => (prev === 'radio' ? 'none' : 'radio'))
-            }
-            title="Radio Signal (T)"
-            className={`px-3 py-1.5 rounded text-xs font-mono border transition-colors ${
-              activeDrawer === 'radio'
-                ? 'bg-[#c8a464] text-[#0b0a09] border-[#c8a464] font-semibold'
-                : 'bg-[#12100e]/85 text-[#d8cfc0] border-white/15 hover:border-[#c8a464]/60'
+            onClick={() => {
+              engineRef.current?.togglePause();
+            }}
+            title="Menu / Settings (P / Esc)"
+            className={`px-3 py-1.5 rounded-lg text-xs font-mono border transition-colors flex items-center gap-1.5 ${
+              isPaused
+                ? 'bg-[#e5c158] text-[#0b0a09] border-[#e5c158] font-bold'
+                : 'bg-white/5 text-[#d8cfc0] border-white/15 hover:border-[#c8a464]/60'
             }`}
           >
-            (((·))) {!xrActive && 'T'}
+            <span>{isPaused ? '▶' : '☰'}</span>
+            <span>{isPaused ? 'RESUME' : 'MENU'}</span>
           </button>
-        )}
-
-        <button
-          onClick={() => {
-            hubPlayerState.toggleAudioMuted();
-            if (engineRef.current?.isPaused()) {
-              engineRef.current.mountWorldLockedPausePanel();
-            }
-          }}
-          title="Mute / Unmute Audio (M)"
-          className={`px-3 py-1.5 rounded text-xs font-mono border transition-colors ${
-            hubState.audio.muted
-              ? 'bg-[#ff6b6b]/20 text-[#ff6b6b] border-[#ff6b6b]/50 font-semibold'
-              : 'bg-[#12100e]/85 text-[#d8cfc0] border-white/15 hover:border-[#c8a464]/60'
-          }`}
-        >
-          {hubState.audio.muted ? '🔇' : '🔊'} {!xrActive && 'M'}
-        </button>
-
-        <button
-          onClick={() =>
-            setActiveDrawer((prev) => (prev === 'audio' ? 'none' : 'audio'))
-          }
-          title="4-Bus Audio Mixer (Z)"
-          className={`px-3 py-1.5 rounded text-xs font-mono border transition-colors ${
-            activeDrawer === 'audio'
-              ? 'bg-[#c8a464] text-[#0b0a09] border-[#c8a464] font-semibold'
-              : 'bg-[#12100e]/85 text-[#d8cfc0] border-white/15 hover:border-[#c8a464]/60'
-          }`}
-        >
-          ♫ {!xrActive && 'Z'}
-        </button>
-
-        {isControlRevealed('comfort') && (
-          <button
-            onClick={() =>
-              setActiveDrawer((prev) =>
-                prev === 'comfort' ? 'none' : 'comfort'
-              )
-            }
-            title="Comfort & Quality Tier (Alt)"
-            className={`px-3 py-1.5 rounded text-xs font-mono border transition-colors ${
-              activeDrawer === 'comfort'
-                ? 'bg-[#c8a464] text-[#0b0a09] border-[#c8a464] font-semibold'
-                : 'bg-[#12100e]/85 text-[#d8cfc0] border-white/15 hover:border-[#c8a464]/60'
-            }`}
-          >
-            ✥ {!xrActive && 'Alt'}
-          </button>
-        )}
-
-        <button
-          onClick={() => {
-            engineRef.current?.togglePause();
-          }}
-          title="Pause / Resume Game Clock & Audio (P / Esc)"
-          className={`px-3 py-1.5 rounded text-xs font-mono border transition-colors ${
-            isPaused
-              ? 'bg-[#e5c158] text-[#0b0a09] border-[#e5c158] font-semibold'
-              : 'bg-[#12100e]/85 text-[#d8cfc0] border-white/15 hover:border-[#c8a464]/60'
-          }`}
-        >
-          {isPaused ? '▶' : '⏸'} {!xrActive && 'P'}
-        </button>
-
-        {/* Codex Journal button (replaces Rules overlay; always available via wrist/top-right or Key R, §2.5) */}
-        <button
-          onClick={() =>
-            setActiveDrawer((prev) => (prev === 'codex' ? 'none' : 'codex'))
-          }
-          title="Codex Journal (R)"
-          className={`px-3 py-1.5 rounded text-xs font-mono border transition-colors ${
-            activeDrawer === 'codex'
-              ? 'bg-[#c8a464] text-[#0b0a09] border-[#c8a464] font-semibold'
-              : 'bg-[#12100e]/85 text-[#d8cfc0] border-white/15 hover:border-[#c8a464]/60'
-          }`}
-        >
-          ❖ {!xrActive && 'R'}
-        </button>
         </div>
       </div>
 
-      {/* Desktop & Non-Blocking Pause Overlay (Mirrors the 3D World-Locked VR Pause Panel, TZ.md §6.1–§6.3) */}
+      {/* Clean, Non-Blocking Pause / Menu Modal */}
       {isPaused && (
-        <div className="absolute top-16 left-4 w-[390px] max-w-[calc(100vw-2rem)] bg-[#080b14]/95 border border-[#e5c158]/50 rounded p-5 text-xs text-[#e8e2d5] backdrop-blur-md shadow-2xl z-20 space-y-3.5">
-          <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+        <div className="absolute top-16 left-4 sm:left-6 w-[380px] max-w-[calc(100vw-2rem)] bg-[#080b14]/95 border border-[#e5c158]/40 rounded-xl p-5 text-xs text-[#e8e2d5] backdrop-blur-xl shadow-2xl z-20 space-y-4">
+          <div className="flex items-center justify-between border-b border-white/10 pb-3">
             <div>
               <span className="font-display text-sm font-semibold text-[#e5c158] tracking-wider block">
-                ⏸ PAUSED · WORLD CLOCK FROZEN
+                NEUROMICON MENU
               </span>
               <span className="font-mono text-[10px] text-[#a89f91]">
-                {`Game Time ${telemetry.gameTimeSec.toFixed(
-                  1
-                )}s · Head tracking & 3D VR panel live`}
+                {hubState.location === 'threshold'
+                  ? 'Cosmic Nexus'
+                  : hubState.location === 'corridor'
+                  ? `Sector ${hubState.segmentIndex}`
+                  : hubState.currentRoomId || 'Atmospheric Space'}
               </span>
             </div>
             <button
               onClick={() => engineRef.current?.setPaused(false)}
-              className="px-3 py-1.5 rounded bg-[#66cc99] text-[#080b14] font-mono font-semibold text-xs hover:bg-[#7ee0b0]"
+              className="px-3.5 py-1.5 rounded-lg bg-[#e5c158] text-[#080b14] font-mono font-bold text-xs hover:bg-[#f3d37a] transition-colors"
             >
-              ▶ Resume (P)
+              ▶ Resume (Esc)
             </button>
           </div>
 
-          {/* Active Astronomical Nebula Attribution */}
-          <div className="p-2.5 rounded bg-white/5 border border-white/10 font-mono text-[11px] space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-[#e5c158] font-semibold truncate">
-                {`${telemetry.nebulaId} · ${telemetry.nebulaName}`}
-              </span>
-              <div className="flex items-center gap-1 ml-2">
-                {telemetry.nebulaPalette.map((hex, i) => (
-                  <span
-                    key={`${hex}-${i}`}
-                    className="w-3 h-3 rounded-full border border-white/25 inline-block"
-                    style={{ backgroundColor: hex }}
-                  />
-                ))}
-              </div>
-            </div>
-            <div className="text-[10px] text-[#a89f91] truncate">
-              {`Credit: ${telemetry.nebulaCredit} (${telemetry.nebulaLicense})`}
-            </div>
-          </div>
-
-          {/* 4-Bus Volume Mixer inside Pause Menu (TZ.md §5.2 & §6.1) */}
-          <div className="space-y-2 border-t border-white/10 pt-2.5">
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-[11px] text-[#d8cfc0]">
-                Master / Bus Mixer (`[` `]` / `M`):
-              </span>
+          {/* Master Volume & Mute */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between font-mono text-[11px]">
+              <span className="text-[#d8cfc0]">Sound & Music (M)</span>
               <button
                 onClick={() => {
                   hubPlayerState.toggleAudioMuted();
                   engineRef.current?.mountWorldLockedPausePanel();
                 }}
-                className={`px-2.5 py-1 rounded font-mono text-[10px] ${
+                className={`px-2.5 py-0.5 rounded font-mono text-[10px] ${
                   hubState.audio.muted
                     ? 'bg-[#ff6b6b]/20 text-[#ff6b6b] border border-[#ff6b6b]/40'
                     : 'bg-[#66cc99]/20 text-[#66cc99] border border-[#66cc99]/40'
                 }`}
               >
-                {hubState.audio.muted ? '🔇 MUTED (M)' : '🔊 ACTIVE (M)'}
+                {hubState.audio.muted ? 'MUTED' : `${Math.round(hubState.audio.master * 100)}%`}
+              </button>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.02}
+              value={hubState.audio.master}
+              onChange={(e) => {
+                hubPlayerState.setAudioVolume('master', parseFloat(e.target.value));
+                engineRef.current?.mountWorldLockedPausePanel();
+              }}
+              className="w-full accent-[#c8a464] h-1.5"
+            />
+          </div>
+
+          {/* Comfort & Movement Mode */}
+          <div className="space-y-2.5 border-t border-white/10 pt-3">
+            <div className="font-mono text-[10px] uppercase tracking-wider text-[#a89f91]">
+              Locomotion & Comfort
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {(['teleport', 'smooth'] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => hubPlayerState.setComfortMode(m)}
+                  className={`py-1.5 rounded-lg font-mono text-[11px] uppercase border transition-colors ${
+                    hubState.comfort.locomotion === m
+                      ? 'bg-[#c8a464] text-[#0b0a09] border-[#c8a464] font-bold'
+                      : 'bg-white/5 text-[#d8cfc0] border-white/10 hover:border-white/20'
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-[#d8cfc0] font-mono text-[11px]">Posture</span>
+              <button
+                onClick={() =>
+                  hubPlayerState.setSeatedPosture(!hubState.comfort.seated)
+                }
+                className="px-3 py-1 rounded-lg font-mono text-[10px] bg-white/5 border border-white/10 text-[#f3ede2]"
+              >
+                {hubState.comfort.seated ? 'SEATED' : 'STANDING'}
               </button>
             </div>
 
-            {(
-              [
-                { key: 'master', label: 'Master Volume ([ / ])' },
-                { key: 'music', label: 'Music (Room MP3 Track)' },
-                { key: 'ambient', label: 'Ambient (Atrium Drone)' },
-                { key: 'sfx', label: 'Effects (Chimes & UI)' },
-                { key: 'voice', label: 'Voice / Radio Signal' },
-              ] as const
-            ).map((bus) => (
-              <div key={bus.key}>
-                <div className="flex justify-between text-[10px] font-mono text-[#a89f91]">
-                  <span>{bus.label}</span>
-                  <span>{Math.round(hubState.audio[bus.key] * 100)}%</span>
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.02}
-                  value={hubState.audio[bus.key]}
-                  onChange={(e) => {
-                    hubPlayerState.setAudioVolume(
-                      bus.key,
-                      parseFloat(e.target.value)
-                    );
-                    engineRef.current?.mountWorldLockedPausePanel();
-                  }}
-                  className="w-full accent-[#c8a464] h-1.5"
-                />
-              </div>
-            ))}
+            <div className="flex items-center justify-between">
+              <span className="text-[#d8cfc0] font-mono text-[11px]">Reduced Motion</span>
+              <button
+                onClick={() => hubPlayerState.toggleReducedMotion()}
+                className={`px-3 py-1 rounded-lg font-mono text-[10px] border ${
+                  hubState.comfort.reducedMotion
+                    ? 'bg-[#66cc99]/20 text-[#66cc99] border-[#66cc99]/40'
+                    : 'bg-white/5 border-white/10 text-[#a89f91]'
+                }`}
+              >
+                {hubState.comfort.reducedMotion ? 'ON' : 'OFF'}
+              </button>
+            </div>
           </div>
 
-          {/* Quick Actions in Pause Menu */}
-          <div className="border-t border-white/10 pt-2.5 flex gap-2">
-            {hubState.location === 'room' && (
+          {/* Return button if in room */}
+          {hubState.location === 'room' && (
+            <div className="border-t border-white/10 pt-3">
               <button
                 onClick={() => {
                   engineRef.current?.setPaused(false);
                   engineRef.current?.transitionToDestination('CORRIDOR');
                 }}
-                className="flex-1 py-1.5 px-2.5 rounded bg-white/10 hover:bg-white/15 text-[#f3ede2] font-mono text-[11px]"
+                className="w-full py-2 px-3 rounded-lg bg-white/10 hover:bg-white/15 text-[#f3ede2] font-mono text-[11px] text-center transition-colors"
               >
-                ↺ Return to Sector Room
+                ↺ Return to Sector Corridor
               </button>
-            )}
-            <button
-              onClick={() => {
-                setActiveDrawer('codex');
-              }}
-              className="flex-1 py-1.5 px-2.5 rounded bg-white/10 hover:bg-white/15 text-[#e5c158] font-mono text-[11px]"
-            >
-              ❖ Open Codex (R)
-            </button>
-          </div>
+            </div>
+          )}
+
+          {/* Astronomical Nebula Attribution */}
+          {telemetry.nebulaId && (
+            <div className="border-t border-white/10 pt-3 font-mono text-[10px] text-[#a89f91] space-y-1">
+              <div className="flex items-center justify-between text-[#e5c158]">
+                <span>{telemetry.nebulaName || telemetry.nebulaId}</span>
+                <div className="flex items-center gap-1">
+                  {telemetry.nebulaPalette.map((hex, i) => (
+                    <span
+                      key={`${hex}-${i}`}
+                      className="w-2.5 h-2.5 rounded-full border border-white/20 inline-block"
+                      style={{ backgroundColor: hex }}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="truncate text-white/50">
+                NASA/ESA · {telemetry.nebulaCredit}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1042,61 +979,7 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
             >
               ↺ Replay Awakening
             </button>
-
-            <button
-              onClick={() => {
-                const eng = engineRef.current;
-                if (eng) {
-                  setLeakResult(eng.runLeakCheck());
-                }
-              }}
-              className="px-3 py-1.5 rounded bg-[#c8a464]/20 hover:bg-[#c8a464]/30 border border-[#c8a464]/40 text-[#e5c158] font-mono text-[11px]"
-            >
-              30-Transition GPU Test
-            </button>
           </div>
-
-          {leakResult && (
-            <div className="mt-2.5 p-2.5 rounded bg-black/50 border border-white/10 font-mono text-[11px]">
-              <div className="text-[#66cc99]">
-                ✓ {leakResult.iterations} mount/unmount cycles:{' '}
-                {leakResult.passed ? 'PASSED (0 leaks)' : 'FAILED'}
-              </div>
-              <div className="text-[#a89f91] mt-0.5">
-                {`Δgeo: ${leakResult.geometriesDelta} · Δtex: ${leakResult.texturesDelta} · Δmat: ${leakResult.materialLeaks} · ${telemetry.fps} FPS (${telemetry.frameTimeMs} ms)`}
-              </div>
-            </div>
-          )}
-
-          {/* Optional Studio Inspector Links */}
-          {onOpenStudioSection && (
-            <div className="border-t border-white/10 mt-3 pt-3 flex flex-wrap gap-1.5">
-              <button
-                onClick={() => onOpenStudioSection('registry')}
-                className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-[11px] font-mono text-[#a89f91]"
-              >
-                World Graph
-              </button>
-              <button
-                onClick={() => onOpenStudioSection('manifests')}
-                className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-[11px] font-mono text-[#a89f91]"
-              >
-                Room Bible
-              </button>
-              <button
-                onClick={() => onOpenStudioSection('validator')}
-                className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-[11px] font-mono text-[#a89f91]"
-              >
-                Validator
-              </button>
-              <button
-                onClick={() => onOpenStudioSection('protocol')}
-                className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-[11px] font-mono text-[#a89f91]"
-              >
-                Protocol Docs
-              </button>
-            </div>
-          )}
         </div>
       )}
 
@@ -1281,29 +1164,6 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
                 </button>
               ))}
             </div>
-          </div>
-
-          <div
-            aria-label="Live render performance metrics"
-            className="rounded border border-white/10 bg-black/30 p-3"
-          >
-            <div className="mb-2 font-mono text-[11px] font-semibold uppercase tracking-wide text-[#e5c158]">
-              Live Performance
-            </div>
-            <div className="grid grid-cols-3 gap-x-3 gap-y-2 font-mono text-[11px]">
-              <div><span className="block text-[#a89f91]">FPS</span><span>{telemetry.fps}</span></div>
-              <div><span className="block text-[#a89f91]">Frame</span><span>{telemetry.frameTimeMs} ms</span></div>
-              <div><span className="block text-[#a89f91]">Draw calls</span><span>{telemetry.drawCalls}</span></div>
-              <div><span className="block text-[#a89f91]">Triangles</span><span>{telemetry.triangles.toLocaleString()}</span></div>
-              <div><span className="block text-[#a89f91]">Geometries</span><span>{telemetry.geometries}</span></div>
-              <div><span className="block text-[#a89f91]">Textures</span><span>{telemetry.textures}</span></div>
-              <div><span className="block text-[#a89f91]">Texture GPU est.</span><span>{telemetry.textureMemoryMB} MB</span></div>
-              <div><span className="block text-[#a89f91]">Sky calls</span><span>{telemetry.skyDrawCalls}</span></div>
-              <div><span className="block text-[#a89f91]">Resolution</span><span>{telemetry.resolutionScale}×</span></div>
-            </div>
-            <p className="mt-2 text-[10px] leading-relaxed text-[#a89f91]">
-              Texture memory is an estimate from loaded image dimensions and pixel format.
-            </p>
           </div>
         </div>
       )}

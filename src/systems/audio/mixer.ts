@@ -20,7 +20,7 @@ export interface GainRampRecord {
 export const DEFAULT_AUDIO_VOLUME_STATE: AudioVolumeState = {
   master: 0.7,
   music: 0.8,
-  ambient: 0.8,
+  ambient: 0.0,
   sfx: 0.8,
   voice: 0.8,
   muted: false,
@@ -137,6 +137,24 @@ export class AudioMixer {
   }
 
   /**
+   * Unlocks WebAudio on user interaction (pointerdown, click, touch, keydown).
+   */
+  public async unlockAudio(): Promise<boolean> {
+    const ctx = this.ensureContext();
+    if (!ctx) return false;
+    if (ctx.state === 'suspended') {
+      try {
+        await ctx.resume();
+        this.applyAllGainsImmediateOrRamp(true);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
    * Room API v1 & Hub Bus Accessor (`ctx.audio.bus('music' | 'ambient' | 'sfx' | 'voice')`, TZ.md §5.1).
    */
   public bus(name: AudioBusName): GainNode | null {
@@ -245,7 +263,7 @@ export class AudioMixer {
         ? 0
         : sliderToPerceptualGain(this.state.master);
     const musicTarget = sliderToPerceptualGain(this.state.music);
-    const ambientTarget = sliderToPerceptualGain(this.state.ambient);
+    const ambientTarget = 0; // Pure music mode: zero ambient drone or hum
     const sfxTarget = sliderToPerceptualGain(this.state.sfx);
     const voiceTarget = sliderToPerceptualGain(this.state.voice);
 

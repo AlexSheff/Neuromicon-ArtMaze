@@ -48,13 +48,13 @@ export const I18N_STRINGS: Record<string, I18nEntry> = {
 
   // Audio Accessibility Captions (§2.8)
   'caption.drone_swell': {
-    en: '[Low subterranean resonance swells below; faint harmonic shimmer above]',
-    ru: '[Внизу нарастает глубокий гул; вверху мерцает высокий гармонический тон]',
+    en: '[Harmonic music resonates through the cosmic atrium; celestial shimmer above]',
+    ru: '[Гармоническая музыка наполняет космический атриум; вверху мерцает свет]',
     justification: 'Deaf/hard-of-hearing accessibility caption for vertical acoustic cues (§2.8).',
   },
   'caption.pedestal_hum': {
-    en: '[The central stone monolith hums with a warm chord]',
-    ru: '[Центральный каменный монолит отзывается тёплым аккордом]',
+    en: '[The central stone monolith responds with a warm harmonic chord]',
+    ru: '[Центральный каменный монолит отзывается тёплым гармоническим аккордом]',
     justification: 'Accessibility caption for spatial interaction cue (§2.8).',
   },
   'caption.atrium_reveal': {
