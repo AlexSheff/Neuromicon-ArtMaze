@@ -558,7 +558,7 @@ export class ThreeLabyrinthEngine {
     // Animate dust particles with music, drum kick shockwaves, snare shimmer, and tone
     if (this.dustParticles) {
       const spectrum = spatialAudioSystem.getMultiBandSpectrum(timeSec);
-      this.dustParticles.rotation.y = timeSec * 0.025 + spectrum.beatPulse * 0.04;
+      this.dustParticles.rotation.y = timeSec * 0.025;
       const pMat = this.dustParticles.material as THREE.PointsMaterial;
       if (pMat) {
         pMat.size = 0.042 * (1.0 + spectrum.drumKick * 0.65 + spectrum.overallEnergy * 0.35);
@@ -1336,10 +1336,10 @@ export class ThreeLabyrinthEngine {
       emissiveIntensity: 0.35,
     });
     const gateArch = new THREE.Mesh(
-      new THREE.BoxGeometry(2.1, 3.4, 0.2),
+      new THREE.TorusGeometry(1.25, 0.12, 16, 48),
       gateMat
     );
-    gateArch.position.set(0, 1.7, 0);
+    gateArch.position.set(0, 1.8, 0);
     gateGroup.add(gateArch);
 
     const gatePlaqueTex = createArchitecturalPlaqueTexture(

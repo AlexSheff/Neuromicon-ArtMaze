@@ -111,11 +111,58 @@ export class SpatialAudioSystem {
     isLiveSignal: false,
   };
 
+  private pendingAutoplay = false;
+
   constructor() {
     // Sync HTMLAudioElement fallback volume whenever mixer state changes
     audioMixer.subscribe(() => {
       this.syncElementVolume();
     });
+    this.setupAutoplayUnlock();
+  }
+
+  /**
+   * Automatically unlocks audio and starts/resumes the intro track on the first user interaction
+   * (pointerdown, keydown, touchstart, or XR session start).
+   */
+  public setupAutoplayUnlock(): void {
+    if (typeof window === 'undefined') return;
+    const unlock = () => {
+      this.unlockAudioAndResume();
+    };
+
+    window.addEventListener('pointerdown', unlock, { passive: true, once: false });
+    window.addEventListener('keydown', unlock, { passive: true, once: false });
+    window.addEventListener('touchstart', unlock, { passive: true, once: false });
+  }
+
+  public unlockAudioAndResume(): void {
+    void audioMixer.unlockAudio();
+    const ctx = audioMixer.ensureContext();
+    if (ctx && ctx.state === 'suspended') {
+      void ctx.resume();
+    }
+    if (!this.pausedByGame && !audioMixer.getState().muted) {
+      if (!this.mp3Audio || !this.currentRoomTrackUrl) {
+        this.playRoomSoundtrack(
+          this.currentRoomTrackUrl || 'assets/audio/intro.mp3',
+          108,
+          'Neuromicon · Intro'
+        );
+      } else if (this.mp3Audio.paused) {
+        void this.mp3Audio.play().then(() => {
+          this.isMp3Streaming = true;
+          this.duckGenerativeRoomSynth(true);
+        }).catch(() => {
+          this.playRoomSoundtrack(
+            this.currentRoomTrackUrl || 'assets/audio/intro.mp3',
+            108,
+            'Neuromicon · Intro'
+          );
+        });
+      }
+    }
+    this.pendingAutoplay = false;
   }
 
   private ensureAnalyser(): AnalyserNode | null {
@@ -164,7 +211,8 @@ export class SpatialAudioSystem {
     }
 
     const isMusicActive =
-      Boolean(this.currentRoomTrackUrl) &&
+      this.isMp3Streaming &&
+      Boolean(this.mp3Audio && !this.mp3Audio.paused) &&
       !audioMixer.getState().muted &&
       !this.pausedByGame;
 
@@ -214,8 +262,8 @@ export class SpatialAudioSystem {
             (4.3 * 255);
           const kickDelta = Math.max(0, kickRaw - this.prevKickEnergy);
           this.prevKickEnergy = kickRaw * 0.65 + this.prevKickEnergy * 0.35;
-          if (kickDelta > 0.025) {
-            this.kickEnvelope = Math.min(1.0, this.kickEnvelope + kickDelta * 4.8);
+          if (kickDelta > 0.04) {
+            this.kickEnvelope = Math.min(1.0, this.kickEnvelope + kickDelta * 3.2);
           } else {
             this.kickEnvelope *= 0.88;
           }
@@ -226,8 +274,8 @@ export class SpatialAudioSystem {
             (4.3 * 255);
           const snareDelta = Math.max(0, snareRaw - this.prevSnareEnergy);
           this.prevSnareEnergy = snareRaw * 0.65 + this.prevSnareEnergy * 0.35;
-          if (snareDelta > 0.03) {
-            this.snareEnvelope = Math.min(1.0, this.snareEnvelope + snareDelta * 4.4);
+          if (snareDelta > 0.04) {
+            this.snareEnvelope = Math.min(1.0, this.snareEnvelope + snareDelta * 3.2);
           } else {
             this.snareEnvelope *= 0.85;
           }
@@ -249,37 +297,29 @@ export class SpatialAudioSystem {
 
     if (!hasLiveFft) {
       if (isMusicActive) {
-        // Fallback musical simulation when inside active music
-        const tempoRad = timeSec * 2.2;
+        // Smooth harmonic musical envelope (zero harsh epileptic square strobes)
+        const tempoRad = timeSec * 1.2;
         const toneShift = (this.currentBaseHz % 256) / 256;
 
         for (let b = 0; b < 16; b++) {
-          const bandFreq = 0.55 + b * 0.16 + toneShift * 0.65;
-          const w1 = Math.sin(tempoRad * bandFreq + b * 0.78);
-          const w2 = Math.cos(tempoRad * (0.38 + b * 0.09) - b * 1.15);
-          const w3 = Math.sin(tempoRad * 0.85 - b * 0.42);
-          const harmonic = Math.max(
-            0,
-            (w1 * 0.45 + w2 * 0.35 + w3 * 0.2 + 0.6) * 0.68
-          );
-          this.bands16[b] = Math.min(1.0, Math.pow(harmonic, 1.5) * 0.82);
+          const bandFreq = 0.4 + b * 0.12 + toneShift * 0.4;
+          const w1 = Math.sin(tempoRad * bandFreq + b * 0.5);
+          const w2 = Math.cos(tempoRad * (0.3 + b * 0.08) - b * 0.8);
+          const harmonic = Math.max(0, (w1 * 0.5 + w2 * 0.5) * 0.45);
+          this.bands16[b] = harmonic;
         }
 
-        // 4/4 musical rhythm: Kick on 1 & 3, Snare on 2 & 4
-        const beatCycle = (timeSec * 2.2) % 4.0;
-        const kickDist = Math.min(beatCycle % 2.0, 2.0 - (beatCycle % 2.0));
-        const snareDist = Math.min(Math.abs(beatCycle - 1.0), Math.abs(beatCycle - 3.0));
-        this.kickEnvelope = Math.max(0, 1.0 - kickDist * 5.5);
-        this.snareEnvelope = Math.max(0, 1.0 - snareDist * 6.5);
-        this.smoothedTonePitch = (toneShift + Math.sin(timeSec * 0.3) * 0.25 + 0.5) % 1.0;
+        this.kickEnvelope *= 0.85;
+        this.snareEnvelope *= 0.85;
+        this.smoothedTonePitch = toneShift;
         this.smoothedToneHz = this.currentBaseHz || 220;
       } else {
-        // When audio is muted/stopped: zero target energy so nothing twitches without music!
+        // Complete silence: all bands and envelopes are completely zero! Zero twitching or flashing!
         for (let b = 0; b < 16; b++) {
           this.bands16[b] = 0;
         }
-        this.kickEnvelope *= 0.8;
-        this.snareEnvelope *= 0.8;
+        this.kickEnvelope = 0;
+        this.snareEnvelope = 0;
       }
     }
 
@@ -627,9 +667,9 @@ export class SpatialAudioSystem {
     if (!this.pausedByGame && !audioMixer.getState().muted) {
       if (!this.currentRoomTrackUrl) {
         this.playRoomSoundtrack(
-          'assets/audio/01_Purpose.mp3',
-          144,
-          'Intro · Purpose'
+          'assets/audio/intro.mp3',
+          108,
+          'Neuromicon · Intro'
         );
       } else if (this.mp3Audio && (this.mp3Audio.paused || !this.isMp3Streaming)) {
         const audio = this.mp3Audio;
@@ -676,12 +716,12 @@ export class SpatialAudioSystem {
    * Plays the atmospheric intro / corridor music track with zero background drone or hum.
    */
   public setCorridorVerticalCrossfade(_blend01: number, label?: string): void {
-    const corridorTrack = 'assets/audio/01_Purpose.mp3';
+    const corridorTrack = 'assets/audio/intro.mp3';
     if (this.currentRoomTrackUrl !== corridorTrack || (this.mp3Audio && this.mp3Audio.paused)) {
       this.playRoomSoundtrack(
         corridorTrack,
-        144,
-        label || 'Intro · Purpose'
+        108,
+        label || 'Neuromicon · Intro'
       );
     }
   }
@@ -798,7 +838,7 @@ export class SpatialAudioSystem {
             })
             .catch(() => {
               // Auto-play was prevented by browser before user gesture, or network error.
-              // Generative room synthesizer remains active at full volume!
+              this.pendingAutoplay = true;
               this.isMp3Streaming = false;
               this.duckGenerativeRoomSynth(false);
             });

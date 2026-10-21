@@ -100,8 +100,25 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
   }, []);
 
   useEffect(() => {
+    const unlockOnGesture = () => {
+      spatialAudioSystem.unlockAudioAndResume();
+    };
+    window.addEventListener('pointerdown', unlockOnGesture, { passive: true });
+    window.addEventListener('keydown', unlockOnGesture, { passive: true });
+    window.addEventListener('touchstart', unlockOnGesture, { passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', unlockOnGesture);
+      window.removeEventListener('keydown', unlockOnGesture);
+      window.removeEventListener('touchstart', unlockOnGesture);
+    };
+  }, []);
+
+  useEffect(() => {
     const offSession = webxrManager.onSessionChange((active) => {
       setXrActive(active);
+      if (active) {
+        spatialAudioSystem.unlockAudioAndResume();
+      }
     });
     // Auto-pause when XR headset is removed or Quest system menu blurs session (TZ.md §6.3)
     const offBlur = webxrManager.onVisibilityBlurred(() => {
@@ -549,12 +566,12 @@ export const LabyrinthViewport: React.FC<LabyrinthViewportProps> = ({
   return (
     <div
       ref={containerRef}
-      className="relative h-[100dvh] min-h-[360px] w-full overflow-hidden select-none bg-[#070605]"
+      className="relative w-full h-full overflow-hidden select-none bg-[#070605]"
     >
       <canvas
         ref={canvasRef}
         onClick={handleCanvasClick}
-        className="block w-full h-full cursor-crosshair"
+        className="block w-full h-full cursor-crosshair outline-none"
       />
 
       {/* Center Reticle + 3s Reversible Platform Hold Progress Ring (§2.2 Beat 70–90 s) */}

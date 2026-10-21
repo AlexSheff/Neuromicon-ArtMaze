@@ -11,9 +11,9 @@ export const awakenState: OnboardingStateHandler = {
   id: 'AWAKEN',
   onEnter() {
     spatialAudioSystem.playRoomSoundtrack(
-      'assets/audio/01_Purpose.mp3',
-      144,
-      'Intro · Purpose'
+      'assets/audio/intro.mp3',
+      108,
+      'Neuromicon · Intro'
     );
     eventBus.emit('audio:caption', { textId: 'caption.drone_swell' });
   },

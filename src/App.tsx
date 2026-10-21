@@ -66,7 +66,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0b0a09] text-[#e8e2d5] flex flex-col relative">
+    <div className="fixed inset-0 w-screen h-screen overflow-hidden bg-[#0b0a09] text-[#e8e2d5] flex flex-col">
       {/* §2.1 Minimal Pre-World Entry Screen (English-only: Title + Enter + conditional VR button) */}
       {!hasEnteredWorld && (
         <div className="artmaze-entry fixed inset-0 z-50 text-[#f3ede2] select-none overflow-hidden">
@@ -206,7 +206,7 @@ export default function App() {
         </header>
       )}
 
-      <main className="flex-1">
+      <main className="flex-1 relative w-full h-full overflow-hidden">
         {activeSection === 'labyrinth' && (
           <LabyrinthViewport
             lang="en"

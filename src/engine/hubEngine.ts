@@ -945,9 +945,9 @@ export class HubEngine {
         }
       );
       spatialAudioSystem.playRoomSoundtrack(
-        'assets/audio/01_Purpose.mp3',
-        144,
-        'Intro · Purpose'
+        'assets/audio/intro.mp3',
+        108,
+        'Neuromicon · Intro'
       );
       return;
     }
@@ -994,9 +994,10 @@ export class HubEngine {
     }
 
     // location === 'room'
-    spatialAudioSystem.stopRoomSoundtrack();
-    const roomId = state.currentRoomId || '';
-    if (!getRoomV1Manifest(roomId)) {
+    const roomId = state.currentRoomId || 'ROOM_001';
+    const roomManifest = getRoomV1Manifest(roomId);
+    if (!roomManifest) {
+      spatialAudioSystem.stopRoomSoundtrack();
       roomStreamer.mountVoidFallback(
         roomId || 'UNKNOWN_ROOM',
         this.worldRoot,

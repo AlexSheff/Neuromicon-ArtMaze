@@ -23,6 +23,7 @@ import {
   createSignageTexture,
   getWorldNodes,
   SpatialInteractiveTarget,
+  WorldGraphNode,
 } from '../corridor/corridorBuilder';
 import {
   disposeThreeHierarchy,
@@ -34,6 +35,7 @@ import { nebulaSkySystem } from '../systems/sky/nebulaSkySystem';
 import { HubPlayerState } from '../state/playerState';
 import { resolveRoomNebulaMapping } from '../systems/sky/nebulaRegistry';
 import { buildProceduralRoom } from './proceduralRoomGenerator';
+import { buildRoundPortalNode } from './hubRotundaBuilder';
 
 const NEUROMICON_CDN_BASE =
   'https://cdn.jsdelivr.net/gh/AlexSheff/Neuromicon@main';
@@ -1194,96 +1196,60 @@ export class RoomStreamer {
       emissiveIntensity: 0.45,
     });
 
-    const island = new THREE.Mesh(
-      new THREE.CylinderGeometry(7.8, 8.5, 0.4, 48),
-      islandMat
+    // 1. Invisible Walkable Floor Plane in Pure Cosmic Void
+    const invisibleFloor = new THREE.Mesh(
+      new THREE.PlaneGeometry(60, 60),
+      new THREE.MeshBasicMaterial({ visible: false })
     );
-    island.position.set(0, -0.2, 0);
-    root.add(island);
-    walkableMeshes.push(island);
+    invisibleFloor.rotation.x = -Math.PI * 0.5;
+    root.add(invisibleFloor);
+    walkableMeshes.push(invisibleFloor);
 
-    buildFloorElectricCircuitSparks({
-      root,
-      maxRadius: 7.2,
-      primaryHex: '#9d4edd',
-      secondaryHex: '#4ea8de',
-      goldHex: '#e5c158',
-    });
-
-    buildAudioReactiveBubblesAndParticles({
-      root,
-      radiusX: 6.4,
-      radiusZ: 6.4,
-      minY: 0.7,
-      maxY: 6.2,
-      bubbleCount: 12,
-      particleCount: 180,
-    });
-
-    // Flanking Quartz Glass Plasma Columns in Void Fallback
-    [-4.2, 4.2].forEach((px, idx) => {
-      root.add(
-        buildQuartzPlasmaColumn({
-          x: px,
-          z: -3.2,
-          height: 6.8,
-          radius: 0.36,
-          primaryHex: '#9d4edd',
-          secondaryHex: '#4ea8de',
-          goldHex: '#e5c158',
-          basaltMat: gothicBasaltMat,
-          trimMat,
-          phaseSeed: idx * 2.1 + 0.7,
-        })
-      );
-    });
-
-    root.add(
-      buildVRExplorerScaleFigure({
-        x: -2.6,
-        z: -1.4,
-        rotY: 0.22,
-        visorHex: '#4ea8de',
-        trimHex: '#e5c158',
+    // Subtle floating stardust guide ring
+    const floorRing = new THREE.Mesh(
+      new THREE.RingGeometry(2.0, 2.06, 48),
+      new THREE.MeshBasicMaterial({
+        color: '#c8a464',
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.35,
       })
     );
+    floorRing.rotation.x = -Math.PI * 0.5;
+    floorRing.position.y = 0.015;
+    root.add(floorRing);
 
-    const voidVortexTex = createDoorLeafTexture(
-      '#050915',
-      '#c8a464',
-      '#4ea8de'
-    );
-    const voidVortexMat = new THREE.MeshStandardMaterial({
-      map: voidVortexTex,
-      roughness: 0.2,
-      metalness: 0.75,
-      emissive: '#4ea8de',
-      emissiveIntensity: 0.22,
+    // 2. Audio-Reactive Iridescent Soap Bubbles & Soft Particles floating in deep space
+    buildAudioReactiveBubblesAndParticles({
+      root,
+      radiusX: 7.5,
+      radiusZ: 7.5,
+      minY: 0.8,
+      maxY: 5.5,
+      bubbleCount: 12,
+      particleCount: 160,
     });
-    const plaqueTex = createSignageTexture(
-      '↺',
-      roomId,
-      `${state.branch.toUpperCase()} · SEG ${state.segmentIndex}`,
-      'VOID THRESHOLD',
-      '#c8a464',
-      '#7cc6f2'
-    );
 
-    const portalGroup = buildWiredSciFiGothicPortal({
+    // 3. Floating Round Celestial Stargate: Return to Corridor (Zero doors, zero walls!)
+    const portalGroup = buildRoundPortalNode({
       x: 0,
-      z: -3.2,
+      y: 2.2,
+      z: -3.8,
       rotY: 0,
-      width: 2.6,
-      height: 3.8,
-      frameMat: trimMat,
-      vortexMat: voidVortexMat,
+      node: {
+        id: 'CORRIDOR',
+        symbol: '↺',
+        title: `${state.branch.toUpperCase()} · SEG ${state.segmentIndex}`,
+        titleRu: `${state.branch.toUpperCase()} · SEG ${state.segmentIndex}`,
+        dimension: roomId,
+        dimensionRu: roomId,
+        branch: state.branch,
+        segment: state.segmentIndex,
+        status: 'ready',
+      } as unknown as WorldGraphNode,
+      visited: false,
       accentHex: '#c8a464',
       plasmaHex: '#4ea8de',
-      statusColorHex: '#7cc6f2',
-      plaqueTex,
-      plaqueWidth: 2.2,
-      plaqueHeight: 1.05,
-      cableSpread: 1.05,
       phaseSeed: 3.3,
     });
 
